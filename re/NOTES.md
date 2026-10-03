@@ -75,3 +75,31 @@ ee0d9a9d4b388f3af3ed6ec6aadd38a27823c1eee614af4bf378227e98364081  ADBLUE.MID
   to `1234 dfab 5678 f2e7`. Step: `A' = A + (0209:020b)` (32-bit, `0207`+`020b`, then
   `0205`+`0209`+carry), `0209 = old 0207`, `020b = old 0205`.
 - Seed: `int 21h/2Ch`, step count = `(1/100 s) ^ seconds ^ minutes` (0 means 256).
+
+## Galaxy
+
+Same scheme as the original Elite, with Elite Plus's own formulas for the system data.
+
+- Seed: three words `ds:5503/5505/5507` (w0, w1, w2). `twist` (`5e0f`): w0, w1, w2 ←
+  w1, w2, w0+w1+w2. Four twists step to the next system.
+- `load_galaxy_seed` (`5e25`): galaxy number `ds:8315`, seeds at `ds:5509` (6 bytes each;
+  the eight are byte-rotations of galaxy 1's, as in the original).
+  `galaxy_step` (`610e`): load seed, then `cx` × 4 twists.
+- `planet_name` (`6130`) → `ds:8338`, length `ds:8341`: four rounds of "take w2 high byte,
+  twist", digram `ds:5585 + 2·(b & 1f)`; the fourth digram only if w0 bit 6. Index 0 is
+  two spaces, so names have 0–8 letters.
+- `system_data` (`5ee8`): `5fe1` finds the system nearest to the chart cursor (`ds:3318/3319`),
+  `6047` distance, then from `5f00` (callable on its own):
+
+  | Field | Formula |
+  |-------|---------|
+  | government `8345` | `(w1lo >> 3) & 7` |
+  | economy `8346` | `((gov < 2 ? 2 : 0) | (w0hi & 7)) ^ 7`, index into names at `ds:894d` (0 Poor Agricultural … 7 Rich Industrial) |
+  | tech `8347` | `((eco + 3) & w1hi) + (w2lo & 1)`, shown + 1 |
+  | population `8348` | `(u8)(tech·eco) / 2 + 20 + gov`, in 0.1 billion |
+  | species `8349–834c` | `ff` (Human Colonials) unless w2lo bit 7; else `(w2hi>>2)&7`, `w2hi>>5`, `(w0hi^w1hi)&7`, `((w2hi&3)+that)&7`; names at `ds:8ada/8b00/8b3b/8b76` |
+  | productivity `834d` | `(gov+8)² · pop · 4` (16-bit) |
+  | radius `834f` | `((rol2(w0hi·0101h) ^ (swap(w2) & 3ff)) & fff) + 10e1h` |
+  | description seeds `8351/8353` | `w0^w1`, `w0^w1^w2` |
+- Chart position (`5e95`): x = w1hi, y = w0hi / 2.
+- Checked: `re/emu/galaxytest.py` compares all 8 × 256 systems with `core/ep_galaxy.c`.
