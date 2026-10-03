@@ -108,6 +108,10 @@ int main(int argc, char **argv)
             for (int k = 0; k < g.circles.n; k++)
                 printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
             printf("end\n");
+        } else if (!strcmp(argv[1], "data_screen")) {
+            ep_data_screen(&g);
+            print_prims(&g.render);
+            printf("end\n");
         } else if (!strcmp(argv[1], "equip_screen")) {
             ep_equipment_screen(&g);
             print_prims(&g.render);

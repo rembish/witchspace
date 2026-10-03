@@ -7,6 +7,7 @@
 #include "ep_circle.h"
 #include "ep_flight.h"
 #include "ep_galaxy.h"
+#include "ep_desc.h"
 #include "ep_dsmap.h"
 #include "ep_combat.h"
 #include "ep_commands.h"
@@ -1441,6 +1442,178 @@ void ep_chart_home(ep_game *g)
         c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CHART_CENTRE + 1];
     }
     ep_chart_find(g);
+}
+
+/* ---- DATA ON ---- */
+
+static uint8_t *data_b(ep_game *g, uint16_t addr) { return &g->f.data_text[addr - 0x8900]; }
+
+/* 3a40: the planet's picture from the table at ds:2680 (n entries on, wrapping at ffh) */
+static void data_picture(ep_game *g, uint8_t n)
+{
+    uint16_t at = 0x2680;
+    for (; n; n--) {
+        if (ep_ds_byte(g, at) == 0xff) at = 0x2680;
+        at++;
+        while (ep_ds_byte(g, at)) at = (uint16_t)(at + 3);
+        at++;
+    }
+    ep_render_rect(&g->render, 8, 0xe0, 0x67, 0x52, 0x2a);
+    ep_render_rect(&g->render, 7, 0xdf, 0x66, 0x52, 0x2a);
+    uint8_t colour = ep_ds_byte(g, at++);
+    if (colour == 0xff) {
+        at = 0x2680;
+        colour = ep_ds_byte(g, at++);
+    }
+    if (g->f.video == 2) { /* 28ab: MCGA's own colour for it */
+        uint16_t m = 0x28ab;
+        while (ep_ds_byte(g, m) != colour) m = (uint16_t)(m + 2);
+        colour = ep_ds_byte(g, (uint16_t)(m + 1));
+    }
+    ep_render_rect(&g->render, colour, 0xe0, 0x67, 0x50, 0x28);
+    uint8_t p;
+    while ((p = ep_ds_byte(g, at++)) != 0) {
+        uint16_t off = ep_ds_word(g, at);
+        at = (uint16_t)(at + 2);
+        sprite(g, (uint8_t)(0x5e + p), (int16_t)(0xe0 + (uint8_t)off), (int16_t)(0x67 + (off >> 8)));
+    }
+}
+
+/* 632b: the description, word by word, wrapped at 132h */
+static void data_description(ep_game *g)
+{
+    uint8_t *d = g->f.description, *c = g->cmdr.b;
+    memset(d, 0, 0x100);
+    uint16_t r0 = (uint16_t)(c[EP_CMDR_SELECTED + 0x19] | c[EP_CMDR_SELECTED + 0x1a] << 8);
+    uint16_t r1 = (uint16_t)(c[EP_CMDR_SELECTED + 0x1b] | c[EP_CMDR_SELECTED + 0x1c] << 8);
+    ep_desc_io io = {
+        d,        ep_ds_byte(g, 0x5a3d), &r0,           &r1, &c[EP_CMDR_SELECTED + EP_SYSREC_NAME],
+        &g->seed, &g->f.desc_caps,       g->f.desc_save
+    };
+    ep_describe(&io);
+    c[EP_CMDR_SELECTED + 0x19] = (uint8_t)r0;
+    c[EP_CMDR_SELECTED + 0x1a] = (uint8_t)(r0 >> 8);
+    c[EP_CMDR_SELECTED + 0x1b] = (uint8_t)r1;
+    c[EP_CMDR_SELECTED + 0x1c] = (uint8_t)(r1 >> 8);
+    int16_t x = 0x0e, y = 0x95;
+    int at = 0;
+    for (;;) {
+        int end = at;
+        while (end < 0x100 && d[end] && d[end] != ' ') end++;
+        int last = end >= 0x100 || !d[end];
+        if (!last) d[end] = 0;
+        uint16_t w = ep_text_width(&d[at]);
+        if ((uint16_t)(w + 5 + x) >= 0x132) {
+            x = 0x0e;
+            y = (int16_t)(y + 9);
+        }
+        ep_pen(&g->render, x, y, 0x0e);
+        ep_text(&g->render, &d[at], end - at + 1, 0);
+        x = g->render.pen_x;
+        if (last) return;
+        x = (int16_t)(x + 5);
+        at = end + 1;
+    }
+}
+
+void ep_data_screen(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b;
+    f->screen_bits = 0;
+    ep_select_system(g);
+    if (f->screen_flag && !f->hyper_countdown) { /* from the chart: keep its cursor */
+        int k = f->chart_kind ? 4 : 2;
+        c[EP_CMDR_CURSOR + k] = c[EP_CMDR_CURSOR];
+        c[EP_CMDR_CURSOR + k + 1] = c[EP_CMDR_CURSOR + 1];
+    }
+    f->screen_flag = 0;
+    frame(g);
+    uint8_t *name = &c[EP_CMDR_SELECTED + EP_SYSREC_NAME];
+    name[name[9]] = 0; /* 8dd1 */
+    int k = 0;
+    do *data_b(g, (uint16_t)(0x890d + k)) = name[k];
+    while (name[k++]);
+    uint8_t t[64];
+    int n = ep_ds_text(g, 0x8905, t, sizeof t);
+    title(g, 0xa0, 0, 0x0f, t, n);
+    /* 8ddd: the distance "xx.x" written backwards up to 8a94 */
+    uint16_t src = 0x5566, dst = 0x8a94;
+    *data_b(g, dst--) = ep_ds_byte(g, src--);
+    *data_b(g, dst--) = '.';
+    for (;;) {
+        uint8_t ch = ep_ds_byte(g, src--);
+        *data_b(g, dst) = ch;
+        if (ch == ' ') break;
+        dst--;
+    }
+    dst++;
+    n = 0;
+    uint8_t ch;
+    while ((ch = *data_b(g, dst++)) != 0) t[n++] = ch;
+    uint16_t a = 0x8a96;
+    do t[n++] = ch = ep_ds_byte(g, a++);
+    while (ch && n < 63);
+    ep_pen(&g->render, 0x47, 0x1f, 0x0e);
+    ep_text(&g->render, t, n, 0);
+    text_header(g, 0x895d);
+    text_at(g, 0xb1, 0x4d, 0x0f,
+            ep_ds_word(g, (uint16_t)(0x894d + 2 * c[EP_CMDR_SELECTED + EP_SYSREC_ECONOMY])));
+    text_header(g, 0x8a0d);
+    text_at(g, 0xc4, 0x57, 0x0f,
+            ep_ds_word(g, (uint16_t)(0x89fd + 2 * c[EP_CMDR_SELECTED + EP_SYSREC_GOVERNMENT])));
+    text_header(g, 0x8a7b);
+    uint8_t tech = (uint8_t)(c[EP_CMDR_SELECTED + EP_SYSREC_TECH] + 1);
+    uint16_t tat = 0x8a8e;
+    if (tech >= 10) {
+        tech = (uint8_t)(tech - 10);
+        tat = 0x8a8d;
+        *data_b(g, 0x8a8d) = '1';
+    }
+    *data_b(g, 0x8a8e) = (uint8_t)(tech + '0');
+    text_at(g, 0xc2, 0x6b, 0x0f, tat);
+    sprite(g, 0x84, 0x18, 0x0f);
+    uint8_t *pop = data_b(g, 0x8ab4);
+    digits(pop, c[EP_CMDR_SELECTED + 0x10], 0);
+    pop[0] = 0x0f;
+    pop[1] = ' ';
+    pop[2] = pop[3];
+    pop[3] = '.';
+    text_header(g, 0x8aa3);
+    text_header(g, 0x8ac2);
+    const uint8_t *sp = &c[EP_CMDR_SELECTED + 0x11];
+    if (sp[0] == 0xff) {
+        f->species_icon = 8;
+        text_on(g, 0x8ac9);
+    } else {
+        text_on(g, ep_ds_word(g, (uint16_t)(0x8ada + 2 * sp[0])));
+        text_on(g, ep_ds_word(g, (uint16_t)(0x8b00 + 2 * sp[1])));
+        text_on(g, ep_ds_word(g, (uint16_t)(0x8b3b + 2 * sp[2])));
+        f->species_icon = sp[3];
+        text_on(g, ep_ds_word(g, (uint16_t)(0x8b76 + 2 * sp[3])));
+    }
+    uint16_t prod = (uint16_t)(c[EP_CMDR_SELECTED + 0x15] | c[EP_CMDR_SELECTED + 0x16] << 8);
+    digits(data_b(g, 0x8bd8), prod, 0);
+    text_header(g, 0x8bcd);
+    g->render.pen_colour = 0x0f;
+    text_on(g, *data_b(g, 0x8bd8) == '0' ? 0x8bd9 : 0x8bd8);
+    uint16_t radius = (uint16_t)(c[EP_CMDR_SELECTED + 0x17] | c[EP_CMDR_SELECTED + 0x18] << 8);
+    digits(data_b(g, 0x8be7), radius, 0);
+    *data_b(g, 0x8be7) = ' ';
+    text_header(g, 0x8be2);
+    sprite(g, (uint8_t)(0x79 + f->species_icon), 0x30, 0x3d);
+    data_description(g);
+    ep_select_system(g);
+    data_picture(g, (uint8_t)((uint8_t)g->seed.w[0] ^ (uint8_t)(g->seed.w[1] >> 8)));
+    uint8_t v = (uint8_t)((uint8_t)(g->seed.w[1] >> 8) - (uint8_t)g->seed.w[0]); /* 3a28 */
+    sprite(g, (uint8_t)(0x6d + (uint8_t)((v * 0x0c) >> 8)), 0xb0, 0x0b);
+    static const int16_t arrows[8][4] = { { 0x33, 0x21, 0xa7, 0x21 },   { 0xa3, 0x1e, 0xa7, 0x22 },
+                                          { 0xa3, 0x24, 0xa7, 0x20 },   { 0x101, 2, 0x101, 0x1b },
+                                          { 0x101, 2, 0x105, 6 },       { 0x102, 2, 0xfe, 6 },
+                                          { 0x101, 0x28, 0x101, 0x42 }, { 0x102, 0x41, 0xfe, 0x3d } };
+    for (int j = 0; j < 8; j++) line(g, 0x0c, arrows[j][0], arrows[j][1], arrows[j][2], arrows[j][3]);
+    line(g, 0x0c, 0x101, 0x41, 0x105, 0x3d);
+    f->idle = EP_IDLE_PLAIN;
 }
 
 int ep_station_idle(ep_game *g)

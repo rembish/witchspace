@@ -11,6 +11,8 @@ typedef struct {
     uint16_t r0, r1;              /* ds:8351, ds:8353 */
     uint8_t caps;                 /* ds:5a34 */
     uint8_t nb[EP_NAMEBUF];       /* ds:8338..8341 */
+    ep_seed seed;                 /* ds:5503: random names go through it */
+    uint8_t save[8];              /* ds:5a2b: the name kept while a random one is made */
 } desc_state;
 
 static void put(desc_state *d, uint8_t c)
@@ -63,16 +65,16 @@ static void print_code(desc_state *d, uint8_t code)
         memcpy(tmp + j, ep_desc_ian, 5);
         print(d, tmp);
         break;
-    case 3: { /* 6446: random name from the description seeds; the length byte stays changed */
-        uint8_t saved[8];
-        memcpy(saved, d->nb, 8);
-        ep_seed s = { { d->r0, d->r1, (uint16_t)(d->r0 ^ d->r1) } };
-        ep_planet_name(&s, d->nb);
+    case 3: /* 6446: random name from the description seeds; the length byte stays changed */
+        memcpy(d->save, d->nb, 8);
+        d->seed.w[0] = d->r0;
+        d->seed.w[1] = d->r1;
+        d->seed.w[2] = (uint16_t)(d->r0 ^ d->r1);
+        ep_planet_name(&d->seed, d->nb);
         name_scratch(d, tmp);
-        memcpy(d->nb, saved, 8);
+        memcpy(d->nb, d->save, 8);
         print(d, tmp);
         break;
-    }
     case 4: /* 6488: back one character */ d->di--; break;
     case 5: d->caps = 1; break;
     case 6: d->caps = 0; break;
@@ -96,6 +98,29 @@ static void print(desc_state *d, const uint8_t *s)
             put(d, c);
         }
     }
+}
+
+void ep_describe(ep_desc_io *io)
+{
+    desc_state d;
+    memset(&d, 0, sizeof d);
+    memcpy(d.nb, io->name, EP_NAMEBUF);
+    d.r0 = *io->r0;
+    d.r1 = *io->r1;
+    d.caps = *io->caps;
+    d.seed = *io->seed;
+    memcpy(d.save, io->save, 8);
+    d.out[0] = io->before;
+    d.di = 1;
+    print(&d, (const uint8_t *)ep_desc_template);
+    put(&d, 0);
+    memcpy(io->out, d.out + 1, EP_DESC_MAX);
+    memcpy(io->name, d.nb, EP_NAMEBUF);
+    *io->r0 = d.r0;
+    *io->r1 = d.r1;
+    *io->caps = d.caps;
+    *io->seed = d.seed;
+    memcpy(io->save, d.save, 8);
 }
 
 void ep_system_description(const ep_seed *s, char out[EP_DESC_MAX + 1])

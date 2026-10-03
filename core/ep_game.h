@@ -150,6 +150,11 @@ typedef struct {
     uint8_t chart_kind;         /* ds:6404: 0 short-range, else galactic */
     uint8_t chart_digit;        /* ds:55e6: the galaxy's number in its chart's title */
     uint8_t dist_shown[0x12];   /* ds:5550: the distance as the chart shows it ("xx.x") */
+    uint8_t data_text[0x300];   /* ds:8900: the Data screen's texts, with its numbers written in */
+    uint8_t description[0x100]; /* ds:5a3e: the system's description, words cut at the spaces */
+    uint8_t species_icon;       /* ds:ae1b */
+    uint8_t desc_save[8];       /* ds:5a2b */
+    uint8_t desc_caps;          /* ds:5a34 */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

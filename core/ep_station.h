@@ -79,6 +79,10 @@ void ep_chart_find(ep_game *g);
 /* 5d9f: the cursor back to the present system */
 void ep_chart_home(ep_game *g);
 
+/* 8880: DATA ON the selected system: distance, economy, government, tech level, population,
+ * species, productivity, radius, the description and a picture */
+void ep_data_screen(ep_game *g);
+
 /* where the screens idle */
 enum {
     EP_IDLE_NONE = 0,
