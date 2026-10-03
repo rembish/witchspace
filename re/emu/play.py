@@ -44,6 +44,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scale", type=int, default=3)
     ap.add_argument("--keys", default="PMA", help="typed at start: sound, graphics, protection word")
+    ap.add_argument("--record", help="save the screen to DIR/frame-NNN.png once a second")
+    ap.add_argument("--debug-keys", action="store_true", help="print key events and deliveries")
     a = ap.parse_args()
 
     m = Machine()
@@ -61,6 +63,9 @@ def main():
     tk.Label(root, textvariable=status, anchor="w").pack(fill="x")
 
     def key(ev, release):
+        last["key"] = ev.keysym + (" up" if release else "")
+        if a.debug_keys:
+            print("key", ev.keysym, "release" if release else "press", flush=True)
         sym = ev.keysym if ev.keysym in SCAN or ev.keysym in EXT else ev.keysym.lower()
         if sym in EXT:
             codes = [0xE0, EXT[sym]]
@@ -75,8 +80,13 @@ def main():
             down.add(sym)
             events.extend(codes)
 
-    root.bind("<KeyPress>", lambda ev: key(ev, False))
-    root.bind("<KeyRelease>", lambda ev: key(ev, True))
+    root.bind_all("<KeyPress>", lambda ev: key(ev, False))
+    root.bind_all("<KeyRelease>", lambda ev: key(ev, True))
+    # WSLg and some window managers do not give a new window keyboard focus: take it, and
+    # again on any click.
+    root.after(300, root.focus_force)
+    label.bind("<Button-1>", lambda ev: root.focus_force())
+    last = {"key": "-", "sent": "-"}
 
     t0 = time.time()
     base_ticks = [None]
@@ -84,10 +94,15 @@ def main():
     def deliver(mm):
         # one keyboard interrupt per pause (a timer tick is usually pending as well)
         if events and not mm.keys and mm.down is None and not any(e != 8 for e in mm.pending):
-            mm.scancode_event(events.pop(0))
+            code = events.pop(0)
+            if a.debug_keys:
+                print(f"deliver {code:#04x} at tick {mm.ticks}", flush=True)
+            mm.scancode_event(code)
+            last["sent"] = f"{code:02x}"
         return mm.ticks >= target[0]
 
     target = [0]
+    saved = []
 
     def frame():
         if m.exit_code is not None:
@@ -110,7 +125,12 @@ def main():
         photo = tk.PhotoImage(data=ppm, format="PPM")
         label.configure(image=photo)
         label.image = photo
-        status.set(f"ticks {m.ticks}")
+        status.set(f"ticks {m.ticks}   last key {last['key']}   sent scancode {last['sent']}"
+                   "   (click the picture if keys do not arrive)")
+        if a.record and int(time.time() - t0) >= len(saved):
+            os.makedirs(a.record, exist_ok=True)
+            im.save(os.path.join(a.record, f"frame-{len(saved):03d}.png"))
+            saved.append(1)
         root.after(10, frame)
 
     root.after(10, frame)
