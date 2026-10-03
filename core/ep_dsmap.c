@@ -126,6 +126,7 @@ static const field fields[] = {
     F(0x8de6, f.tribble_text, 1),
     F(0x88e0, f.screen_redraw, 0),
     F(0x0991, f.menu_kept, 1),
+    F(0x2c51, f.scoop_text, 1),
     F(0x0a83, f.prot_page, 1),
     F(0x0a91, f.prot_paragraph, 0),
     F(0x0a99, f.prot_line, 0),

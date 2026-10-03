@@ -2,6 +2,8 @@
 #include "ep_world.h"
 
 #include "ep_circle.h"
+#include "ep_combat.h"
+#include "ep_dsmap.h"
 #include "ep_render.h"
 
 static uint16_t get16(const ep_object *o, int off) { return (uint16_t)(o->b[off] | o->b[off + 1] << 8); }
@@ -29,14 +31,105 @@ static void crash(ep_game *g)
     ep_event_add(g, EP_EV_SOUND, 0x12); /* 4df5 */
 }
 
+/* 46e2: what the fuel scoops pick up: anything in the box under the ship (|x|, |z| < 150,
+ * 30 <= y < 230), by type: a canister's cargo (at random, or the masking device), an escape
+ * pod's slaves, a Thargon's alien items, a boulder's alloys or an asteroid's gems and metals.
+ * Larger things only get a message. The hold's room is a byte: over-full counts as room. */
+static void scoop(ep_game *g, ep_object *o, const int16_t p[3])
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b, *cargo = &c[EP_CMDR_CARGO];
+    uint8_t room = (uint8_t)((c[EP_CMDR_EQUIPMENT + 1] == 1 ? 0x23 : 0x14) - c[EP_CMDR_CARGO_USED]);
+    if (p[1] < 0x1e || p[1] >= 0x1e + 0xc8) return;
+    if (ep_abs16((uint16_t)p[0]) >= 0x96 || ep_abs16((uint16_t)p[2]) >= 0x96) return;
+    uint16_t msg;
+    switch (o->b[EP_OBJ_FLAGS] & 0x3e) {
+    case 0x28: return;
+    case 0x22: /* 4754: a canister */
+        if (o->b[EP_OBJ_FLAGS1E] & 0x40) {
+            o->b[EP_OBJ_FLAGS] &= 0xfe; /* 7e82 */
+            c[0xcd] = 1;                /* ds:83a8: the masking device */
+            msg = 0x2c30;
+            break;
+        }
+        if (!room) {
+            msg = 0x2c42;
+            break;
+        }
+        o->b[EP_OBJ_FLAGS] &= 0xfe;
+        {
+            uint8_t k = (uint8_t)((uint8_t)ep_flight_random(g) / 0x18);
+            if (k == 3) k = 0x0b; /* no slaves: furs */
+            cargo[2 * k]++;
+            c[EP_CMDR_CARGO_USED]++;
+            for (int j = 0; j < 13; j++) f->scoop_text[j] = ep_ds_byte(g, (uint16_t)(0x8f2d + 17 * k + j));
+        }
+        msg = 0x2c51;
+        break;
+    case 0x2a: /* 47b2: an escape pod */
+        if (!room) {
+            msg = 0x2c42;
+            break;
+        }
+        o->b[EP_OBJ_FLAGS] &= 0xfe;
+        cargo[2 * 3]++;
+        c[EP_CMDR_CARGO_USED]++;
+        msg = 0x2c5f;
+        break;
+    case 0x16: /* 47cd */
+        if (o->b[EP_OBJ_FLAGS1E] & 0x10) {
+            o->b[EP_OBJ_FLAGS] &= 0xfe;
+            uint16_t r = ep_flight_random(g) & 0x0307;
+            unsigned gems = cargo[2 * 15] + (r & 0xff);
+            cargo[2 * 15] = gems > 0xff || (uint8_t)gems >= 0xfb ? 0xfa : (uint8_t)gems;
+            cargo[2 * 13] = (uint8_t)(cargo[2 * 13] + (r >> 8)); /* no carry looked at */
+            if (cargo[2 * 13] >= 0xfb) cargo[2 * 13] = 0xfa;
+            r = ep_flight_random(g);
+            cargo[2 * 14] = (uint8_t)(cargo[2 * 14] + ((r >> 8) & 3) + 1);
+            if (cargo[2 * 14] >= 0xfb) cargo[2 * 14] = 0xfa;
+            if (room) {
+                cargo[(uint8_t)ep_flight_random(g) >= 0x28 ? 2 * 12 : 2 * 9]++;
+                c[EP_CMDR_CARGO_USED]++;
+            }
+            msg = 0x2c7f;
+            break;
+        }
+        if (!room) {
+            msg = 0x2c42;
+            break;
+        }
+        o->b[EP_OBJ_FLAGS] &= 0xfe;
+        if (cargo[2 * 9] < 0xfa) {
+            cargo[2 * 9]++;
+            c[EP_CMDR_CARGO_USED]++;
+        }
+        msg = 0x2c98;
+        break;
+    case 0x0e: /* 485f: a Thargon */
+        if (!room) {
+            msg = 0x2c42;
+            break;
+        }
+        o->b[EP_OBJ_FLAGS] &= 0xfe;
+        if (cargo[2 * 16] < 0xfa) {
+            cargo[2 * 16]++;
+            c[EP_CMDR_CARGO_USED]++;
+        }
+        msg = 0x2ca5;
+        break;
+    default: msg = 0x2c0b; /* too large */
+    }
+    f->message = msg;
+    f->message_time = 0x14;
+}
+
 /* 42c8: camera-space position and the in-view test */
 static void to_camera(ep_game *g, ep_object *o)
 {
     int16_t p[3];
     for (int k = 0; k < 3; k++) p[k] = (int16_t)get16(o, EP_OBJ_POS + 2 * k);
     ep_object_rotate(&g->space, o, p);
-    if (ep_commander_b(&g->cmdr, EP_CMDR_EQUIPMENT + 5) == 1 && g->f.scoop_lock == 0)
-        ep_event_add(g, EP_EV_UNPORTED, 0x46e2); /* scooping: not reconstructed yet */
+    if (ep_commander_b(&g->cmdr, EP_CMDR_EQUIPMENT + 5) == 1 && g->f.scoop_lock == 0) scoop(g, o, p);
     if (p[2] < 100) return;
     for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);
     uint16_t z = (uint16_t)p[2];

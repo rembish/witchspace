@@ -191,6 +191,7 @@ typedef struct {
     uint8_t prot_line;          /* ds:0a99 */
     uint8_t prot_word;          /* ds:0aa1 */
     uint16_t prot_hash;         /* ds:09d9: the word's, 9 bits */
+    uint8_t scoop_text[13];     /* ds:2c51: the scooped canister's goods, as a message */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
