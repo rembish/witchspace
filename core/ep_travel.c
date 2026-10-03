@@ -323,11 +323,7 @@ void ep_tunnel_frame(ep_game *g, int k)
 void ep_launch(ep_game *g)
 {
     ep_flight *f = &g->f;
-    if (f->other_screen) { /* 763e */
-        f->other_screen = 0;
-        f->message_time = (uint16_t)(f->message_time & 0xff);
-        f->message_shown = 0;
-    }
+    ep_cockpit(g); /* 763e */
     f->screen = 0;
     ep_key_bar(g);
     /* 028d: the mouse driver is reset */

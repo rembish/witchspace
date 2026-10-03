@@ -56,7 +56,8 @@ void ep_message_tick(ep_game *g)
     f->message_time |= 0xff00; /* 7040 */
     if (f->message == f->message_shown) return;
     f->message_shown = f->message;
-    /* 7053: the message line, centred and shadowed (2fca) */
+    /* 7053: the message line: the bar under it (30d2), the text centred and shadowed (2fca) */
+    ep_render_sprite(&g->render, 0x6c, 0, 0);
     uint8_t t[128];
     int n = ep_ds_text(g, f->message, t, sizeof t);
     ep_render_text(&g->render, 0x0f, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0, t, n, 1);
