@@ -13,6 +13,7 @@ import random
 import glob
 import os
 import subprocess
+import struct
 import sys
 import tempfile
 
@@ -98,6 +99,9 @@ ROUTINES = {
     "equip_session": (0x924A, {}, {}),
     "save_session": (0x07AA, {}, {}),
     "load_session": (0x08AB, {}, {0x9E80: "end"}),
+    "title_open": (0x9E9A, {}, {0x9F21: "end"}),
+    "title_session": (0x9F21, {}, {0xA004: "start", **{a: "end" for a in (  # a screen up
+        0x0480, 0x0DF6, 0x0945, 0x08E4, 0x0AAC, 0x0AEF, 0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0xA040)}}),
 }
 
 
@@ -521,6 +525,31 @@ def files_world(img, rng):
         w(0xFF10 + j, keys[j])
 
 
+def title_world(img, rng):
+    """Any sound; keys for the waits or the passes; a title ship part way. (Not the video mode:
+    its routines are chosen once, at the start.)"""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0x4801, rng.choice([0, 1, 2]))
+    w(0x45EA, rng.randrange(4))
+    w(0x76B5, rng.choice([3, 3, 12, 36]))
+    keys = []
+    while len(keys) < 12:
+        if NAME == "title_session":  # mostly passes with no key; F-keys, Esc; space late if at all
+            keys.append(rng.choice([0xFF] * 12 + [0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2,
+                                                  0x1B, ord("x"), 0x20 if len(keys) > 8 else 0xFF]))
+        else:
+            keys += [0xFF] * rng.choice([0, 0, 1, 3]) + [rng.choice([0x20, 0x20, 0x9A, 0x9B, 0x9D, 0x9E, 0x1B, ord("x"), 0xFF])]
+    for j in range(12):
+        w(0xFF10 + j, keys[j])
+    if NAME == "title_session":  # where the ship is
+        w(0xB25F, rng.choice([0, 0, 1, 0x76, 0x77, 0x78]), 2)
+        w(0x775E + 8, rng.choice([5000, 4900, 1000, 200]), 2)
+        at = rng.choice([0, 5, 13, 22, 23, 23])  # 23: the last before the end mark
+        w(0xB261, 0xB263 + at, 2)
+        w(0xB1BB, img[DS * 16 + 0xB263 + at])
+        w(0x775E, img[DS * 16 + 0xB263 + at] << 1 | 1)
+
+
 def pause_world(img, rng):
     """From any screen; options toggled, sound, abandon or exit asked, space."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -900,6 +929,8 @@ FUZZ = {
     "equip_screen": [(0, trading), (0, equip_world)],
     "chart_session": [(0, chart_world)],
     "pause_session": [(0, pause_world)],
+    "title_open": [(0, title_world)],
+    "title_session": [(0, title_world)],
     "save_session": [(0, files_world)],
     "load_session": [(0, files_world)],
     "start_game": [(0, start_world), (0, arrival_dialogs)],
@@ -1051,9 +1082,10 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session"):
         def sprite_or_icon(e, r):
-            if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":  # the bar's (0312)
+            sp = SS * 16 + e.mu.reg_read(UC_X86_REG_SP)
+            if e.mu.mem_read(sp, 2) == b"\x15\x03" or e.mu.mem_read(sp, 2) == b"\xce\x37" and e.mu.mem_read(sp + 8, 2) == b"\x15\x03":  # the bar's (0312, through 37bd on EGA/VGA)
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
             else:
                 prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
@@ -1106,6 +1138,48 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x4AC0, lambda e, r: None)
 
         e.on_intr = fake_dos(files, written)
+    if NAME in ("title_open", "title_session"):  # drawn on both pages (EGA, VGA): the second is skipped
+        def second_page(mu, ad, sz, u):
+            ret = struct.unpack("<H", mu.mem_read(SS * 16 + mu.reg_read(UC_X86_REG_SP), 2))[0]
+            mu.reg_write(UC_X86_REG_SP, mu.reg_read(UC_X86_REG_SP) + 2)
+            mu.reg_write(UC_X86_REG_IP, ret)
+        for at in (0x2F2D, 0x2F64, 0x37D1):  # 2f12, 2f4d, 37bd
+            e.mu.hook_add(UC_HOOK_CODE, second_page, begin=CS * 16 + at, end=CS * 16 + at)
+    if NAME == "title_open":  # keys at 0276 (ffh: none); one page drawn; no hardware
+        tkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
+
+        def title_key(e, r):
+            if not tkeys:
+                left.append("end")
+                e.mu.emu_stop()
+                return
+            k = tkeys.pop(0)
+            if k == 0xFF:
+                return {"flags": r["flags"] & ~1}
+            e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
+            return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
+        e.hook(0x0276, title_key)
+        e.hook(0x4D21, lambda e, r: sounds.append("event 6:2"))
+        for stub in (0x30DC, 0x3821, 0x3941, 0x3956, 0x3B3E, 0x3130, 0x301A):
+            e.hook(stub, lambda e, r: None)
+
+    if NAME == "title_session":  # a key at each pass (9f21), 12 passes
+        tkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
+
+        def title_pass(mu, ad, sz, u):
+            if not tkeys:
+                left.append("end")
+                mu.emu_stop()
+                return
+            mu.mem_write(DS * 16 + 0x0D2F, bytes([tkeys.pop(0)]))
+        e.mu.hook_add(UC_HOOK_CODE, title_pass, begin=CS * 16 + 0x9F21, end=CS * 16 + 0x9F21)
+        e.hook(0x4D21, lambda e, r: sounds.append("event 6:2"))
+        for stub in (0x3130, 0x301A, 0x028D):
+            e.hook(stub, lambda e, r: None)
+        for stub in (0x0674, 0x0736, 0x0779):  # not reconstructed yet
+            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
+                sounds.append(f"event {EV_UNPORTED}:{stub}"), left.append("end"), mu.emu_stop()),
+                begin=CS * 16 + stub, end=CS * 16 + stub)
     if NAME == "chart_session":  # a key and the arrows held at each pass (5c80, 595a), 12 passes
         ckeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
         carrows = list(image[DS * 16 + 0xFF20:DS * 16 + 0xFF2C])
@@ -1159,20 +1233,20 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
         if NAME == "explode":
             regs = dict(regs, di=0x76DE + 0x40 * image[DS * 16 + 0xFF00] % (0x40 * 36))
-        e.call(addr, **regs)
+        e.call(addr, max_insns=100_000_000 if NAME == "title_session" else 10_000_000, **regs)  # 12 title passes
     except RuntimeError:
         if not left:
             raise
     if NAME == "pause_session" and not left:
         left.append("end")
-    if NAME in ("chart_session", "save_session", "load_session") and not left:
+    if NAME in ("chart_session", "save_session", "load_session", "title_open", "title_session") and not left:
         left.append("end")
     if NAME == "commands" and not left:
         left.append("cmd 0")
