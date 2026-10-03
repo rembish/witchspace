@@ -6,6 +6,7 @@
 
 #include "ep_combat.h"
 #include "ep_flight.h"
+#include "ep_trade.h"
 #include "ep_world.h"
 
 #include <stdio.h>
@@ -55,6 +56,16 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "laser_hits")) {
             ep_laser_hits(&g);
             print_prims(&g.render);
+        } else if (!strncmp(argv[1], "buy", 3) || !strncmp(argv[1], "sell", 4) ||
+                   !strncmp(argv[1], "equip", 5)) {
+            int row = ds[0xad2b]; /* the selected row, as the screen leaves it */
+            uint16_t r = argv[1][0] == 'b'   ? ep_trade_buy(&g, row)
+                         : argv[1][0] == 's' ? ep_trade_sell(&g, row)
+                                             : ep_equip_buy(&g, row);
+            if (r == EP_TRADE_CHOOSE_MOUNT)
+                printf("choose mount\n");
+            else if (r > EP_TRADE_CHOOSE_MOUNT)
+                printf("result %u\n", r);
         } else if (!strcmp(argv[1], "collisions")) {
             ep_collisions(&g);
         } else if (!strcmp(argv[1], "enemy_fire")) {

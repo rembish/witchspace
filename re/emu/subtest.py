@@ -32,7 +32,9 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary; and sound state (the core
 # reports sounds as events).
-SCRATCH = [(0x01F8, 0x01F9), (0x1074, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
+SCRATCH = [(0x45E4, 0x45E5), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0xA500, 0xA7FF), (0x8D00, 0x8D4E), (0x92F9, 0x92F9), (0xA3A0, 0xA4FF), (0xACA8, 0xACB3), (0xAD2B, 0xAD2D),
+           (0x031D, 0x031E), (0x03F1, 0x03F2), (0x0980, 0x0990),
+           (0x01F8, 0x01F9), (0x1074, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
            (0x76D6, 0x76D7), (0x45E6, 0x45FF), (0x4FE0, 0x4FE0)]
 
 EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
@@ -62,6 +64,9 @@ ROUTINES = {
     "laser_hits": (0xAC52, {}, {}),
     "collisions": (0x66D6, {}, {}),
     "enemy_fire": (0xAE50, {}, {}),
+    "buy": (0x96DE, {}, {}),
+    "sell": (0x9781, {}, {}),
+    "equip": (0x932F, {}, {0x94BF: "choose mount"}),
 }
 
 
@@ -127,6 +132,35 @@ def docking_approach(img, rng):
         img[DS * 16 + 0x76D8 + 2 * k:DS * 16 + 0x76DA + 2 * k] = a.to_bytes(2, "little")
 
 
+def trading(img, rng):
+    """A random commander and market: cargo, cash, equipment, the docked system, a row."""
+    d = DS * 16
+    for k in range(17):
+        img[d + 0x8379 + 2 * k] = rng.choice([0, 0, 1, 5, 0xF9, 0xFA, 0xFF, rng.getrandbits(8)])
+        img[d + 0x837A + 2 * k] = rng.choice([0, 1, 7, 0xF9, 0xFA, 0xFF, rng.getrandbits(8)])
+    img[d + 0x839C] = rng.choice([0, 5, 0x13, 0x14, 0x22, 0x23, 0x30])
+    cash = rng.choice([0, 1, 100, 1000, 30000, 0x10000, 0x7FFFF, rng.getrandbits(20)])
+    img[d + 0x8367:d + 0x836B] = cash.to_bytes(4, "little")
+    for k in range(14):
+        img[d + 0x8356 + k] = rng.choice([0, 0, 0, 1, rng.getrandbits(8)])
+    img[d + 0x8356] = rng.choice([0, 0x10, 0xFA, 0xFB, 0xFF, rng.getrandbits(8)])
+    img[d + 0x8357] = rng.choice([0, 3, 4, 5])
+    img[d + 0x8358] = rng.choice([0, 1])
+    img[d + 0x835C] = rng.choice([0, 1])
+    img[d + 0x8365] = rng.choice([0, 1, 0x0F, 0x0E, 0x07, rng.getrandbits(4)])
+    img[d + 0x8366] = rng.getrandbits(8)
+    img[d + 0x836B] = rng.choice([0, 0x20, 0xFF])
+    img[d + 0x832C:d + 0x832F] = bytes([rng.randrange(8), rng.randrange(8), rng.randrange(13)])
+    img[d + 0x83A0] = rng.choice([0, 0, 1, 4])
+    img[d + 0xAD2B] = rng.choice([rng.randrange(17), rng.randrange(14), 0, 0, 1, 4, 5, 12, 13])
+    img[d + 0x839D] = 1  # on the market screen the table is already drawn
+    if NAME == "equip":  # only rows the station lists (min tech <= tech + 1)
+        row = img[d + 0xAD2B] % 14
+        img[d + 0xAD2B] = row
+        min_tech = [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10][row]
+        img[d + 0x832E] = rng.randint(min_tech - 1, 12)
+
+
 def attacker(img, rng):
     slot = rng.randint(2, 19)
     base = DS * 16 + 0x76DE + 0x40 * slot
@@ -153,6 +187,7 @@ FUZZ = {
                    (0x83AA, [0, 0, 1]), (0x83A0, [0, 4, 6]), (0x83A2, [0, 1, 2, 3]), (0x836B, [0, 0xD7, 0xD8, 0xFF]),
                    (0x7680, [0, 1]), (0x83A4, [0, 0, 1, 5, 6, 0x23, 0x24, 0x40]), (0x805A, [0, 0, 3]),
                    (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
+    "buy": [(0, trading)], "sell": [(0, trading)], "equip": [(0, trading)],
     "collisions": [(0, something_close), (0, docking_approach), (0x83AA, [0, 0, 1]), (0xAE23, [0, 0, 0, 1]),
                    (0x54C4, [0, 10, 0x80, 0xFF]), (0x54C8, [0, 0x10, 0x200, 0x3FF])],
     "enemy_fire": [(0, attacker), (0x7612, [1, 1, 1, 0]), (0x7681, [0, 0x80]), (0x54C4, [0, 5, 14, 15, 16, 0xFF]),
@@ -222,6 +257,11 @@ def run_original(image, addr, regs, exits=None):
     for stub in UNPORTED:
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
+    if NAME in ("buy", "sell"):
+        e.call(0x97D8)
+    elif NAME == "equip":
+        e.call(0x9161)
+    e.hook(0x2FC0, lambda e, r: left.append(f"result {r['si']}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
         e.call(addr, **regs)
@@ -230,6 +270,8 @@ def run_original(image, addr, regs, exits=None):
             raise
     if NAME == "tunnel" and not left:
         left.append("end 0")
+    if NAME in ("buy", "sell", "equip"):  # the screens' drawing is the frontend's
+        prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims
 

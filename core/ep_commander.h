@@ -33,6 +33,7 @@ enum {
     EP_CMDR_KILLS = 0x91,        /* ds:836c: word */
     EP_CMDR_NAME = 0x95,         /* ds:8370 */
     EP_CMDR_CARGO = 0x9e,        /* ds:8379: 17 x (held, on offer) */
+    EP_CMDR_CARGO_USED = 0xc1,   /* ds:839c: tonnes in the hold */
     EP_CMDR_MARKET_DRAWN = 0xc2, /* ds:839d */
     EP_CMDR_CHECKSUM = 0xe0,     /* ds:83bb */
 };

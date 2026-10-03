@@ -452,3 +452,20 @@ Flight loop (`a027`, top `a040`): `0299` key map, `3921` flash, `a3f4`, `3130` c
   dead.
 - Checked: `subtest.py collisions|enemy_fire --fuzz 10` (ships and stations placed close,
   docking approaches, attackers).
+
+## Trading (station)
+
+- Buy (`96de`, row `ds:ad2b`): needs stock on offer; goods rows 0–12 need room (`ds:839c`
+  tonnes < 20, 35 with the cargo bay extension `8358`; else CARGO BAY FULL `ad2e`); rows 13–16
+  (kg/g) refuse when **on offer** ≥ 250 (`ad3e`, the original tests the wrong byte); price
+  from the price table, paid by `8e23` (32-bit, refused → `ad50`); held +1, offer −1, tonnes +1.
+- Sell (`9781`): held −1, offer +1 (stays at 255), tonnes −1, cash + selling price; `98d4`
+  adds the item's illegal flag (third byte at `ds:92a1`) to the legal status.
+- Equipment (`932f`): fuel (row 0; mission 1 refuses `8dad`; ≥ fbh refuses `adaa`): full
+  tank costs `((255 − fuel)·7 · price) >> 8`, else what the low word of the cash buys,
+  `(cash_lo·256/price)/7` units, for all of that low word; missiles at most 4 (`ad64`); other
+  items once (`8d5a`); lasers (rows 4, 5, 12, 13 → type 0–3, `8df7`) need a free mount
+  (`92e6`), the mining laser needs fuel scoops (`8d7a`); paid → count + 1; a laser goes to the
+  only free mount, or the player picks one (menu at `94bf`; `9524` fits the n-th free mount:
+  bit in `8365`, two type bits in `8366`).
+- Checked: `subtest.py buy|sell|equip --fuzz 10` (random cargo, cash, equipment, system).
