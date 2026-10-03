@@ -224,7 +224,9 @@ enum {
     ST_M456_DONE,  /* 9c75, 9cb5, 9cf3 */
     ST_MOUNT_BUY,  /* 9502: the mount for a laser bought */
     ST_MOUNT_SELL, /* 968f: the mount of a laser sold */
-    ST_FIND_TEXT   /* 61b1: the name to find */
+    ST_FIND_TEXT,  /* 61b1: the name to find */
+    ST_ABANDON,    /* 0aac: Sure ? (Y/N) */
+    ST_EXIT        /* 0aef */
 };
 
 static int wait(ep_game *g, uint8_t step, int kind)
@@ -501,6 +503,20 @@ int ep_station_key(ep_game *g, uint8_t key)
     case ST_MOUNT_BUY:
     case ST_MOUNT_SELL: return mount_key(g, key);
     case ST_FIND_TEXT: return find_key(g, key);
+    case ST_ABANDON:
+    case ST_EXIT:
+        if (!yes && !no) return EP_WAIT_YN;
+        if (no)
+            ep_box_close(g);
+        else if (f->station_step == ST_EXIT)
+            f->leave = 2; /* 00ba */
+        else {
+            f->leave = 1; /* 0ac4: back to the title (9e80) */
+            f->screen_shown = 0xff;
+            g->space.in_flight = 0;
+        }
+        f->station_step = ST_NONE;
+        return EP_WAIT_NONE;
     case ST_NONE: return EP_WAIT_NONE;
     default: break;
     }
@@ -870,7 +886,7 @@ static void equipment_cash(ep_game *g)
     ep_status_picture(g);
     uint16_t a = 0x82fb;
     while (ep_ds_byte(g, a) == ' ') a++;
-    uint8_t t[32];
+    uint8_t t[96];
     int n = ep_ds_text(g, a, t, sizeof t);
     ep_pen(&g->render, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0x87, 0x0f);
     ep_text(&g->render, t, n, 0);
@@ -885,7 +901,7 @@ void ep_equipment_screen(ep_game *g)
     f->screen_flag = 0;
     f->screen_bits = 0;
     frame(g);
-    uint8_t t[32];
+    uint8_t t[96];
     int n = ep_ds_text(g, 0x88fa, t, sizeof t);
     title(g, 0xa0, 0, 0x0f, t, n);
     ep_equipment_rows(g);
@@ -1768,20 +1784,50 @@ static int find_key(ep_game *g, uint8_t key)
     return EP_WAIT_NONE;
 }
 
-int ep_station_idle(ep_game *g)
+/* ---- boxes and questions ---- */
+
+void ep_box_open(ep_game *g, uint16_t title_text)
+{
+    ep_render *r = &g->render;
+    ep_event_add(g, EP_EV_KEEP, 1); /* 397c */
+    ep_render_rect(r, 4, 0x19, 0x0d, 0x110, 0x73);
+    ep_render_rect(r, 4, 0x1a, 0x80, 0x110, 1);
+    ep_render_rect(r, 4, 0x129, 0x0e, 1, 0x73);
+    ep_render_rect(r, 0x0c, 0x18, 0x0c, 0x110, 1);
+    ep_render_rect(r, 0x0c, 0x18, 0x17, 0x110, 1);
+    ep_render_rect(r, 0x0c, 0x18, 0x7e, 0x110, 1);
+    ep_render_rect(r, 0x0c, 0x18, 0x0c, 1, 0x73);
+    ep_render_rect(r, 0x0c, 0x127, 0x0c, 1, 0x73);
+    uint8_t t[40];
+    int n = ep_ds_text(g, title_text, t, sizeof t);
+    title(g, 0xa0, 0x0e, 0x0a, t, n);
+}
+
+void ep_box_close(ep_game *g) { ep_event_add(g, EP_EV_PUT_BACK, 1); } /* 3981 */
+
+int ep_station_ask(ep_game *g, uint16_t title_text, int what)
+{
+    ep_box_open(g, title_text);
+    uint8_t t[96];
+    int n = ep_ds_text(g, 0x0685, t, sizeof t);
+    title(g, 0xa0, 0x46, 0x0f, t, n);
+    wait(g, what == EP_ASK_ABANDON ? ST_ABANDON : ST_EXIT, EP_WAIT_YN);
+    return EP_CMD_SCREEN;
+}
+
+/* what a pass does after the commands (also when the pause menu closes) */
+static int idle_after(ep_game *g, int r)
 {
     ep_flight *f = &g->f;
-    int r;
+    if (r == EP_CMD_PAUSE) {
+        f->resume = EP_RESUME_IDLE;
+        return r;
+    }
     switch (f->idle) {
-    case EP_IDLE_STATUS: /* 8dac */
-        f->screen_redraw = 0;
-        ep_key_bar(g);
-        r = ep_commands(g);
+    case EP_IDLE_STATUS:
         if (r == EP_CMD_STAY && f->screen_redraw) ep_status_screen(g);
         return r;
-    case EP_IDLE_MARKET: { /* 9124 .. 915f, up to the next 9124 */
-        ep_key_bar(g);
-        r = ep_commands(g);
+    case EP_IDLE_MARKET: { /* 912a..915f */
         if (r != EP_CMD_STAY) return r;
         ep_list_poll(g, 0);
         uint8_t row = f->menu[1];
@@ -1791,22 +1837,31 @@ int ep_station_idle(ep_game *g)
         if (f->list_busy && !f->note_ticks) cash_line(g); /* 90d7 */
         return r;
     }
-    case EP_IDLE_EQUIP: /* 92d3 .. up to the next 92d3 */
-        ep_key_bar(g);
-        r = ep_commands(g);
+    case EP_IDLE_EQUIP:
         if (r != EP_CMD_STAY || f->station_step) return r;
         equipment_tail(g);
         return r;
-    case EP_IDLE_LOCAL:
-    case EP_IDLE_GALAXY:
-        if (f->idle == EP_IDLE_LOCAL)
-            chart_local_pass(g);
-        else
-            chart_galaxy_pass(g);
-        ep_key_bar(g);
-        return ep_commands(g);
-    default: /* the bar and the commands */ ep_key_bar(g); return ep_commands(g);
+    default: return r;
     }
+}
+
+int ep_station_idle(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    switch (f->idle) {
+    case EP_IDLE_STATUS: f->screen_redraw = 0; break; /* 8dac */
+    case EP_IDLE_LOCAL: chart_local_pass(g); break;
+    case EP_IDLE_GALAXY: chart_galaxy_pass(g); break;
+    default: break;
+    }
+    ep_key_bar(g);
+    return idle_after(g, ep_commands(g));
+}
+
+int ep_station_resume(ep_game *g)
+{
+    g->f.resume = EP_RESUME_NONE;
+    return idle_after(g, ep_commands(g)); /* 03c0 goes on reading keys */
 }
 
 void ep_timer_tick(ep_game *g)

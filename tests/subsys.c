@@ -112,6 +112,20 @@ int main(int argc, char **argv)
             for (int k = 0; k < g.circles.n; k++)
                 printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
             printf("end\n");
+        } else if (!strcmp(argv[1], "pause_session")) { /* Esc, then 12 keys: a pass or a question each */
+            int r = ep_pause_open(&g);
+            for (int k = 0; r == EP_CMD_PAUSE && k < 12; k++) {
+                uint8_t key = ds[0xff10 + k];
+                if (g.f.station_step) {
+                    ep_station_key(&g, key);
+                    if (g.f.leave) break;
+                    continue;
+                }
+                g.in.last_key = key;
+                if (ep_pause_idle(&g) == EP_CMD_RESUME) break;
+            }
+            print_prims(&g.render);
+            printf("end\n");
         } else if (!strcmp(argv[1], "data_screen")) {
             ep_data_screen(&g);
             print_prims(&g.render);

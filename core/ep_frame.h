@@ -26,8 +26,12 @@ enum {
     EP_FRAME_NEXT = 0, /* go on flying (the next frame starts at a040) */
     EP_FRAME_DOCKED,   /* docking succeeded (7613) or the escape capsule arrived: the station */
     EP_FRAME_SCREEN,   /* a command opened a screen not reconstructed yet */
-    EP_FRAME_OVER      /* the death sequence is over: back to the title */
+    EP_FRAME_OVER,     /* the death sequence is over: back to the title */
+    EP_FRAME_PAUSED    /* the pause menu is up (ep_pause_idle), then ep_flight_resume */
 };
+
+/* the rest of the frame the pause menu interrupted (EP_FRAME_*) */
+int ep_flight_resume(ep_game *g);
 
 /* a040..a0c9: one frame of the flight loop: the key bar, both halves, then the laser, the
  * commands, the jump drive, the countdowns, the tunnel, the energy drain and the death */

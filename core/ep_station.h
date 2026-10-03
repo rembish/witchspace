@@ -88,6 +88,14 @@ void ep_data_screen(ep_game *g);
 /* 6189: FIND: Which System ? (a name typed, the cursor onto it) */
 int ep_chart_find_name(ep_game *g);
 
+/* 0b20: a box over the screen with a title; 0b0a: the screen put back */
+void ep_box_open(ep_game *g, uint16_t title);
+void ep_box_close(ep_game *g);
+
+/* the abandon (0a92) and exit (0ad5) questions; Y sets f.leave */
+enum { EP_ASK_ABANDON = 1, EP_ASK_EXIT };
+int ep_station_ask(ep_game *g, uint16_t title, int what);
+
 /* where the screens idle */
 enum {
     EP_IDLE_NONE = 0,
@@ -102,6 +110,9 @@ enum {
 /* one pass of the current screen's idle loop: the bar, the commands, the screen's own
  * work; returns the commands' EP_CMD_* (a new screen to show: EP_CMD_SCREEN) */
 int ep_station_idle(ep_game *g);
+
+/* the pass the pause menu interrupted, from where it stopped (EP_CMD_*) */
+int ep_station_resume(ep_game *g);
 
 /* 4a50: one timer tick: the clock, and a note's time up */
 void ep_timer_tick(ep_game *g);

@@ -13,8 +13,21 @@
 enum {
     EP_CMD_STAY = 0,    /* carry on with this frame */
     EP_CMD_RESTART = 1, /* back to the top of the flight loop (a040): the rest of the frame is skipped */
-    EP_CMD_SCREEN = 2   /* a screen that is not reconstructed yet (EP_EV_UNPORTED says which) */
+    EP_CMD_SCREEN = 2,  /* a screen is up (or a dialog waits): the caller idles it */
+    EP_CMD_PAUSE = 3,   /* the pause menu is up: ep_pause_idle, then ep_resume */
+    EP_CMD_RESUME = 4,  /* the pause menu closed: ep_resume carries on with what it interrupted */
+    EP_CMD_TITLE = 5,   /* the game was abandoned: back to the title */
+    EP_CMD_QUIT = 6     /* quit to DOS */
 };
+
+/* what the pause interrupted */
+enum { EP_RESUME_NONE = 0, EP_RESUME_FLIGHT, EP_RESUME_IDLE };
+
+/* 0425: the pause menu (Esc): its title, the options' bar */
+int ep_pause_open(ep_game *g);
+
+/* 0480..0490: a pass of the pause menu; EP_CMD_RESUME when space closed it */
+int ep_pause_idle(ep_game *g);
 
 /* 0299: set up the bar for the current screen, redraw the icons that changed */
 void ep_key_bar(ep_game *g);

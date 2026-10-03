@@ -17,7 +17,19 @@
  * not reconstructed yet (so tests notice when a state reaches them). */
 /* EP_EV_ICON: function-key bar slot (high byte) gets icon sprite (low byte) */
 /* EP_EV_WAIT: the original stops for this many timer ticks (a sound playing out) */
-enum { EP_EV_SOUND = 1, EP_EV_SURFACE_SOUND, EP_EV_UNPORTED, EP_EV_ICON, EP_EV_WAIT };
+/* EP_EV_MUSIC: the music driver switched (arg: ds:45e7, 1 = sound off)
+ * EP_EV_KEEP / EP_EV_PUT_BACK: the screen under a box (arg 1, 397c at 18,c 112x75) or the top
+ * line (arg 2, at 8,0 130x9) is kept, then put back (3981) */
+enum {
+    EP_EV_SOUND = 1,
+    EP_EV_SURFACE_SOUND,
+    EP_EV_UNPORTED,
+    EP_EV_ICON,
+    EP_EV_WAIT,
+    EP_EV_MUSIC,
+    EP_EV_KEEP,
+    EP_EV_PUT_BACK
+};
 
 typedef struct {
     uint8_t kind;
@@ -157,6 +169,11 @@ typedef struct {
     uint8_t desc_caps;          /* ds:5a34 */
     uint8_t entry[0x2b];        /* ds:09a2: a text being typed: max, count, text, x, y, end, colours, blink */
     uint16_t find_text[2];      /* ds:5567: the typed name and where it ends */
+    uint8_t sound_mode;         /* ds:45ea */
+    uint8_t pause_screen;       /* the screen the pause menu came from (on the original's stack) */
+    uint8_t resume;             /* what the pause interrupted (EP_RESUME_*) */
+    uint8_t leave;              /* 1 back to the title (abandon), 2 to DOS (exit) */
+    uint8_t bar_quiet;          /* ds:b3d4: the bar's marks are not drawn */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

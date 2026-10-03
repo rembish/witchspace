@@ -3,6 +3,8 @@
 
 #include <string.h>
 
+#include "ep_dsmap.h"
+
 #include "ep_chart.h"
 #include "ep_combat.h"
 #include "ep_dust.h"
@@ -110,6 +112,24 @@ void ep_key_bar(ep_game *g)
         ep_event_add(g, EP_EV_ICON,
                      (uint16_t)(k << 8 | (id < sizeof ep_icon_sprite ? ep_icon_sprite[id] : 0)));
     }
+    /* 0323: on the options' screens, marks by what is chosen */
+    if (!f->bar_redraw || f->bar_quiet) return;
+    uint8_t s = f->screen_shown;
+    if (s < 3 || s > 5) return;
+    uint8_t c = g->in.control < 3 ? g->in.control : 0;
+    ep_render_sprite(&g->render, 0x32, ep_ds_byte(g, (uint16_t)(0x03e3 + c)),
+                     (int16_t)(uint8_t)(ep_ds_byte(g, (uint16_t)(0x03e6 + c)) + f->bar_colour));
+    if (s != 5) {
+        const uint8_t opt[4] = { f->opt_reverse_stop, f->opt_self_centre, f->opt_invert_pitch,
+                                 f->opt_invert_both };
+        for (int k = 0; k < 4; k++)
+            if (opt[k] & 1)
+                ep_render_sprite(
+                    &g->render, 0x32, ep_ds_byte(g, (uint16_t)(0x03e9 + 2 * k)),
+                    (int16_t)(uint8_t)(ep_ds_byte(g, (uint16_t)(0x03ea + 2 * k)) + f->bar_colour));
+    }
+    if (f->sound_off) ep_render_sprite(&g->render, 0x36, 0xda, (int16_t)(uint8_t)(3 + f->bar_colour));
+    /* 03ad: the protection has put a ret here */
 }
 
 /* ---- slots and launches ---- */
@@ -534,6 +554,45 @@ static void anti_ecm(ep_game *g)
     message(g, text, 0x19);
 }
 
+/* ---- the pause menu ---- */
+
+int ep_pause_open(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t s = f->screen;
+    if (s == 0 || s == 2)
+        f->screen = 3;
+    else if (s == 1)
+        f->screen = 4;
+    else
+        return EP_CMD_STAY; /* no pause within the pause */
+    f->pause_screen = s;
+    sound(g, 4);                    /* 4e15 */
+    ep_event_add(g, EP_EV_KEEP, 2); /* 397c: the top line kept */
+    ep_render_sprite(&g->render, 0x6c, 0, 0);
+    uint8_t t[96];
+    int n = ep_ds_text(g, 0x095c, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0, 0x0f);
+    ep_text(&g->render, t, n, 1);
+    g->in.last_key = 0xff;
+    return EP_CMD_PAUSE;
+}
+
+int ep_pause_idle(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_key_bar(g);
+    f->space_pressed = 0;
+    int r = ep_commands(g);
+    if (r != EP_CMD_STAY) return r;
+    if (!f->space_pressed) return EP_CMD_STAY;
+    ep_event_add(g, EP_EV_PUT_BACK, 2); /* 0492: the top line put back */
+    f->screen = f->pause_screen;
+    f->laser_hold = 1;
+    ep_key_bar(g);
+    return EP_CMD_RESUME;
+}
+
 static int run(ep_game *g, uint8_t id)
 {
     static const uint16_t handler[37] = {
@@ -569,6 +628,28 @@ static int run(ep_game *g, uint8_t id)
     case 0x21: ep_equipment_buy(g); return EP_CMD_STAY;
     case 0x22: ep_equipment_sell(g); return EP_CMD_STAY;
     case 0x20: ep_market_sell(g); return EP_CMD_STAY;
+    case 0x19:
+    case 0x1a:
+    case 0x1b:
+    case 0x1c: /* 062c..064d: the steering and invert options */
+        if (id == 0x19)
+            g->f.opt_reverse_stop ^= 1;
+        else if (id == 0x1a)
+            g->f.opt_self_centre ^= 1;
+        else if (id == 0x1b)
+            g->f.opt_invert_pitch ^= 1;
+        else
+            g->f.opt_invert_both ^= 1;
+        g->f.screen_shown = 0xff;
+        return EP_CMD_STAY;
+    case 0x1d: /* 0658: sound on or off */
+        g->f.sound_off ^= 1;
+        g->f.sound_mode = 5;
+        g->f.screen_shown = 0xff;
+        ep_event_add(g, EP_EV_MUSIC, g->f.sound_off);
+        return EP_CMD_STAY;
+    case 0x1e: return ep_station_ask(g, 0x0451, EP_ASK_ABANDON); /* 0a92 */
+    case 0x1f: return ep_station_ask(g, 0x0445, EP_ASK_EXIT);    /* 0ad5 */
     case 0x23: masking(g); return EP_CMD_STAY;
     case 0x24: anti_ecm(g); return EP_CMD_STAY;
     default: ep_event_add(g, EP_EV_UNPORTED, id < 37 ? handler[id] : id); return EP_CMD_SCREEN;
@@ -587,8 +668,9 @@ int ep_commands(ep_game *g)
             g->f.space_pressed = 1;
             continue;
         } else if (key == 0x1b) {
-            ep_event_add(g, EP_EV_UNPORTED, 0x0425); /* the Esc menu */
-            return EP_CMD_SCREEN;
+            int r = ep_pause_open(g);
+            if (r != EP_CMD_STAY) return r;
+            continue;
         } else if (key >= 0x97 && key <= 0xa2) {
             slot = key - 0x97;
         } else if (key >= '1' && key <= '9') {

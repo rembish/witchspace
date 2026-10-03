@@ -167,7 +167,7 @@ key_rows = ds(0x31F, 6 * 12)
 icon_sprite = ds(0x374, 37)
 bar_colour = ds(0x2FB, 3)
 # static data the texts are read from, by address (the live buffers inside are game state)
-DS_TEXT = [(0x2600, 0x2D00), (0x5500, 0xB400)]
+DS_TEXT = [(0x0300, 0x0B00), (0x2600, 0x2D00), (0x5500, 0xB400)]
 ds_text = [(a, ds(a, b - a)) for a, b in DS_TEXT]
 # ds:0d40: the font, 9 bytes a glyph from 20h: 8 rows, then the width
 glyph_width = [ds(0xD48 + 9 * i, 1)[0] for i in range(0x5B)]

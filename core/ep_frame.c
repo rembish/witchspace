@@ -132,20 +132,14 @@ void ep_death(ep_game *g)
     add24(c, 1, j); /* the same jitter both ways */
 }
 
-int ep_flight_frame(ep_game *g)
+/* a07f onwards, after the commands */
+static int frame_after(ep_game *g, int r)
 {
     ep_flight *f = &g->f;
-    ep_key_bar(g);
-    ep_frame_before_ai(g);
-    ep_frame_from_ai(g);
-    if (f->docked == 1) {
-        ep_dock(g);
-        return EP_FRAME_DOCKED;
-    }
-    ep_laser_fire(g);
-    switch (ep_commands(g)) {
+    switch (r) {
     case EP_CMD_RESTART: return EP_FRAME_NEXT;
     case EP_CMD_SCREEN: return EP_FRAME_SCREEN;
+    case EP_CMD_PAUSE: f->resume = EP_RESUME_FLIGHT; return EP_FRAME_PAUSED;
     default: break;
     }
     ep_jump_drive(g);
@@ -167,4 +161,24 @@ int ep_flight_frame(ep_game *g)
     f->message = 0xb127;
     f->message_time = 0x3c;
     return EP_FRAME_NEXT;
+}
+
+int ep_flight_frame(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_key_bar(g);
+    ep_frame_before_ai(g);
+    ep_frame_from_ai(g);
+    if (f->docked == 1) {
+        ep_dock(g);
+        return EP_FRAME_DOCKED;
+    }
+    ep_laser_fire(g);
+    return frame_after(g, ep_commands(g));
+}
+
+int ep_flight_resume(ep_game *g)
+{
+    g->f.resume = EP_RESUME_NONE;
+    return frame_after(g, ep_commands(g)); /* 03c0 goes on reading keys */
 }
