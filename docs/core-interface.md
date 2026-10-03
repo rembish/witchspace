@@ -14,13 +14,13 @@ segment. See `re/NOTES.md` for the details.
 Everything lives in one `ep_game` (`core/ep_game.h`). `ep_boot` fills it the way the
 original's start-up does; nothing else is global. The frontend sets three things on it:
 
-- `io`: access to commander files (`exists`, `read`, `write`, and `list` of `*.CDR`).
-  NULL means no files.
+- `io`: access to commander files (`exists`, `read`, `write`, and `list` of `*.CDR`), and
+  `read` of the game's music (`ADBLUE.MID`, at start-up with an AdLib). NULL means no files.
 - `wait(g, until, show)`: called wherever the original busy-waits on the timer, that is
   before a frame is shown (`show` = 1) and while a sound plays out. The frontend:
   - shows the output so far;
-  - calls `ep_timer_tick` once per tick (1193182 / 5555h Hz, about 55 Hz) until
-    `g->clock >= until`;
+  - calls `ep_pit_tick` once per tick of the timer (1193182 / `g->pit` Hz: 5555h, about
+    55 Hz, unless the AdLib's music has set its own) until `g->clock >= until`;
   - may empty the output (`ep_output_begin`).
 
   Multi-frame sequences (the launch tunnel, the hyperspace rings) call it once per frame.
@@ -87,8 +87,12 @@ Events (`core/ep_game.h`):
 | `UNPORTED` | should not happen |
 
 With the PC speaker (`f.sound_device` = 2) the core plays the music and effects itself:
-after each `ep_timer_tick`, `g->speaker` is the PIT divisor and `g->speaker_on` says whether
-it sounds.
+after each tick, `g->speaker` is the PIT divisor and `g->speaker_on` says whether it sounds.
+
+With an AdLib (`f.sound_device` = 1) the core runs the original's music driver: after each
+tick, `g->opl[0 .. g->nopl)` are the writes it made to the OPL2 chip (register, value), in
+order. The frontend plays them on an emulated chip and sets `g->nopl` to 0. While the music
+plays, the timer runs at the song's rate (the driver keeps the game's clock at 55 Hz).
 
 ## Loops
 
