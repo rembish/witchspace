@@ -186,6 +186,11 @@ typedef struct {
     uint8_t title_step;         /* the title coming up: 1 the intro picture, 2 the credits */
     uint32_t intro_until;       /* 3ae5: the intro picture's time (in registers) */
     uint8_t protection_failed;  /* the copy protection was asked and answered wrong (off: never) */
+    uint8_t prot_page[2];       /* ds:0a83: the protection's page (a number, then two digits) */
+    uint8_t prot_paragraph;     /* ds:0a91 */
+    uint8_t prot_line;          /* ds:0a99 */
+    uint8_t prot_word;          /* ds:0aa1 */
+    uint16_t prot_hash;         /* ds:09d9: the word's, 9 bits */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -227,6 +232,7 @@ typedef struct {
 
 typedef struct {
     const ep_io *io;         /* NULL: no files */
+    uint8_t protection;      /* 1: the copy protection is asked (ep_boot.h); off by default */
     ep_commander cmdr;       /* ds:82db */
     ep_commander cmdr_saved; /* ds:83be: a second copy (the commander as last saved or docked) */
     ep_space space;          /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */

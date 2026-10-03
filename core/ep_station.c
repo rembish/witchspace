@@ -13,6 +13,7 @@
 #include "ep_commands.h"
 #include "ep_render.h"
 #include "ep_market.h"
+#include "ep_boot.h"
 #include "ep_title.h"
 #include "ep_trade.h"
 
@@ -235,7 +236,8 @@ enum {
     ST_LOAD_NONE,  /* 08e4: none there (space) */
     ST_LOAD_GONE,  /* 0a29: it could not be opened (space) */
     ST_LOAD_BAD,   /* 0a0f: a bad file (space), then the title */
-    ST_LOAD_GOOD   /* 0a35: loaded (space), then the station */
+    ST_LOAD_GOOD,  /* 0a35: loaded (space), then the station */
+    ST_PROTECTION  /* 1472: the word from the novella */
 };
 
 static int wait(ep_game *g, uint8_t step, int kind)
@@ -442,6 +444,7 @@ int ep_status_screen(ep_game *g)
 }
 
 static int find_key(ep_game *g, uint8_t key);
+static int protection_key(ep_game *g, uint8_t key);
 static int save_key(ep_game *g, uint8_t key);
 static int load_key(ep_game *g, uint8_t key);
 static int mount_key(ep_game *g, uint8_t key);
@@ -515,6 +518,7 @@ int ep_station_key(ep_game *g, uint8_t key)
     case ST_MOUNT_SELL: return mount_key(g, key);
     case ST_FIND_TEXT: return find_key(g, key);
     case EP_STEP_TITLE: return ep_title_key(g, key);
+    case ST_PROTECTION: return protection_key(g, key);
     case ST_SAVE_NAME:
     case ST_SAVE_ASK:
     case ST_SAVE_DONE: return save_key(g, key);
@@ -2034,6 +2038,27 @@ static int load_key(ep_game *g, uint8_t key)
     text_header(g, good ? 0x05c8 : 0x063d);
     f->station_step = good ? ST_LOAD_GOOD : ST_LOAD_BAD;
     return EP_WAIT_KEY;
+}
+
+/* ---- the copy protection's question ---- */
+
+int ep_protection_ask(ep_game *g)
+{
+    text_header(g, 0x09db);
+    entry_open(g, 0x18, 0x5a, 0x93, 0x000a, 0); /* 0d9d */
+    g->f.station_step = ST_PROTECTION;
+    return EP_WAIT_TEXT;
+}
+
+static int protection_key(ep_game *g, uint8_t key)
+{
+    int r = entry_key(g, key);
+    if (!r) return EP_WAIT_TEXT;
+    /* 1474: Esc leaves DI 0, the hash then of ds:0000 (empty here) */
+    uint16_t h = r < 0 ? 0 : ep_protection_hash(entry_b(g, 0x9a4));
+    g->f.protection_failed = h != g->f.prot_hash;
+    g->f.station_step = ST_NONE;
+    return EP_WAIT_NONE;
 }
 
 /* ---- a new game ---- */
