@@ -320,6 +320,7 @@ int main(int argc, char **argv)
             ep_dust_reset(&g);
         } else if (!strcmp(argv[1], "dashboard")) {
             ep_dashboard_tick(&g);
+            print_prims(&g.render);
         } else if (!strcmp(argv[1], "ai")) {
             ep_ai_frame(&g);
         } else if (!strcmp(argv[1], "explode")) {

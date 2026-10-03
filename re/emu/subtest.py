@@ -33,7 +33,7 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary; and sound state (the core
 # reports sounds as events).
-SCRATCH = [(0x0002, 0x002C), (0x54CC, 0x54E1), (0x6405, 0x6405), (0x63F2, 0x6401), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0x8D00, 0x8D09), (0xA3A0, 0xA40F), (0xACA8, 0xACAF), (0xACB1, 0xACB3),
+SCRATCH = [(0x0002, 0x002C), (0x63F2, 0x6401), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0x8D00, 0x8D09), (0xA3A0, 0xA40F), (0xACA8, 0xACAF), (0xACB1, 0xACB3),
            (0x031B, 0x031E), (0x03F2, 0x03F2),
            (0x01F8, 0x01F9), (0x1074, 0x108E), (0x1091, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
            (0x76D6, 0x76D7), (0x45E8, 0x45E9), (0x45EB, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
@@ -1091,7 +1091,6 @@ def run_original(image, addr, regs, exits=None):
     e.mu.hook_add(UC_HOOK_CODE, sound_wait, begin=CS * 16 + 0x4E88, end=CS * 16 + 0x4E88)
     for stub in UNPORTED_FOR.get(NAME, UNPORTED):
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
-    e.hook(0x487E, lambda e, r: None)  # compass: drawing only
 
     def view_clear(e, r):  # 3130 as the core emits it
         prims.extend(["rect 0:8,9,304,124", "10:0,96,160", "10:51,296,157"])
@@ -1114,10 +1113,12 @@ def run_original(image, addr, regs, exits=None):
         visits = []
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (visits.append(1), len(visits) > 1 and (
             left.append("frame 0"), mu.emu_stop())), begin=CS * 16 + 0xA040, end=CS * 16 + 0xA040)
-    if NAME in ("loop", "frame"):  # bar icons
+    if NAME in ("loop", "frame"):  # bar icons as events, other sprites (37bd: on both pages) drawn
         def bar_icon(e, r):
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
+            else:
+                prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
         e.hook(0x37BD, bar_icon)
     if NAME in ("commands", "loop"):
         if NAME == "commands":  # the bar's icons as events; the cockpit (763e) is drawing
@@ -1155,7 +1156,7 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "message"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "message", "dashboard", "update_objects"):
         def sprite_or_icon(e, r):
             sp = SS * 16 + e.mu.reg_read(UC_X86_REG_SP)
             if e.mu.mem_read(sp, 2) == b"\x15\x03" or e.mu.mem_read(sp, 2) == b"\xce\x37" and e.mu.mem_read(sp + 8, 2) == b"\x15\x03":  # the bar's (0312, through 37bd on EGA/VGA)
@@ -1311,7 +1312,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "dashboard"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
@@ -1350,7 +1351,7 @@ def run_original(image, addr, regs, exits=None):
         left.append("cmd 0")
     if NAME == "tunnel" and not left:
         left.append("end 0")
-    if NAME in ("buy", "sell", "equip", "dashboard", "arrive", "countdowns", "launch", "dock"):  # the screens' drawing is the frontend's
+    if NAME in ("buy", "sell", "equip", "arrive", "countdowns", "launch", "dock"):  # the screens' drawing is the frontend's
         prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds + written
 
@@ -1379,7 +1380,7 @@ def main():
         open(inf, "wb").write(before)
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
         got, got_prims = open(outf, "rb").read(), out.splitlines()
-        if NAME in ("frame", "loop", "commands"):  # drawing is checked per subsystem; here state and events
+        if NAME in ("loop", "commands"):  # drawing is checked per subsystem and in "frame"; here state and events
             want_prims = [l for l in want_prims if l.startswith(("event", "frame", "cmd"))]
             got_prims = [l for l in got_prims if l.startswith(("event", "frame", "cmd"))]
         diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]]
