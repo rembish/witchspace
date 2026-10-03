@@ -98,7 +98,7 @@ ROUTINES = {
     "start_game": (0xA004, {}, {0x8DAC: "end"}),  # a040: no chart in witchspace, back to the view
     "equip_session": (0x924A, {}, {}),
     "save_session": (0x07AA, {}, {}),
-    "load_session": (0x08AB, {}, {0x9E80: "end"}),
+    "load_session": (0x08AB, {}, {}),  # 9e80: below
     "title_open": (0x9E9A, {}, {0x9F21: "end"}),
     "title_session": (0x9F21, {}, {0xA004: "start", **{a: "end" for a in (  # a screen up
         0x0480, 0x0DF6, 0x0945, 0x08E4, 0x0AAC, 0x0AEF, 0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0xA040)}}),
@@ -1138,6 +1138,9 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x4AC0, lambda e, r: None)
 
         e.on_intr = fake_dos(files, written)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (  # 9e80: the station (af18 = 1) or the title
+            left.extend(["end", f"leave {3 if e.r8(0xAF18) == 1 else 1}"]), mu.emu_stop()),
+            begin=CS * 16 + 0x9E80, end=CS * 16 + 0x9E80)
     if NAME in ("title_open", "title_session"):  # drawn on both pages (EGA, VGA): the second is skipped
         def second_page(mu, ad, sz, u):
             ret = struct.unpack("<H", mu.mem_read(SS * 16 + mu.reg_read(UC_X86_REG_SP), 2))[0]

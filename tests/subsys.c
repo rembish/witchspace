@@ -210,6 +210,7 @@ int main(int argc, char **argv)
             dialog_keys(&g, argv[1][0] == 's' ? ep_save_screen(&g) : ep_load_screen(&g));
             print_prims(&g.render);
             printf("end\n");
+            if (g.f.leave) printf("leave %d\n", g.f.leave);
         } else if (!strcmp(argv[1], "title_open")) { /* the waits given the keys at ds:ff10 */
             int w = ep_title_open(&g);
             for (int k = 0; w != EP_WAIT_NONE && k < 12; k++) w = ep_station_key(&g, ds[0xff10 + k]);
