@@ -7,15 +7,17 @@ Welltris ports: a deterministic C core reconstructed from the machine code and c
 against the original running in an emulator, with a fresh frontend on top. No original game
 files are included.
 
-**Status:** reverse engineering in progress. Reconstructed and checked against the original:
-galaxy and system generation, descriptions, market and equipment prices, the commander
-block (save files), ship models and rendering, the title screen (frame by frame), and in
-flight: the object update with sun, planet and scanner, the player's controls and movement,
-the laser, messages and warnings, fuel leak and energy, the dashboard's state, star dust,
-combat (hits, damage, collisions, enemy fire, explosions), trading, and the ship AI (every
-class handler, spawning, missions). Flight subsystems are checked on
-game states taken from the running original (`re/emu/corpus.py`, `re/emu/subtest.py`). The
-port (`eliteplus`) shows the title screen so far.
+**Status:** the game logic is reconstructed and checked against the original: galaxy and
+system generation, descriptions, markets, the commander block (save files), ship models and
+rendering, the title (setup, intro and credits, frame by frame), starting, saving and loading
+a game, every station screen (status, market, equipment, charts, data, the arrival dialogues
+and missions), the pause menu and options, and the whole flight loop (object update with sun,
+planet and scanner, controls, laser, messages, energy, dashboard, star dust, combat, the ship
+AI, docking, launching, hyperspace and witchspace). Each part is difftested on game states
+taken from the running original (`re/emu/corpus.py`, `re/emu/subtest.py`); `ep_flow` covers
+what the emulator cannot (the timer). Left: the key, joystick and mouse set-up screens, the
+copy protection (to be opt-in, off by default), and the frontend, which so far shows the
+title's ship only.
 
 ## Layout
 
@@ -45,7 +47,8 @@ python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip inst
 ~/tools/venv/bin/python re/emu/titletest.py 6000    # whole original booted headless vs core
 ~/tools/venv/bin/python re/emu/play.py              # the original in the harness, in a window
 ~/tools/venv/bin/python re/emu/corpus.py            # flight states from the original (git-ignored)
-~/tools/venv/bin/python re/emu/subtest.py controls --fuzz 10   # one flight subsystem vs the core
+~/tools/venv/bin/python re/emu/subtest.py controls --fuzz 10   # one subsystem vs the core
+ctest --test-dir build                               # core checks outside the emulator
 re/ghidra/run.sh                                     # Ghidra project, decompiled C and listing
 ```
 
