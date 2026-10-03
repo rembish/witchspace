@@ -127,6 +127,13 @@ int main(int argc, char **argv)
         fclose(f);
         static ep_game g;
         state_load(&g, ds);
+        g.in.joy_present = g.in.mouse_present = ds[0xff40]; /* the devices, as subtest.py fakes them */
+        g.in.joy_x = (uint16_t)(ds[0xff41] | ds[0xff42] << 8);
+        g.in.joy_y = (uint16_t)(ds[0xff43] | ds[0xff44] << 8);
+        g.in.joy_buttons = ds[0xff45];
+        g.in.mouse_dx = (int16_t)(ds[0xff46] | ds[0xff47] << 8);
+        g.in.mouse_dy = (int16_t)(ds[0xff48] | ds[0xff49] << 8);
+        g.in.mouse_buttons = ds[0xff4a];
         g.render.nprim = 0;
         g.render.ntext = 0;
         g.circles.n = 0;

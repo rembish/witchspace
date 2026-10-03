@@ -605,6 +605,25 @@ def controls_world(img, rng):
         w(0xFF10 + j, keys[j])
 
 
+def device_world(img, rng):
+    """Keyboard, joystick or mouse control; the devices there or not, where they are."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0x8F2C, rng.choice([0, 1, 1, 2, 2]))
+    w(0xFF40, rng.choice([0, 1, 1, 1]))
+    for a in (0xFF41, 0xFF43):
+        w(a, rng.choice([0, 1000, 1010, 1200, 1900, rng.randint(0, 2200)]), 2)
+    for a in (0x09CD, 0x09CF):
+        w(a, rng.choice([1000, 1000, 1005, 0, rng.randint(100, 1900)]), 2)
+    w(0xFF45, rng.choice([0xFF, 0xEF, 0xDF, 0xCF, 0x00]))
+    for a in (0xFF46, 0xFF48):
+        w(a, rng.choice([0, 3, -3, 9, -9, 40, -40, 600, -600, rng.randint(-2000, 2000)]), 2)
+    w(0xFF4A, rng.choice([0, 0, 1, 2, 3]))
+    w(0x0CA8, rng.choice([0, 0, 1, 9]))
+    w(0x0CAB, rng.choice([0, 0, 0x18, -0x18, 0x30]), 2)
+    for k in (0x7D, 0x7E):
+        w(0x020D + k, rng.choice([0x80, 0x80, 0x80, 0]))
+
+
 def speaker_world(img, rng):
     """The speaker part way through a sequence, a note, a pattern, a rest or a loop."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -961,7 +980,7 @@ FUZZ = {
     "energy_drain": [(0xB139, [0, 1, 2]), (0x54C8, [0, 1, 2, 3, 0x3FF])],
     "laser": [(0xB126, [0, 0, 1]), (0xAE23, [0, 0, 1]), (0x020D + 0x39, [0, 0x80]), (0x8365, 1), (0x8366, 1),
               (0xB0DE, [0, 0x200, 0x400, 0x600]), (0x54C2, [0, 0xEB, 0xEF, 0xF0, 0xFC]), (0xB3D3, [0, 0, 1]),
-              (0xB125, [0, 1])],
+              (0xB125, [0, 1]), (0, device_world)],
     "tunnel": [(0xAE23, [0, 1, 2, 30]), (0x83B5, [0, 0, 5])],
     "laser_hits": [(0, ship_in_sights), (0, ship_in_sights), (0xB0E4, [1, 1, 1, 0]), (0xB0E3, [0, 1, 2, 3]),
                    (0x83AA, [0, 0, 1]), (0x83A0, [0, 4, 6]), (0x83A2, [0, 1, 2, 3]), (0x836B, [0, 0xD7, 0xD8, 0xFF]),
@@ -978,7 +997,7 @@ FUZZ = {
                    (0xB3D5, [0, 0, 1, 2, 7, 15, 0x28]), (0x54C8, [0x100, 0x2FE, 0x2FF, 0x3FF]), (0, ai_world)],
     "status": [(0, status_world), (0, arrival_dialogs)],
     "market": [(0, market_world)],
-    "market_session": [(0, trading), (0, market_world), (0, market_keys)],
+    "market_session": [(0, trading), (0, market_world), (0, market_keys), (0, device_world)],
     "launch": [(0, arrival_world), (0x8711, [0, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world)],
     "dock": [(0x7613, [0, 1, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world), (0, ai_world)],
     "loop": [(0, ai_handlers), (0, autopilot_world), (0, dust_world), (0, ship_in_sights), (0, bar_world), (0, command_world),
@@ -1007,7 +1026,7 @@ FUZZ = {
            (0x83A0, [0, 4, 5, 6]), (0x83A2, [0, 2, 3]), (0x83B0, [0, 1]), (0x839E, [0, 5, 0x0D]),
            (0x839F, [0, 1]), (0x83A3, [0, 7]), (0x8329, [7, 7, 3])],
     "equip_screen": [(0, trading), (0, equip_world)],
-    "chart_session": [(0, chart_world)],
+    "chart_session": [(0, chart_world), (0, device_world)],
     "pause_session": [(0, pause_world)],
     "timer": [(0, speaker_world)],
     "define_keys": [(0, controls_world)],
@@ -1021,7 +1040,7 @@ FUZZ = {
     "load_session": [(0, files_world)],
     "start_game": [(0, start_world), (0, arrival_dialogs)],
     "data_screen": [(0, chart_world), (0x031D, [0, 1]), (0xAE60, [0, 0, 3]), (0x831E, [0, 1])],
-    "equip_session": [(0, trading), (0, equip_world), (0, equip_keys)],
+    "equip_session": [(0, trading), (0, equip_world), (0, equip_keys), (0, device_world)],
     "collisions": [(0, something_close), (0, docking_approach), (0x83AA, [0, 0, 1]), (0xAE23, [0, 0, 0, 1]),
                    (0x54C4, [0, 10, 0x80, 0xFF]), (0x54C8, [0, 0x10, 0x200, 0x3FF])],
     "enemy_fire": [(0, attacker), (0x7612, [1, 1, 1, 0]), (0x7681, [0, 0x80]), (0x54C4, [0, 5, 14, 15, 16, 0xFF]),
@@ -1034,7 +1053,7 @@ FUZZ = {
                  (0x09D3, [0, 1, 0xFF]), (0x09D4, [0, 1, 0xFF]),
                  (0x09D5, [0, 1, 0x16, 0x17, 0xE9, 0xEA, 0xFF, 0x0C]), (0x09D6, [0, 1, 0x16, 0x17, 0xE9, 0xEA, 0xFF, 0x0C]), (0xB134, [0, 1]), (0xB135, [0, 1]), (0xB136, [0, 0, 1]),
                  (0xB137, [0, 0, 1]), (0xAF56, [4, 8, 0x2C, 0x30]), (0xAF58, [0, 1]), (0xB0DD, [0, 0, 1]),
-                 (0x76D8, 2), (0x76DA, 2), (0x76DC, 2), (0xAE23, [0, 0, 0, 3]), (0xB126, [0, 0, 0, 0x3C, 5])],
+                 (0x76D8, 2), (0x76DA, 2), (0x76DC, 2), (0xAE23, [0, 0, 0, 3]), (0xB126, [0, 0, 0, 0x3C, 5]), (0, device_world)],
 }
 
 
@@ -1101,6 +1120,30 @@ def run_original(image, addr, regs, exits=None):
     e.hook(0x1514, span)
     sounds = []
     e.devices()
+    # the joystick and the mouse as ds:ff40.. say (tests/subsys.c reads the same): there, the
+    # joystick's counts, its buttons (port 201h), the mouse's mickeys and buttons (int 33h)
+    dev = image[DS * 16 + 0xFF40:DS * 16 + 0xFF4B]
+    word = lambda k: int.from_bytes(dev[k:k + 2], "little")
+    there, mickeys = dev[0], [word(6), word(8)]
+    e.port_in[0x201] = dev[5] if there else 0xFF
+    e.hook(0x0FFB, lambda e, r: {"bx": word(1) if there else 0, "cx": word(3) if there else 0,
+                                 "flags": (r["flags"] & ~1) if there else (r["flags"] | 1)})
+
+    def mouse(e, intno):
+        if intno != 0x33:
+            return False
+        fn = e.mu.reg_read(REGS["ax"])
+        if fn == 0x0B:
+            e.mu.reg_write(REGS["cx"], mickeys[0])
+            e.mu.reg_write(REGS["dx"], mickeys[1])
+            mickeys[:] = [0, 0]
+        elif fn == 5:
+            e.mu.reg_write(REGS["ax"], dev[10])
+        elif fn == 0:
+            e.mu.reg_write(REGS["ax"], 0xFFFF if there else 0)
+        return True
+    intr_handlers = [mouse]
+    e.on_intr = lambda e, intno: any(h(e, intno) for h in intr_handlers)
 
     def observe(at, line):  # noted on entry; the routine runs
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: sounds.append(line(e)), begin=CS * 16 + at, end=CS * 16 + at)
@@ -1159,7 +1202,7 @@ def run_original(image, addr, regs, exits=None):
         paused = "cmd 3" if NAME == "commands" else "frame 4"
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(paused), mu.emu_stop()),
                       begin=CS * 16 + 0x0480, end=CS * 16 + 0x0480)  # the pause menu is up
-        e.on_intr = fake_dos({}, [])  # no commander files
+        intr_handlers.append(fake_dos({}, []))  # no commander files
         for stub in (0x0674, 0x0736, 0x0779):  # not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
                 sounds.append(f"event {EV_UNPORTED}:{stub}"),
@@ -1235,12 +1278,12 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x0276, file_key)
         e.hook(0x4AC0, lambda e, r: None)
 
-        e.on_intr = fake_dos(files, written)
+        intr_handlers.append(fake_dos(files, written))
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (  # 9e80: the station (af18 = 1) or the title
             left.extend(["end", f"leave {3 if e.r8(0xAF18) == 1 else 1}"]), mu.emu_stop()),
             begin=CS * 16 + 0x9E80, end=CS * 16 + 0x9E80)
     if NAME == "protection_pick":  # it closes the graphics file (handle ds:2128)
-        e.on_intr = fake_dos({}, [])
+        intr_handlers.append(fake_dos({}, []))
     if NAME in ("title_open", "title_session"):  # drawn on both pages (EGA, VGA): the second is skipped
         def second_page(mu, ad, sz, u):
             ret = struct.unpack("<H", mu.mem_read(SS * 16 + mu.reg_read(UC_X86_REG_SP), 2))[0]
@@ -1273,10 +1316,6 @@ def run_original(image, addr, regs, exits=None):
                 return
             mu.mem_write(DS * 16 + 0x0D2D, (0x20D + (ckeys.pop(0) & 0x7F)).to_bytes(2, "little"))
         e.mu.hook_add(UC_HOOK_CODE, press, begin=CS * 16 + 0x05F9, end=CS * 16 + 0x05F9)
-        there = image[DS * 16 + 0xFF40]
-        jx, jy = (int.from_bytes(image[DS * 16 + a:DS * 16 + a + 2], "little") for a in (0xFF41, 0xFF43))
-        e.hook(0x0FFB, lambda e, r: {"bx": jx if there else 0, "cx": jy if there else 0,
-                                     "flags": (r["flags"] & ~1) if there else (r["flags"] | 1)})
         e.hook(0x0BCA, lambda e, r: {"ax": 0xFFFF if there else 0,
                                      "flags": (r["flags"] & ~0x40) if there else (r["flags"] | 0x40)})
     if NAME == "title_open":  # keys at 0276 (ffh: none); one page drawn; no hardware
