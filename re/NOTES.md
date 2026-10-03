@@ -3,6 +3,8 @@
 Addresses: `XXXX` = offset in code segment `0000` (load-relative), `ds:XXXX` = data segment
 `0b00`. Other segments are named by their load-relative paragraph. Symbol names live in
 `ghidra/names.txt`. Items marked **[verify]** still need a check (emulator or DOSBox-X).
+In Ghidra's decompiled C, unnamed data shows up as linear `ram` addresses: `ds:XXXX` is
+`0x1b000 + XXXX`, e.g. `bRam00023318` = `ds:8318`.
 
 ## The original
 
@@ -88,7 +90,7 @@ Same scheme as the original Elite, with Elite Plus's own formulas for the system
 - `planet_name` (`6130`) → `ds:8338`, length `ds:8341`: four rounds of "take w2 high byte,
   twist", digram `ds:5585 + 2·(b & 1f)`; the fourth digram only if w0 bit 6. Index 0 is
   two spaces, so names have 0–8 letters.
-- `system_data` (`5ee8`): `5fe1` finds the system nearest to the chart cursor (`ds:3318/3319`),
+- `system_data` (`5ee8`): `5fe1` finds the system nearest to the chart cursor (`ds:8318/8319`; zoomed chart if `ds:831e` = 1, centre `ds:8316/8317`),
   `6047` distance, then from `5f00` (callable on its own):
 
   | Field | Formula |
@@ -101,5 +103,5 @@ Same scheme as the original Elite, with Elite Plus's own formulas for the system
   | productivity `834d` | `(gov+8)² · pop · 4` (16-bit) |
   | radius `834f` | `((rol2(w0hi·0101h) ^ (swap(w2) & 3ff)) & fff) + 10e1h` |
   | description seeds `8351/8353` | `w0^w1`, `w0^w1^w2` |
-- Chart position (`5e95`): x = w1hi, y = w0hi / 2.
+- Chart position (`5e95` → `ds:8318/8319`): x = w1hi, y = w0hi / 2 (galaxy chart).
 - Checked: `re/emu/galaxytest.py` compares all 8 × 256 systems with `core/ep_galaxy.c`.

@@ -2,11 +2,13 @@
 #include "ep_galaxy.h"
 
 #include <stdio.h>
+#include <string.h>
 
 int main(void)
 {
     for (int g = 0; g < EP_GALAXIES; g++) {
         ep_seed s = ep_galaxy_seed(g);
+        ep_seed last = ep_system_seed(g, EP_SYSTEMS - 1);
         for (int n = 0; n < EP_SYSTEMS; n++) {
             ep_system d;
             ep_system_data(&s, &d);
@@ -19,6 +21,8 @@ int main(void)
             else
                 printf(" %u %u %u %u", d.species[0], d.species[1], d.species[2], d.species[3]);
             printf(" desc %04x %04x\n", d.desc_seed[0], d.desc_seed[1]);
+            if (n == EP_SYSTEMS - 1 && memcmp(&s, &last, sizeof s) != 0)
+                printf("ep_system_seed disagrees with walking the galaxy\n");
             for (int k = 0; k < 4; k++) ep_twist(&s);
         }
     }

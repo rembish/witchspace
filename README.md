@@ -1,10 +1,11 @@
 # Elite Plus (1991) — decompilation & multiplatform port (work in progress)
 
-Elite Plus is the PC version of Elite by David Braben and Ian Bell, rewritten for DOS in
-assembly (Firebird/MicroProse, 1991). This repo reverse-engineers `ELITE.EXE` with the same
-approach as the BlockOut and Welltris ports: a deterministic C core reconstructed from the
-machine code and checked against the original running in an emulator, with a fresh frontend
-on top. No original game files are included.
+Elite Plus is the PC version of Elite by David Braben and Ian Bell, written for DOS in
+assembly by Chris Sawyer (Realtime Software); the executable says "Release: V3.1 August
+1990". This repo reverse-engineers `ELITE.EXE` with the same approach as the BlockOut and
+Welltris ports: a deterministic C core reconstructed from the machine code and checked
+against the original running in an emulator, with a fresh frontend on top. No original game
+files are included.
 
 **Status:** early reverse engineering. Done so far: unpacking, control-flow recovery,
 an emulator harness, and the galaxy generator (all 8 × 256 systems match the original).
@@ -46,5 +47,6 @@ re/ghidra/run.sh                                     # Ghidra project, decompile
 
 ## Credits
 
-Elite © 1984 David Braben and Ian Bell. Elite Plus © 1991 Firebird / MicroProse. This is an
-unofficial fan reimplementation for preservation; no original game files are distributed.
+Elite © 1984 David Braben and Ian Bell. Elite Plus © 1991 Chris Sawyer, Realtime Software,
+and Bell & Braben. This is an unofficial fan reimplementation for preservation; no original
+game files are distributed.

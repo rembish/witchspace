@@ -8,7 +8,7 @@
 5e0f twist  # w0,w1,w2 <- w1,w2,w0+w1+w2
 5e25 load_galaxy_seed  # ds:5509 + 6*galaxy(ds:8315) -> ds:5503
 5e4d chart_to_screen
-5e95 seed_to_chart  # chart cursor ds:3318/3319 from the current seed
+5e95 seed_to_chart  # chart cursor ds:8318/8319 from the current seed
 5ee8 system_data  # nearest system to cursor, distance, then government..radius, name
 5fe1 find_nearest_system
 6047 system_distance  # -> ds:8343 (light years * 40)

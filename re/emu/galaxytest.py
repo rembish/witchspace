@@ -24,6 +24,9 @@ def original():
         e.call(0x5E25)
         for n in range(256):
             w = [e.r16(0x5503 + 2 * k) for k in range(3)]
+            e.w8(0x831E, 0)  # chart not zoomed: seed_to_chart stores the raw position
+            e.call(0x5E95)
+            x, y = e.r8(0x8318), e.r8(0x8319)
             e.wb(0x8349, b"\xee" * 4)
             e.call(0x5F00)
             sp = e.rb(0x8349, 4)
@@ -32,8 +35,7 @@ def original():
                 species += " (species bytes written)"
             name = e.cstr(0x8338).decode("ascii")
             lines.append(
-                f"{g} {n:3d} {w[0]:04x}{w[1]:04x}{w[2]:04x} {name:<8s} x{w[1] >> 8:3d} "
-                f"y{(w[0] >> 8) >> 1:3d} gov{e.r8(0x8345)} eco{e.r8(0x8346)} tech{e.r8(0x8347):2d} "
+                f"{g} {n:3d} {w[0]:04x}{w[1]:04x}{w[2]:04x} {name:<8s} x{x:3d} y{y:3d} gov{e.r8(0x8345)} eco{e.r8(0x8346)} tech{e.r8(0x8347):2d} "
                 f"pop{e.r8(0x8348):3d} prod{e.r16(0x834D):5d} rad{e.r16(0x834F):5d} sp{species} "
                 f"desc {e.r16(0x8351):04x} {e.r16(0x8353):04x}")
     return lines
