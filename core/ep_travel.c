@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "ep_dsmap.h"
 #include "ep_sound.h"
 #include "ep_chart.h"
 #include "ep_combat.h"
@@ -43,6 +44,7 @@ void ep_flight_start(ep_game *g)
     ep_flight *f = &g->f;
     ep_space *s = &g->space;
     g->seed = ep_system_seed(g->cmdr.b[EP_CMDR_GALAXY], current(g, EP_SYSREC_INDEX)); /* 610e */
+    memset(f->dash, 0x80, sizeof f->dash); /* 5490: the dashboard to be drawn again */
     s->ship_slots = 0x14;
     s->debris_slots = 0x10;
     s->count = 0x24;
@@ -302,6 +304,45 @@ void ep_tunnel_start(ep_game *g)
     ep_dashboard_tick(g);
 }
 
+/* the tunnel's rectangles: half width, half height (ds:7654, ten; ds:767c, the one inside) */
+static void tunnel_rect(const ep_game *g, uint16_t at, int16_t *w, int16_t *h)
+{
+    *w = (int16_t)ep_ds_word(g, at);
+    *h = (int16_t)ep_ds_word(g, (uint16_t)(at + 2));
+}
+
+/* 6988: the walls from a rectangle out to the view's edges */
+static void tunnel_walls(ep_game *g, uint16_t at)
+{
+    int16_t w, h;
+    tunnel_rect(g, at, &w, &h);
+    int16_t l = (int16_t)(0x98 - w), r = (int16_t)(0x130 - l), t = (int16_t)(0x3e - h),
+            b = (int16_t)(0x7c - t);
+    const int16_t bottom[8] = { l, b, (int16_t)(r + 1), b, 0x130, 0x7c, 0, 0x7c };
+    const int16_t top[8] = { 0, 0, 0x130, 0, r, t, l, t };
+    const int16_t left[8] = { 0, 0, l, t, l, b, 0, 0x7c };
+    const int16_t right[8] = { r, t, 0x130, 0, 0x130, 0x7c, r, b };
+    ep_render_quad(&g->render, 0x1a, bottom);
+    ep_render_quad(&g->render, 0x1a, top);
+    ep_render_quad(&g->render, 0x19, left);
+    ep_render_quad(&g->render, 0x19, right);
+}
+
+/* 6941: n rectangles' outlines, from the table entry at `at` */
+static void tunnel_outlines(ep_game *g, uint16_t at, int n)
+{
+    for (int k = 0; k < n; k++, at = (uint16_t)(at + 4)) {
+        int16_t w, h;
+        tunnel_rect(g, at, &w, &h);
+        int16_t r = (int16_t)(w + 0x98), l = (int16_t)(0x98 - w), t = (int16_t)(0x3e - h),
+                b = (int16_t)(0x7c - t);
+        ep_render_line(&g->render, 0x0c, l, t, r, t); /* 261b: from (cx, dx) to (ax, bx) */
+        ep_render_line(&g->render, 0x0c, r, t, r, b);
+        ep_render_line(&g->render, 0x0c, r, b, (int16_t)(0x130 - r), b);
+        ep_render_line(&g->render, 0x0c, l, b, l, t);
+    }
+}
+
 void ep_tunnel_frame(ep_game *g, int k)
 {
     ep_flight *f = &g->f;
@@ -316,7 +357,14 @@ void ep_tunnel_frame(ep_game *g, int k)
         ep_world_update(g, drawn);
         ep_player_move(g);
     }
-    /* 6988, 6941: the walls (the frontend's) */
+    if (k < 10) { /* 6883: the walls at the mouth, the rectangles coming one by one */
+        tunnel_walls(g, f->docked ? 0x767c : 0x7654);
+        tunnel_outlines(g, 0x7654, k + 1);
+    } else { /* 68e5: the walls closing in */
+        uint16_t at = (uint16_t)(0x7654 + 4 * (k - 10));
+        tunnel_walls(g, at);
+        tunnel_outlines(g, at, 20 - k);
+    }
     ep_view_flip(g);
     g->in.last_key = 0xff;                        /* 0287 */
     if (k == 0 && !f->docked) ep_launch_sound(g); /* 4e5a */

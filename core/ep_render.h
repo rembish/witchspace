@@ -81,6 +81,9 @@ void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m
 /* A circle's spans (ep_circle.h), where it was drawn among the other primitives */
 void ep_render_spans(ep_render *r, uint8_t colour, int first, int count);
 
+/* A filled quadrilateral (1a7a), four points in order */
+void ep_render_quad(ep_render *r, uint8_t colour, const int16_t pt[8]);
+
 /* A line (as 261b gets it: end point first) */
 void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
