@@ -189,6 +189,14 @@ static void prim(const ep_game *g, const ep_prim *p)
         }
         break;
     case EP_PRIM_SPRITE: sprite(p->colour, p->pt[0], p->pt[1]); break;
+    case EP_PRIM_BLIP: { /* 29f4: the stick from the scanner's plane, then a head two wide */
+        uint8_t px = ep_ds_initial[0x265e + (p->colour & 0x1f)];
+        int y = p->pt[1], dir = p->pt[2] < 0 ? -1 : 1;
+        for (int k = 0; k < (p->pt[2] < 0 ? -p->pt[2] : p->pt[2]); k++, y += dir) put(p->pt[0], y, px);
+        put(p->pt[0], y, px);
+        put(p->pt[0] + 1, y, px);
+        break;
+    }
     case EP_PRIM_TEXT:
         text(&g->render.text[p->pt[2]], p->pt[3], p->pt[0], p->pt[1], p->colour, p->pt[4]);
         break;

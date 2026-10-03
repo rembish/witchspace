@@ -155,13 +155,44 @@ static void key(SDL_Scancode s, int up)
         }
 }
 
+/* ---- the mouse (int 33h: mickeys and buttons) and a game controller as the joystick (port
+ * 201h: counts about 1000 at the centre, buttons A and B) ---- */
+
+static SDL_GameController *pad;
+
+static void devices(void)
+{
+    if (!pad)
+        for (int k = 0; k < SDL_NumJoysticks() && !pad; k++)
+            if (SDL_IsGameController(k)) pad = SDL_GameControllerOpen(k);
+    g.in.joy_present = pad != NULL;
+    if (pad) {
+        int x = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX),
+            y = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
+        g.in.joy_x = (uint16_t)(1000 + x * 900 / 32768);
+        g.in.joy_y = (uint16_t)(1000 + y * 900 / 32768);
+        g.in.joy_buttons =
+            (uint8_t)(0xff & ~(SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_A) ? 0x10 : 0) &
+                      ~(SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_B) ? 0x20 : 0));
+    }
+    g.in.mouse_present = 1;
+    Uint32 b = SDL_GetMouseState(NULL, NULL);
+    g.in.mouse_buttons = (uint8_t)((b & SDL_BUTTON_LMASK ? 1 : 0) | (b & SDL_BUTTON_RMASK ? 2 : 0));
+    SDL_SetRelativeMouseMode(g.in.control == 2 && mode == M_FLIGHT ? SDL_TRUE : SDL_FALSE);
+}
+
 static void pump(void)
 {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (ev.type == SDL_QUIT) running = 0;
         if (ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) key(ev.key.keysym.scancode, ev.type == SDL_KEYUP);
+        if (ev.type == SDL_MOUSEMOTION) {
+            g.in.mouse_dx = (int16_t)(g.in.mouse_dx + ev.motion.xrel);
+            g.in.mouse_dy = (int16_t)(g.in.mouse_dy + ev.motion.yrel);
+        }
     }
+    devices();
 }
 
 /* ---- time: the timer interrupt as often as the original's ---- */
@@ -412,7 +443,7 @@ int main(int argc, char **argv)
     if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
     files_init(saves);
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
