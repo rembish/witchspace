@@ -12,7 +12,7 @@ import struct
 import sys
 
 
-def unpack(data: bytes) -> bytes:
+def unpack(data: bytes, quiet: bool = False) -> bytes:
     (_, last, pages, nrel, hdr_par, minalloc, maxalloc, ss, sp, _, ip, cs, _, _) = \
         struct.unpack_from("<2sHHHHHHHHHHHHH", data)
     size = (pages - 1) * 512 + last if last else pages * 512
@@ -77,9 +77,10 @@ def unpack(data: bytes) -> bytes:
         out += struct.pack("<HH", off, seg)
     out += bytes(hdr_len - len(out))
     out += body
-    print(f"unpacked {len(img)} -> {len(body)} bytes, {len(relocs)} relocations, "
-          f"entry {real_cs:04x}:{real_ip:04x}, stack {real_ss:04x}:{real_sp:04x}, "
-          f"stub {stub_size} bytes", file=sys.stderr)
+    if not quiet:
+        print(f"unpacked {len(img)} -> {len(body)} bytes, {len(relocs)} relocations, "
+              f"entry {real_cs:04x}:{real_ip:04x}, stack {real_ss:04x}:{real_sp:04x}, "
+              f"stub {stub_size} bytes", file=sys.stderr)
     return bytes(out)
 
 
