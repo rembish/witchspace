@@ -1181,7 +1181,7 @@ def run_original(image, addr, regs, exits=None):
             return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
         e.hook(0x0276, key)
         e.hook(0x3BB1, lambda e, r: None)
-        e.hook(0x3821, lambda e, r: None)  # the palette (waits for the retrace)
+        e.hook(0x3821, lambda e, r: sounds.append(f"event 10:{r['si']}"))  # a palette loaded
     if NAME == "pause_session":  # a key at each pass (0480) or question (0aac, 0aef), 12 keys
         pkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
 
@@ -1235,8 +1235,9 @@ def run_original(image, addr, regs, exits=None):
             e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
             return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
         e.hook(0x0276, title_key)
-        for stub in (0x30DC, 0x3821, 0x3941, 0x3956, 0x3B3E):
+        for stub in (0x30DC, 0x3941, 0x3956, 0x3B3E):
             e.hook(stub, lambda e, r: None)
+        e.hook(0x3821, lambda e, r: sounds.append(f"event 10:{r['si']}"))  # a palette loaded
         e.hook(0x3130, view_clear)
         e.hook(0x301A, flip)
 
