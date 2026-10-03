@@ -330,7 +330,8 @@ static void step(void)
     case M_TITLE_OPENING:
     case M_DIALOG: {
         uint8_t k = g.in.last_key;
-        if (k == 0xff && waiting != EP_WAIT_TEXT && waiting != EP_WAIT_TIME && waiting != EP_WAIT_LIST) {
+        if (k == 0xff && waiting != EP_WAIT_TEXT && waiting != EP_WAIT_TIME && waiting != EP_WAIT_LIST &&
+            waiting != EP_WAIT_SCAN) {
             pace();
             break;
         }

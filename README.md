@@ -7,24 +7,26 @@ Welltris ports: a deterministic C core reconstructed from the machine code and c
 against the original running in an emulator, with a fresh frontend on top. No original game
 files are included.
 
-**Status:** the game logic is reconstructed and checked against the original: galaxy and
-system generation, descriptions, markets, the commander block (save files), ship models and
-rendering, the title (setup, intro and credits, frame by frame), starting, saving and loading
-a game, every station screen (status, market, equipment, charts, data, the arrival dialogues
-and missions), the pause menu and options, and the whole flight loop (object update with sun,
-planet and scanner, controls, laser, messages, energy, dashboard, star dust, combat, the ship
-AI, docking, launching, hyperspace and witchspace). Each part is difftested on game states
-taken from the running original (`re/emu/corpus.py`, `re/emu/subtest.py`); `ep_flow` covers
-what the emulator cannot (the timer). Left: the key, joystick and mouse set-up screens, the
-copy protection (to be opt-in, off by default), and the frontend, which so far shows the
-title's ship only.
+**Status:** the game is reconstructed and playable through the port. Checked against the
+original: galaxy and system generation, descriptions, markets, the commander block (save
+files), ship models and rendering, start-up and the copy protection (opt-in), the title (intro,
+credits, frames), starting, saving and loading games, every station screen and dialogue, the
+pause menu and options, the whole flight loop (objects, sun, planet, scanner, controls, laser,
+messages, energy, dashboard, compass, crosshair, star dust, combat, the ship AI, scooping,
+docking, launching through the tunnel, hyperspace and witchspace), sound (the PC speaker's
+sequencer) and the keyboard. Each part is difftested on game states taken from the running
+original (`re/emu/corpus.py`, `re/emu/subtest.py`); `boottest.py` and `flowtest.py` boot the
+whole original and compare start-up and a game from the title to the first flight frame;
+`ep_flow` covers what the emulator cannot (the timer). Left: redefining keys, the joystick and
+the mouse (the original reads the hardware), the AdLib/Roland music drivers, and a few
+approximations listed in `re/AI.md` and `re/FLIGHT.md`.
 
 ## Layout
 
 | Path        | Contents |
 |-------------|----------|
 | `core/`     | Game logic reconstructed from `ELITE.EXE`: plain C99, no I/O, deterministic |
-| `src/`      | SDL2 frontend (so far the title screen) |
+| `src/`      | SDL2 frontend: the original's 320x200 MCGA screen from the core's output, timer, keyboard, PC speaker, files |
 | `tests/`    | Tools the differential tests drive (`galdump`) |
 | `re/`       | Notes, unpacker, explorer, Ghidra scripts, emulator harness, DOSBox-X runner |
 
@@ -40,7 +42,7 @@ restores a plain executable and `re/tools/explore.py` recovers its control flow.
 
 ```sh
 cmake -S . -B build && cmake --build build -j       # needs SDL2 (apt install libsdl2-dev)
-./build/eliteplus
+./build/eliteplus --data original                  # the pictures from your ELITE.GRF; --saves DIR
 python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip install unicorn capstone
 ~/tools/venv/bin/python re/tools/gen_tables.py      # regenerate core/ep_tables.c from original/
 ~/tools/venv/bin/python re/emu/galaxytest.py        # core vs the original's code, all systems
