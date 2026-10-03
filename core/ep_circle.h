@@ -23,10 +23,14 @@ typedef struct {
 typedef struct {
     ep_span span[EP_MAX_SPANS];
     int n;
-} ep_spans;
+    uint16_t table[0xf80 / 2]; /* the original's span table (stack buffer at 2b1d) */
+} ep_circle_buf;
 
 /* Circle at (x, y) in 3D view pixels, radius r. mask: ds:108f (0, or 1/3/7 for the jitter).
- * outline: ds:1091. Appends to out; steps rng once per span drawn with a mask. */
-void ep_draw_circle(ep_rng *rng, int16_t x, int16_t y, int16_t r, uint16_t mask, int outline, ep_spans *out);
+ * outline: ds:1091. mcga: the MCGA span routine (1675, patched in by set_video_mode) makes
+ * jittered spans one pixel wider than the EGA/VGA one (14b0); the RNG use is the same.
+ * Appends to buf->span; steps rng once per span drawn with a mask. */
+void ep_draw_circle(ep_rng *rng, int16_t x, int16_t y, int16_t r, uint16_t mask, int outline, int mcga,
+                    ep_circle_buf *buf);
 
 #endif

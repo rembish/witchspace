@@ -16,7 +16,8 @@
 typedef struct {
     ep_rng *rng;
     uint16_t mask;
-    ep_spans *out;
+    int mcga;
+    ep_circle_buf *out;
 } span_ctx;
 
 static void emit(span_ctx *c, int16_t bx, int16_t cx, int16_t di)
@@ -42,7 +43,7 @@ static void span(span_ctx *c, int16_t bx, int16_t cx, int16_t di)
     uint32_t old = ep_rng_step(c->rng);
     uint16_t ax = (uint16_t)(old >> 16) & c->mask, dx = (uint16_t)old & c->mask;
     bx = (int16_t)(uint16_t)((uint16_t)bx - ax);
-    cx = (int16_t)(uint16_t)((uint16_t)cx + ax + dx);
+    cx = (int16_t)(uint16_t)((uint16_t)cx + ax + dx + (c->mcga ? 1 : 0));
     if (bx < 0) { /* 14ed */
         cx = (int16_t)(cx + bx);
         if (cx <= 0) return;
@@ -66,7 +67,8 @@ static void outline_span(span_ctx *c, int16_t bx, int16_t cx, int16_t di)
     span(c, bx, cx, di);
 }
 
-void ep_draw_circle(ep_rng *rng, int16_t x, int16_t y, int16_t r, uint16_t mask, int outline, ep_spans *out)
+void ep_draw_circle(ep_rng *rng, int16_t x, int16_t y, int16_t r, uint16_t mask, int outline, int mcga,
+                    ep_circle_buf *out)
 {
     /* 2ab9: reject */
     if ((uint16_t)r >= 0x1f0 || r <= 0) return;
@@ -77,11 +79,10 @@ void ep_draw_circle(ep_rng *rng, int16_t x, int16_t y, int16_t r, uint16_t mask,
         if (y >= 0 ? (int16_t)(y - r) >= 0x7c : (int16_t)(y + r) <= 0) return;
     }
     int16_t ry = (int16_t)(r - (int16_t)((uint16_t)r >> 3));
-    span_ctx c = { rng, mask, out };
+    span_ctx c = { rng, mask, mcga, out };
 
     /* 2b1d..2bed: midpoint circle into the span table (word offsets into buf) */
-    static uint16_t buf[0xf80 / 2];
-    memset(buf, 0, sizeof buf);
+    uint16_t *buf = out->table; /* stale entries from earlier circles stay, as on the stack */
     int16_t di = 0, si = (int16_t)(r << 2), bx = 0, cx = r;
     int16_t dx = (int16_t)(3 - 2 * r);
     int p9a = 0, p9c = si, p9e = si, pa0 = 2 * si;

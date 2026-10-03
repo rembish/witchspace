@@ -33,7 +33,9 @@ JUMP_TABLES = {
 }
 # Code reached only through values the walker cannot see (pushed return addresses etc.).
 EXTRA_ROOTS = [(0, 0x63D8), (0, 0x0215), (0, 0x4A99), (0, 0x00D6), (0, 0x00E4), (0, 0x0144), (0, 0x014C)]
-# (63d8: text code return; the rest are interrupt handlers the game installs)
+EXTRA_ROOTS += [(0, a) for a in (0x16C2, 0x16DA, 0x16CD, 0x16A6, 0x1675)]
+# (63d8: text code return; 0215..014c interrupt handlers the game installs; 16xx: the MCGA
+# span routines patched in from ds:1b1a)
 CODE_SEGS = {0x0000: 0xB000, 0x2270: 0x3010}  # segment -> size in bytes
 
 

@@ -290,3 +290,11 @@ the mode 13h screen with the DAC.
   `A ← A + B`, `B ← swap(A_old)` (`0209` = old low, `020b` = old high).
 - Checked: `re/emu/circletest.py` (random circles on and off the view, all masks, outline
   mode, random RNG states): spans and the RNG state afterwards.
+- MCGA (`set_video_mode` patches 8 code words from `ds:1b1a`: the span vectors in the line,
+  triangle, quad and circle code, e.g. `2aed` → `16da`, `2afa` → `1675`): the MCGA jitter
+  span `1675` steps the RNG the same way but adds 1 to the width. `circletest.py … mcga`
+  applies the patches and checks that path.
+- Main RNG steppers (writes to `ds:0205..020b`): start-up `0047/0067`, `123b 1268 12c8
+  1322 1341 139a` (not yet identified), `14b0` (EGA span jitter), `1675` (MCGA span jitter),
+  `32b8` (protection question), `4527` (planet random event), `99e7 9a36 9a80` (not yet
+  identified). Any of these in a frame path must be ported before frame tests.

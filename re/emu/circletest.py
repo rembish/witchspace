@@ -1,11 +1,12 @@
 """Differential test: filled circles (planets, sun), original (emulated) vs core.
 
-usage: circletest.py [n] [seed] [path/to/ep_circledump]
+usage: circletest.py [n] [seed] [mcga] [path/to/ep_circledump]
 
 Random circles (centre and radius on and off the 3D view, detail mask ds:108f 0/1/3/7,
 outline mode ds:1091) and RNG states through draw_circle (2ab9) in the EGA code path. The
 final span routine (1514) is replaced by a log of (x, width, row); the RNG state after each
-circle is compared too, since masked spans step it.
+circle is compared too, since masked spans step it. With "mcga", the emulator applies the
+MCGA code patches (ds:1b1a, as set_video_mode does) and logs the MCGA span routine (16da).
 """
 import os
 import random
@@ -17,7 +18,8 @@ from eliteemu import Elite
 HERE = os.path.dirname(os.path.abspath(__file__))
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-DUMP = sys.argv[3] if len(sys.argv) > 3 else os.path.join(HERE, "..", "..", "build", "ep_circledump")
+MCGA = len(sys.argv) > 3 and sys.argv[3] == "mcga"
+DUMP = sys.argv[4] if len(sys.argv) > 4 else os.path.join(HERE, "..", "..", "build", "ep_circledump")
 
 
 def s16(v):
@@ -40,7 +42,12 @@ def cases(rng):
 def original(cs):
     e = Elite()
     log = []
-    e.hook(0x1514, lambda e, r: log.append(f"{s16(r['bx'])},{s16(r['cx']) or 1 if s16(r['cx']) >= 0 else None},"
+    if MCGA:
+        p = 0x1B1A
+        while e.r16(p):
+            e.mu.mem_write(0x10000 + e.r16(p), e.rb(p + 2, 2))
+            p += 4
+    e.hook(0x16DA if MCGA else 0x1514, lambda e, r: log.append(f"{s16(r['bx'])},{s16(r['cx']) or 1 if s16(r['cx']) >= 0 else None},"
                                            f"{(s16(r['di']) - 0x168) // 0x28} ") if s16(r["cx"]) >= 0 else None)
     lines = []
     for x, y, r, mask, outline, *w in cs:
@@ -60,7 +67,7 @@ def main():
     cs = cases(random.Random(SEED))
     want = original(cs)
     inp = "".join(" ".join(str(v) for v in c) + "\n" for c in cs)
-    got = subprocess.run([DUMP], input=inp, capture_output=True, text=True, check=True).stdout.split("\n")[:-1]
+    got = subprocess.run([DUMP] + (["mcga"] if MCGA else []), input=inp, capture_output=True, text=True, check=True).stdout.split("\n")[:-1]
     bad = [(c, a, b) for c, a, b in zip(cs, want, got) if a != b]
     for c, a, b in bad[:4]:
         print(f"case {c}\noriginal: {a[:300]}\ncore:     {b[:300]}\n")
