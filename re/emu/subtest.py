@@ -1082,7 +1082,6 @@ def s8(v):
     return v - 256 if v >= 128 else v
 
 
-FRAME_DL = [0]
 
 
 def text_bytes(e, si):
@@ -1111,18 +1110,27 @@ def run_original(image, addr, regs, exits=None):
     def prim(kind, pts):
         prims.append(f"{kind}:{e.r8(0x10A2)}" + "".join(f",{s16(v)}" for v in pts))
 
-    e.hook(0x172C, lambda e, r: prim(0, [r["cx"], r["dx"], r["ax"], r["bx"], r["si"], r["bp"]]))
-    e.hook(0x1A7A, lambda e, r: prim(2, [r["ax"], r["bx"], r["cx"], r["dx"], e.r16(0x10B0),
+    def watch(at, fn):  # fn(e, regs) on entry; the routine runs
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: fn(e, {k: mu.reg_read(v) for k, v in REGS.items()}),
+                      begin=CS * 16 + at, end=CS * 16 + at)
+
+    watch(0x172C, lambda e, r: prim(0, [r["cx"], r["dx"], r["ax"], r["bx"], r["si"], r["bp"]]))
+    watch(0x1A7A, lambda e, r: prim(2, [r["ax"], r["bx"], r["cx"], r["dx"], e.r16(0x10B0),
                                          e.r16(0x10B4), r["si"], r["bp"]]))
-    e.hook(0x261B, lambda e, r: prim(4, [r["cx"], r["dx"], r["ax"], r["bx"]]))
+    clipped = []  # 2618: a clipped line (2576) goes on into 261b: recorded once, as clipped
+    e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: clipped.append(1), begin=CS * 16 + 0x2618, end=CS * 16 + 0x2618)
+    watch(0x261B, lambda e, r: clipped.pop() if clipped else prim(4, [r["cx"], r["dx"], r["ax"], r["bx"]]))
 
     spans = []
 
     def span(e, r):
+        ret = int.from_bytes(e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2), "little")
+        if not 0x2A00 <= ret < 0x2E00:  # a circle's (2ab9, 2d16); not a rect's or a polygon's rows
+            return
         if s16(r["cx"]) >= 0:
             spans.append(f"span {s16(r['bx'])},{s16(r['cx']) or 1},{(s16(r['di']) - 0x168) // 0x28}")
-    e.hook(0x16DA, span)
-    e.hook(0x1514, span)
+    watch(0x16DA, span)
+    watch(0x1514, span)
     sounds = []
     e.devices()
     # the joystick and the mouse as ds:ff40.. say (tests/subsys.c reads the same): there, the
@@ -1186,13 +1194,6 @@ def run_original(image, addr, regs, exits=None):
         visits = []
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (visits.append(1), len(visits) > 1 and (
             left.append("frame 0"), mu.emu_stop())), begin=CS * 16 + 0xA040, end=CS * 16 + 0xA040)
-    if NAME in ("loop", "frame"):  # bar icons as events, other sprites (37bd: on both pages) drawn
-        def bar_icon(e, r):
-            if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
-                sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
-            else:
-                prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
-        e.hook(0x37BD, bar_icon)
     if NAME in ("commands", "loop"):
         if NAME == "commands":  # the bar's icons as events; the cockpit (763e) is drawing
             def cmd_icon(e, r):
@@ -1211,16 +1212,13 @@ def run_original(image, addr, regs, exits=None):
     if NAME in ("frame", "loop", "launch", "dock"):
         e.hook(0x3130, view_clear)
         e.hook(0x301A, flip)
-    if NAME in ("frame", "loop"):  # the original's DL at the AI, passed to the core
-        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
-                      begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
     if NAME in ("launch", "dock", "loop", "commands"):
         e.hook(0x028D, lambda e, r: None)  # the mouse driver
     def pixel(e, r):
         x = (r["ax"] + (r["ax"] >> 2) - 8) & 0xFFFF
         if x < 0x130 and r["bx"] < 0x7C:
             prims.append(f"8:{e.r8(r['si'] + 6) & 0xF},{x},{r['bx']}")
-    e.hook(0x2973, pixel)
+    watch(0x2973, pixel)
     for at, shadow in ((0x2E6D, 0), (0x2EC0, 1)):  # texts (observed, not replaced)
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
@@ -1232,7 +1230,7 @@ def run_original(image, addr, regs, exits=None):
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
             else:
                 prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
-        e.hook(0x3411, sprite_or_icon)
+        watch(0x3411, sprite_or_icon)
     if NAME == "start_game":  # the music stops; the time of day from ds:ff30
         e.hook(0x4AC0, lambda e, r: None)
 
@@ -1405,9 +1403,9 @@ def run_original(image, addr, regs, exits=None):
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
     if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "dashboard", "launch", "dock", "define_keys", "joystick", "mouse", "arrive", "countdowns", "loop"):  # rects
-        e.hook(0x2FD4, lambda e, r: prims.append(
+        watch(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
-    e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
+    watch(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: prims.append(  # 29ed: a scanner blip (MCGA) drawn
         f"blip {(e.r8(mu.reg_read(REGS['di'])) >> 1) & 0x1F},{mu.reg_read(REGS['ax']) >> 8},"
         f"{mu.reg_read(REGS['bx']) >> 8},{s8(mu.reg_read(REGS['cx']) >> 8)}"), begin=CS * 16 + 0x29ED, end=CS * 16 + 0x29ED)
@@ -1466,9 +1464,7 @@ def main():
             image = fuzz(image, rng)
         before = image[DS * 16:DS * 16 + 0x10000]
         want, want_prims = run_original(image, addr, regs, exits)
-        if NAME in ("frame", "loop"):  # the C side gets the original's DL at the AI
-            before = before[:0xFF00] + bytes([FRAME_DL[0]]) + before[0xFF01:]
-            want = want[:0xFF00] + bytes([FRAME_DL[0]]) + want[0xFF01:]
+        if NAME in ("frame", "loop"):
             want_prims = [l for l in want_prims if l != "end"]
         inf, outf = os.path.join(tmp, "in"), os.path.join(tmp, "out")
         open(inf, "wb").write(before)

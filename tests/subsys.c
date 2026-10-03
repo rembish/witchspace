@@ -20,6 +20,7 @@
 #include "ep_world.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static uint8_t ds[DS_SIZE];
@@ -324,8 +325,6 @@ int main(int argc, char **argv)
             for (int k = 0; k < g.circles.n; k++)
                 printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "loop")) {
-            g.test_dl_force = 1;
-            g.test_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
             int r = ep_flight_frame(&g);
             print_prims(&g.render);
             for (int k = 0; k < g.circles.n; k++)
@@ -334,7 +333,6 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "frame")) {
             ep_key_bar(&g);
             ep_frame_before_ai(&g);
-            g.f.reg_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
             ep_frame_from_ai(&g);
             print_prims(&g.render);
             for (int k = 0; k < g.circles.n; k++)

@@ -113,9 +113,10 @@ frame from a040 back to a040, or out to docking, a screen or the title), `frame`
 - A bar slot can only hold `ff` (redraw marker) before 0299 runs, never at 03c0.
 - The player's missile copies the 64 bytes at DI (stale): slot 20 where the collision loop
   stops, unless Tribble sprites moved DI (not reproduced).
-- DL at the AI is approximated: 10h after the crosshair (the MCGA blit leaves the sprite's
-  width, 16), otherwise the value the drawing code last left. The harness must let the blit
-  (3411) run, or DL stays 3fh from 4f44.
+- DL at the AI is what the drawing last left (`render.dl`): a sprite the low byte of its
+  width (3777, from ELITE.GRF: `ep_sprite_width`), text its last glyph's last row address,
+  `y·320 + x + 8·320` (2e52). Nothing else between them and 77e0 writes DL. The harness runs
+  the original's drawing (observed, not replaced), or its DL would be wrong.
 - The docking computer divides by zero closer than one step to its docking point (a969:
   m < speed gives BX = 0). The divide error resumes at the stale `ds:01f8`, usually the
   compass's (48c9/48e7): the compass's tail runs with stray registers, draws a sprite and
