@@ -1077,6 +1077,10 @@ def s16(v):
     return v - 65536 if v >= 32768 else v
 
 
+def s8(v):
+    return v - 256 if v >= 128 else v
+
+
 FRAME_DL = [0]
 
 
@@ -1412,6 +1416,9 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
+    e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: prims.append(  # 29ed: a scanner blip (MCGA) drawn
+        f"blip {(e.r8(mu.reg_read(REGS['di'])) >> 1) & 0x1F},{mu.reg_read(REGS['ax']) >> 8},"
+        f"{mu.reg_read(REGS['bx']) >> 8},{s8(mu.reg_read(REGS['cx']) >> 8)}"), begin=CS * 16 + 0x29ED, end=CS * 16 + 0x29ED)
     try:
         if NAME == "explode":
             regs = dict(regs, di=0x76DE + 0x40 * image[DS * 16 + 0xFF00] % (0x40 * 36))

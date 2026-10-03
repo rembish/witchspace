@@ -29,6 +29,10 @@ static void print_prims(const ep_render *r)
     for (int k = 0; k < r->nprim; k++) {
         const ep_prim *p = &r->prim[k];
         if (p->kind == EP_PRIM_SPANS) continue; /* printed from g->circles */
+        if (p->kind == EP_PRIM_BLIP) {
+            printf("blip %d,%d,%d,%d\n", p->colour, p->pt[0], p->pt[1], p->pt[2]);
+            continue;
+        }
         if (p->kind == EP_PRIM_RECT) {
             printf("rect %d:%d,%d,%d,%d\n", p->colour, p->pt[0], p->pt[1], p->pt[2], p->pt[3]);
             continue;
