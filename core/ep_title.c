@@ -29,9 +29,10 @@ static void centred(ep_game *g, int16_t x, int16_t y, uint8_t colour, uint16_t a
 int ep_title_open(ep_game *g)
 {
     ep_space *s = &g->space;
-    memset(s->obj, 0, (size_t)s->count * sizeof s->obj[0]); /* 816b */
-    ep_music_start(g);                                      /* 4d21: the title music */
-    ep_render_sprite(&g->render, 0x89, 0, 0);               /* 3ae5: the intro picture */
+    memset(s->obj, 0, (size_t)s->count * sizeof s->obj[0]);      /* 816b */
+    ep_music_start(g);                                           /* 4d21: the title music */
+    if (g->f.video == 2) ep_event_add(g, EP_EV_PALETTE, 0x1444); /* 3aef */
+    ep_render_sprite(&g->render, 0x89, 0, 0);                    /* 3ae5: the intro picture */
     g->f.intro_until = g->clock + 1000;
     g->f.title_step = 1;
     g->f.station_step = EP_STEP_TITLE;
@@ -81,6 +82,7 @@ int ep_title_key(ep_game *g, uint8_t key)
     if (f->title_step == 1) { /* 3b18: until a key or the time is past */
         if (g->clock <= f->intro_until && key == 0xff) return EP_WAIT_TIME;
         if (key != 0xff) g->in.last_key = 0xff;
+        if (f->video == 2) ep_event_add(g, EP_EV_PALETTE, 0x1144); /* 3b35 */
         title_setup(g);
         f->title_step = 2;
         return EP_WAIT_TIME;

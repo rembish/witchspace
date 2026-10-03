@@ -22,8 +22,10 @@
  * EP_EV_FLIP: a frame is complete (301a); g->wait shows it. A call may hold several frames
  * (the tunnel, the hyperspace rings); they take no keys (each clears it), so keys pressed
  * meanwhile are dropped.
- * EP_EV_KEEP / EP_EV_PUT_BACK: the screen under a box (arg 1, 397c at 18,c 112x75) or the top
- * line (arg 2, at 8,0 130x9) is kept, then put back (3981) */
+ * EP_EV_KEEP / EP_EV_PUT_BACK: the screen under a box (arg 1, 397c at 18h,0ch 112h x 75h) or
+ * the top line (arg 2, at 8,0 130h x 9) is kept, then put back (3981)
+ * EP_EV_PALETTE: MCGA's 256 colours loaded from the table at ds:arg (3821): 1144h the game's,
+ * 1444h the intro picture's, 1744h the Elite picture's */
 enum {
     EP_EV_SOUND = 1,
     EP_EV_SURFACE_SOUND,
@@ -33,7 +35,8 @@ enum {
     EP_EV_MUSIC,
     EP_EV_KEEP,
     EP_EV_PUT_BACK,
-    EP_EV_FLIP
+    EP_EV_FLIP,
+    EP_EV_PALETTE
 };
 
 typedef struct {

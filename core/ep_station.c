@@ -402,7 +402,9 @@ static int arrival(ep_game *g)
     int r;
     switch (f->station_step) {
     case ST_RATING: goto after_rating;
-    case ST_ELITE: goto after_elite;
+    case ST_ELITE:
+        if (f->video == 2) ep_event_add(g, EP_EV_PALETTE, 0x1144); /* 3ba8 */
+        goto after_elite;
     case ST_TRIBBLES: goto after_tribbles;
     case ST_NONE: break;
     default: goto after_mission;
@@ -412,6 +414,7 @@ static int arrival(ep_game *g)
 after_rating:
     if (f->station_rating) { /* 3b75: the Elite picture, palette cycling until a key */
         f->station_rating = 0;
+        if (f->video == 2) ep_event_add(g, EP_EV_PALETTE, 0x1744); /* 3b7f */
         sprite(g, 0x8a, 0, 0);
         return wait(g, ST_ELITE, EP_WAIT_KEY);
     }
