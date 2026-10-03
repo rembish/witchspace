@@ -188,8 +188,12 @@ Findings:
 - `ds:b126` is the death countdown (60 frames, then the title).
 - The escape capsule sets `ae23` = 100: after 100 frames the tunnel ends at the station.
 - A bar slot can only hold `ff` (redraw marker) before 0299 runs, never at 03c0.
-- The player's missile copies the 64 bytes at DI, which are stale: slot 20, where the
-  collision loop stops, unless Tribble sprites moved DI (not reproduced).
+- The player's missile slot first gets the 64 bytes at DI as the code before the commands
+  left it (8103, 81b7). On MCGA that is the frame's flip (30c2): `ds:d828`, memory nothing
+  writes, so the slot starts from zeros. On EGA/VGA the flip leaves DI alone: slot 20, where
+  the collision loop stops, or the Tribbles' table when their sprites are on screen (that
+  case is not reproduced; the frontend uses MCGA). A slot taken at random (80e2) is copied
+  onto itself. The harness lets the flip run (all but its wait) so DI is the real one.
 - **DL at the AI** is what the drawing last left (`render.dl`):
   - after a sprite, the low byte of its width (3777, from ELITE.GRF: `ep_sprite_width`);
   - after text, its last glyph's last row address, `y·320 + x + 8·320` (2e52).

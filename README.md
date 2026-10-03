@@ -31,7 +31,7 @@ joystick and mouse controls. The copy protection is reconstructed too, but off u
 for (`--protection`).
 
 Not done yet: the AdLib and Roland music (their drivers play the original's `.MID` files),
-and the 16-colour EGA/VGA screen modes (the frontend shows the 256-colour MCGA mode). Three rare
+and the 16-colour EGA/VGA screen modes (the frontend shows the 256-colour MCGA mode). Two rare
 edge cases still behave approximately; they are described in [re/FLIGHT.md](re/FLIGHT.md).
 
 ## Playing
