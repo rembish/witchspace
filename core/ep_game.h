@@ -66,6 +66,19 @@ typedef struct {
     uint16_t pitch_angle[2];  /* ds:af4c, af4e: angles found while pitching */
     int16_t velocity[3];      /* ds:af50, af52, af54 */
     uint8_t jump_speed;       /* ds:b0dd: speed x 32 */
+    uint8_t mission;          /* ds:83a0 */
+    uint8_t mission_state;    /* ds:83a2 */
+    uint8_t station_angry;    /* ds:83aa */
+    uint8_t station_hit;      /* ds:83ab */
+    uint8_t mining;           /* ds:ae22: mining laser on an asteroid */
+    uint8_t target_note;      /* ds:54ca */
+    uint16_t target_slot;     /* ds:b0e1: data address of a slot the mission cares about */
+    uint8_t beam_flip;        /* ds:54b9 */
+    uint8_t beam_pair;        /* ds:54ba */
+    uint8_t beam_colour;      /* ds:54bb */
+    uint8_t safe_zone;        /* ds:7680: bit 0, near the station */
+    uint8_t ap_flag;          /* ds:b0e0 */
+    char bounty_text[16];     /* ds:805c: "BOUNTY: ... Cr", shown as a message */
     uint8_t scoop_lock;       /* ds:b126 */
     uint8_t video;            /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
 } ep_flight;

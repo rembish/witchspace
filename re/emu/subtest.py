@@ -35,7 +35,18 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 SCRATCH = [(0x01F8, 0x01F9), (0x1074, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
            (0x76D6, 0x76D7), (0x45E6, 0x45FF), (0x4FE0, 0x4FE0)]
 
-EV_SOUND, EV_SURFACE = 1, 2
+EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
+
+# Sound routines that wrap 4c98 (some skip the sound depending on audio state, which the core
+# does not keep): logged with the sound number they pass.
+SOUND_WRAPPERS = {
+    0x4D9F: lambda r: 0x0B, 0x4DC9: lambda r: 0x14 + (r["ax"] & 3), 0x4DEB: lambda r: 0x0F,
+    0x4DF5: lambda r: 0x12, 0x4DFF: lambda r: 0x13, 0x4EA7: lambda r: 2, 0x4EAC: lambda r: 5,
+    0x4EB1: lambda r: 6, 0x4EB6: lambda r: 0x0D, 0x4EBB: lambda r: 0x0E, 0x4EC0: lambda r: 0x18,
+    0x4EC5: lambda r: 0x1A, 0x4ECA: lambda r: 0x1B,
+}
+# Routines the core does not reconstruct yet: stubbed and logged on both sides.
+UNPORTED = [0x7EA8]
 
 # name -> (address, registers, {exit address: line printed}) - exits are where a routine
 # leaves without returning (the core reports them as a result line instead)
@@ -47,7 +58,28 @@ ROUTINES = {
     "laser": (0xA183, {}, {}),
     "tunnel": (0xA0CC, {}, {0xA0E9: "end 1"}),
     "controls": (0xA63D, {}, {}),
+    "laser_hits": (0xAC52, {}, {}),
 }
+
+
+def ship_in_sights(img, rng):
+    """A random ship in a random slot, in view near the crosshair."""
+    slot = rng.randint(2, 19)
+    base = DS * 16 + 0x76DE + 0x40 * slot
+    t = rng.choice([0, 1, 5, 7, 22, 28, rng.randrange(30), rng.randrange(30)])
+    img[base] = (t << 1) | 0x81 | (0x40 if rng.random() < 0.5 else 0)
+    z = rng.choice([100, 200, 600, 1500, 4000, 12000])
+    lim = 2 * z // 256 + 40
+    for k, v in enumerate((rng.randint(-lim, lim), rng.randint(-lim, lim), z)):
+        img[base + 0x10 + 2 * k:base + 0x12 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
+    img[base + 0x1E] = rng.choice([0, 0, 4, 0x20, 0x60, rng.getrandbits(8)])
+    img[base + 0x2B] = rng.choice([0, 1, 2, 3, 4, 5, rng.getrandbits(8)])
+    img[base + 0x30] = rng.choice([0, 0xFD, rng.getrandbits(8)])
+    img[base + 0x31] = rng.choice([0, 0xFF, rng.getrandbits(8)])
+    img[base + 0x25] = rng.choice([0, 1, 2])
+    img[base + 0x3A:base + 0x3C] = rng.choice([0, 1, 0x1234]).to_bytes(2, "little")
+    if rng.random() < 0.3:
+        img[DS * 16 + 0xB0E1:DS * 16 + 0xB0E3] = (0x76DE + 0x40 * slot).to_bytes(2, "little")
 
 
 # name -> data-segment fields (address, size) given random values when fuzzing; a value list
@@ -63,6 +95,10 @@ FUZZ = {
               (0xB0DE, [0, 0x200, 0x400, 0x600]), (0x54C2, [0, 0xEB, 0xEF, 0xF0, 0xFC]), (0xB3D3, [0, 0, 1]),
               (0xB125, [0, 1])],
     "tunnel": [(0xAE23, [0, 1, 2, 30]), (0x83B5, [0, 0, 5])],
+    "laser_hits": [(0, ship_in_sights), (0, ship_in_sights), (0xB0E4, [1, 1, 1, 0]), (0xB0E3, [0, 1, 2, 3]),
+                   (0x83AA, [0, 0, 1]), (0x83A0, [0, 4, 6]), (0x83A2, [0, 1, 2, 3]), (0x836B, [0, 0xD7, 0xD8, 0xFF]),
+                   (0x7680, [0, 1]), (0x83A4, [0, 0, 1, 5, 6, 0x23, 0x24, 0x40]), (0x805A, [0, 0, 3]),
+                   (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
     "controls": [(0x020D + 0x48, [0, 0x80, 0x80]), (0x020D + 0x50, [0, 0x80, 0x80]),
                  (0x020D + 0x4B, [0, 0x80, 0x80]), (0x020D + 0x4D, [0, 0x80, 0x80]),
                  (0x020D + 0x34, [0, 0x80, 0x80]), (0x020D + 0x33, [0, 0x80, 0x80]),
@@ -78,6 +114,9 @@ FUZZ = {
 def fuzz(image, rng):
     img = bytearray(image)
     for addr, spec in FUZZ.get(NAME, []):
+        if callable(spec):
+            spec(img, rng)
+            continue
         if isinstance(spec, list):
             v, n = rng.choice(spec), 2 if max(spec) > 0xFF else 1
         else:
@@ -120,6 +159,10 @@ def run_original(image, addr, regs, exits=None):
     sounds = []
     e.hook(0x4E1A, lambda e, r: sounds.append(f"event {EV_SURFACE}:{r['ax']}"))
     e.hook(0x4C98, lambda e, r: sounds.append(f"event {EV_SOUND}:{r['ax'] & 0xFF}"))
+    for wrapper, snd in SOUND_WRAPPERS.items():
+        e.hook(wrapper, lambda e, r, snd=snd: sounds.append(f"event {EV_SOUND}:{snd(r)}"))
+    for stub in UNPORTED:
+        e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
     try:
         e.call(addr, **regs)

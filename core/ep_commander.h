@@ -29,7 +29,8 @@ enum {
     EP_CMDR_LASERS = 0x8a,       /* ds:8365: laser mounts fitted, a bit per view */
     EP_CMDR_LASER_TYPES = 0x8b,  /* ds:8366: two bits of laser type per view */
     EP_CMDR_CASH = 0x8c,         /* ds:8367: 32 bits, tenths of a credit */
-    EP_CMDR_LEGAL = 0x90,        /* ds:836b */
+    EP_CMDR_LEGAL = 0x90,        /* ds:836b: 0 clean, higher worse */
+    EP_CMDR_KILLS = 0x91,        /* ds:836c: word */
     EP_CMDR_NAME = 0x95,         /* ds:8370 */
     EP_CMDR_CARGO = 0x9e,        /* ds:8379: 17 x (held, on offer) */
     EP_CMDR_MARKET_DRAWN = 0xc2, /* ds:839d */

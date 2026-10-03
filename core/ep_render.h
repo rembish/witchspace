@@ -61,6 +61,9 @@ void ep_mat_mul(const ep_mat *a, const ep_mat *b, ep_mat *out); /* 4031: out = a
  * r->prim. */
 void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m);
 
+/* A line (as 261b gets it: end point first) */
+void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
+
 /* draw_ship (43ce). Appends to r->prim. */
 void ep_draw_ship(ep_render *r, const ep_ship_view *v);
 

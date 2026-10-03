@@ -43,6 +43,8 @@ typedef struct {
     uint16_t player_angle[3]; /* ds:76d8, 76da, 76dc */
     uint16_t extra_angle;     /* ds:b0de */
     uint8_t in_flight;        /* ds:af18: scanner and compass only in flight */
+    uint8_t ship_slots;       /* ds:7fde: slots 2.. for ships and the station */
+    uint8_t debris_slots;     /* ds:7fdf: slots 20.. for debris */
     ep_rot rot[6];            /* ds:76be.. */
 } ep_space;
 

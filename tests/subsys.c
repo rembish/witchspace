@@ -4,6 +4,7 @@
  *                              primitives drawn go to stdout, one per line */
 #include "statemap.h"
 
+#include "ep_combat.h"
 #include "ep_flight.h"
 #include "ep_world.h"
 
@@ -51,6 +52,9 @@ int main(int argc, char **argv)
             ep_energy_drain(&g);
         } else if (!strcmp(argv[1], "laser")) {
             ep_laser_fire(&g);
+        } else if (!strcmp(argv[1], "laser_hits")) {
+            ep_laser_hits(&g);
+            print_prims(&g.render);
         } else if (!strcmp(argv[1], "controls")) {
             ep_controls(&g);
         } else if (!strcmp(argv[1], "tunnel")) {

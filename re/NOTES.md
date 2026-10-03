@@ -402,3 +402,30 @@ Flight loop (`a027`, top `a040`): `0299` key map, `3921` flash, `a3f4`, `3130` c
   position −= velocity (`a7b1`).
 - Checked: `re/emu/subtest.py NAME --fuzz N` for update_objects, message, fuel_leak,
   energy_drain, laser, tunnel, controls (corpus states plus fuzzed fields).
+
+## Laser hits (`ac52`)
+
+- Third generator, the flight generator (`4f20`, 84 callers): the twist on the commander's
+  seed words `ds:830f..8313`, returning old `w0 + w1`. Saved with the commander.
+- Target (`abd1`): slots 2 .. `ds:7fde`−1 with flags `81h` and not `+1e` 60h; hit box =
+  byte-swapped word `ds:b0e5[type]` / camera z, + 2; `|x|·256/z` and `|y|·256/z` below it
+  (the dividend is built with `cwd`, so |x| = 8000h always overflows; divide errors skip the
+  slot, via `ds:01f8`); the nearest (smallest z).
+- Hit: `+1e |= 1`, sound 0fh; damage = laser type + 1 (`ds:ae22` = 1 for the mining laser
+  on an asteroid); stations (types 0, 1): docking computer off, and either half damage
+  (rounded up) when `ds:83aa` = 1 (station already hostile) or legal status +40;
+  `+30 += damage` (max ffh), `+2b` (energy) −= damage. Below zero: if `+1e` bit 2 (cannot be
+  destroyed) energy 0 and, for a station, hostile → `83ab` = 1, `83aa` = 0 and destroyed,
+  else legal +40 (on overflow ffh and docking computer off); otherwise destroyed:
+  `ad4f` rewards, `ad1e` mission note (`ds:54ca` = 2 and the slot is `ds:b0e1` → message
+  b21bh), explosion `7ea8`, beam. No kill: beam, laser sound 14h + type.
+- Rewards (`ad4f`): mission 4 state 2 and `+25` = 1 → state 3, kills + 1, message aed8h;
+  mission 6, state > 1, `+25` = 2 → state − 1; bounty `+31`: 0 → message af97h unless one is
+  showing; ffh → Thargoid (type 22) pays 500 (50.0 Cr), police (type 28 with `+3a` = 1) cost
+  legal +4, anything near the station (`ds:7680` bit 0) +2; else pays the bounty: kills + 1
+  (`ds:836c`), "BOUNTY: nnn.n Cr" in `ds:805c` (`7092`), cash + bounty (`8e3c`, cash text
+  rewritten by `6fca`: ten digits, leading zeros blanked, point before the last); in
+  witchspace (`ds:83a4`) Thargons (7) take 5 and Thargoids 35 off it, down to 1 → message aec1h.
+- Beam (`53e2`): one flight-generator step jitters the end (96h + r&3, 3ch + (r>>8)&3);
+  lines from the bottom of the view, colours cycling in `ds:54b9–54bb` by laser type.
+- Checked: `subtest.py laser_hits --fuzz 10` (a random ship placed near the crosshair).
