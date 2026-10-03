@@ -305,3 +305,23 @@ the mode 13h screen with the DAC.
   sun): `(size << 16 >> scale) / (√hi16(x² + y² + z²) · 256)`, the root counted by
   subtracting odd numbers in an 8-bit register (its wrap is unreachable: the sum stays
   below 2³²), divide error or ≥ 256 → 255. Checked by `re/emu/planettest.py`.
+
+## Title screen
+
+- `title_loop` (`9e80` → `9e90` unless `ds:af18`): music, title pictures and credits
+  (`3ae5`, `af73`), player angles and `b0de` cleared, objects for screen 2 (`763e`), slot 2
+  (`ds:775e`) at z = 5000, count 3 (slots 0 and 1 empty), type `ds:b1bb` = first of the list
+  `ds:b263` (24 types, ff-terminated), list pointer `ds:b261`, hold timer `ds:b25f` = 0.
+- Frame (`9f21..9ffa`): key map (`0299`), speaker tune (`4d8e`), clear the view (`3130`),
+  the red disc: `draw_circle(200, 60, 25)` with mask 1 (so the title steps the RNG every
+  frame); slot 2: while the hold timer is 0 move in by 80 down to the type's closest
+  distance (`ds:b1bc`), then hold 120 frames, then move out by 100 to 5000 and take the next
+  type; `+1e` = 2, flags = type·2 + 1, angles `+0e/+0c/+0a` += 30, 20, 25; name (`ds:b27c`
+  by type) and "Press spacebar to start game"; flash colour step `ds:1b3e` (0..5, `3921`);
+  `update_objects`; frame wait; keys (space sets `ds:0319` and ends the loop).
+- Timing contract (as the harness models it, a fast CPU): the frame wait (`301a`) waits
+  until the tick count reaches the last flip time (`ds:267c`) + 2, then stores the new flip
+  time; so a frame lasts two ticks of 54.6 Hz unless the work takes longer.
+- Checked: `re/emu/titletest.py` boots the original in `machine.py` (MCGA) and compares
+  6000 title frames (all 24 ships, the list wrap) with `core/ep_title.c`: RNG, slot 2, title
+  state, clock, disc spans and ship primitives.

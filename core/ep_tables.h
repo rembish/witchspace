@@ -38,4 +38,10 @@ extern const uint8_t ep_models[9644];
 extern const int16_t ep_sin1024[1024];
 extern const int16_t ep_sin2048[2048];
 
+#define EP_TITLE_SHIPS 24
+
+extern const uint8_t ep_title_ships[EP_TITLE_SHIPS];
+extern const uint16_t ep_title_min_dist[32];
+extern const char *const ep_ship_names[30];
+
 #endif
