@@ -284,6 +284,7 @@ def command_world(img, rng):
     w(0x0D2F, rng.choice(keys * 4 + [0xFF, 0x20, 0x1B, 0x41]))
     w(0x54CA, rng.choice([0, 1, 2, 2]))
     w(0xB0DE, rng.choice([0, 0x400, 0x200, 0x600, 0x4FF]), 2)
+    w(0x02F9, rng.choice([img[DS * 16 + 0x02F9], img[DS * 16 + 0x02F9], 1]))  # sometimes at the station
     for a, vals in ((0xAF14, [0, 0, 1]), (0xB126, [0, 0, 1]), (0xB0E0, [0, 0, 1]), (0x83AA, [0, 0, 1]),
                     (0x83AB, [0, 1]), (0x83B1, [0, 1]), (0xAE25, [0, 0, 3]), (0xAE60, [0, 0, 0, 2]), (0xAE23, [0, 0, 3]),
                     (0xB1F8, [0, 0, 1]), (0xB3D5, [0, 0, 5]), (0x7680, [0, 1, 1]), (0x8360, [0, 1]),
@@ -848,15 +849,18 @@ def run_original(image, addr, regs, exits=None):
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
         e.hook(0x37BD, bar_icon)
     if NAME in ("commands", "loop"):
-        if NAME == "commands":
-            e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
+        if NAME == "commands":  # the bar's icons as events; the cockpit (763e) is drawing
+            def cmd_icon(e, r):
+                if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
+                    sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
+            e.hook(0x37BD, cmd_icon)
         done = "cmd 2" if NAME == "commands" else "frame 2"
         for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0x0DF6):  # reconstructed screens: up to their idle loop
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
                           begin=CS * 16 + at, end=CS * 16 + at)
         for stub in (0x07AA, 0x08AB, 0x0674,
                      0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5,
-                     0x0425, 0xA23B):  # screens not reconstructed yet
+                     0x0425):  # screens not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
                 sounds.append(f"event {EV_UNPORTED}:{stub}"),
                 left.append("frame 1" if stub == 0x6864 else done), mu.emu_stop()),
@@ -867,7 +871,7 @@ def run_original(image, addr, regs, exits=None):
     if NAME in ("frame", "loop"):  # the original's DL at the AI, passed to the core
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
                       begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
-    if NAME in ("launch", "dock", "loop"):  # the launch sound and its wait
+    if NAME in ("launch", "dock", "loop", "commands"):  # the launch sound and its wait
         def launch_sound(e, r):
             if e.r8(0x4801) != 2 and e.r8(0x45E7) == 0:
                 sounds.append(f"event {EV_SOUND}:17")
@@ -999,9 +1003,9 @@ def main():
         open(inf, "wb").write(before)
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
         got, got_prims = open(outf, "rb").read(), out.splitlines()
-        if NAME in ("frame", "loop"):  # drawing is checked per subsystem; here the state and the events
-            want_prims = [l for l in want_prims if l.startswith(("event", "frame"))]
-            got_prims = [l for l in got_prims if l.startswith(("event", "frame"))]
+        if NAME in ("frame", "loop", "commands"):  # drawing is checked per subsystem; here state and events
+            want_prims = [l for l in want_prims if l.startswith(("event", "frame", "cmd"))]
+            got_prims = [l for l in got_prims if l.startswith(("event", "frame", "cmd"))]
         diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]]
         for i in range(0x10000):
             if not mask[i] and want[i] != before[i] and not any(a <= i <= b for a, b in SCRATCH):

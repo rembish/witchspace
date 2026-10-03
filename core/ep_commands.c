@@ -334,8 +334,27 @@ static int dock_command(ep_game *g)
     f->screen_bits = 0;
     f->screen_flag = 0;
     if (f->other_screen) {
-        ep_event_add(g, EP_EV_UNPORTED, 0xa23b); /* launch, or back from a docked screen */
-        return EP_CMD_SCREEN;
+        if (f->screen == 1) { /* at the station: 7294, then the launch (a027) */
+            f->energy = 0x3ff;
+            f->fore_shield = 0xff;
+            f->aft_shield = 0xff;
+            f->sun_size = 0x0c;
+            f->altitude = 0xff;
+            f->dead = 0;
+            f->missile_alert = 0;
+            f->warn_time = 0;
+            f->laser_temp = 0;
+            f->target_note = 0;
+            f->message_time = 0;
+            f->force_misjump = 0;
+            f->tribbles_shown = 0;
+            ep_launch(g);
+            return EP_CMD_RESTART;
+        }
+        if (f->station_angry) return EP_CMD_STAY;
+        back_to_flight(g);
+        if (!f->scoop_lock && !f->no_crash && !f->station_angry) docking_computer(g); /* a277 */
+        return EP_CMD_RESTART;
     }
     if (f->scoop_lock || f->no_crash || f->station_angry) return EP_CMD_STAY;
     docking_computer(g);
