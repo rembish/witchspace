@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_library(epcore STATIC core/ep_galaxy.c core/ep_desc.c core/ep_market.c core/ep_render.c core/ep_objects.c core/ep_rng.c core/ep_circle.c core/ep_title.c core/ep_tables.c)
+add_library(epcore STATIC core/ep_galaxy.c core/ep_desc.c core/ep_market.c core/ep_render.c core/ep_objects.c core/ep_rng.c core/ep_circle.c core/ep_title.c core/ep_commander.c core/ep_tables.c)
 target_include_directories(epcore PUBLIC core)
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -34,6 +34,8 @@ add_executable(ep_planetdump tests/planetdump.c)
 target_link_libraries(ep_planetdump PRIVATE epcore)
 add_executable(ep_titledump tests/titledump.c)
 target_link_libraries(ep_titledump PRIVATE epcore)
+add_executable(ep_cmdrdump tests/cmdrdump.c)
+target_link_libraries(ep_cmdrdump PRIVATE epcore)
 
 # The port: SDL2 frontend over the core. The font is embedded, so the binary has no runtime
 # asset paths.

@@ -325,3 +325,20 @@ the mode 13h screen with the DAC.
 - Checked: `re/emu/titletest.py` boots the original in `machine.py` (MCGA) and compares
   6000 title frames (all 24 ships, the list wrap) with `core/ep_title.c`: RNG, slot 2, title
   state, clock, disc spans and ship primitives.
+
+## Commander (save file)
+
+- `ds:82db`, 226 bytes (`ds:82d7`; `ds:82d9` = 25 is the system record length). Save
+  (`0877`): DOS create + write of the block; load (`09de`): read, then `77c5` must match.
+- Checksum (`77c5`): ax = 454ch; for each byte up to `83bb`: `add al, b / adc ah, 0 / rol ax,
+  1`; stored at `ds:83bb`. The block in the EXE has ffffh there (not sealed).
+- Layout (ds addresses): `82db` "ELITE Commander File" 1a; `82f0` "COMMANDER "; `82fb` cash
+  as text; `830f` galaxy seed (3 words); `8315` galaxy; `8316/17` chart centre; `8318/19`
+  cursor; `831a–831d` cursor copies; `831e` zoomed chart; `831f` current system record and
+  `8338` selected system record (25 bytes each: name, `+0a` index, `+0b` distance word,
+  `+0d` government, `+0e` economy, `+0f` tech, population, species, productivity, radius,
+  description seeds); `8356` fuel; `8357–8364` equipment counts (`8357` missiles, `835c`
+  fuel scoops, …); `8367` cash (32-bit tenths); `836b` legal status; `836c/836e` (rating /
+  kills **[verify]**); `8370` name; `8379` cargo 17 × (held, on offer); `839c–83b9` flight
+  and mission state (many fields, see the reference counts); `83bb` checksum.
+- Checked: `re/emu/cmdrtest.py` (checksums of 6000 blocks; default block).

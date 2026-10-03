@@ -47,4 +47,8 @@ extern const char *const ep_ship_names[30];
 extern const uint8_t ep_mcga_colour[256];
 extern const uint8_t ep_dac[768];
 
+#define EP_COMMANDER_SIZE 226
+
+extern const uint8_t ep_commander0[EP_COMMANDER_SIZE];
+
 #endif
