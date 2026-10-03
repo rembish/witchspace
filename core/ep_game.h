@@ -297,8 +297,6 @@ struct ep_game {
     ep_render render;        /* its vertex buffer (ds:28e6) carries over between ships */
     ep_flight f;
     ep_input in;
-    /* tests: DL at the AI from the original (the core only approximates it) */
-    uint8_t test_dl_force, test_dl;
     /* output of the last update */
     ep_circle_buf circles; /* planet and sun spans */
     ep_event event[EP_MAX_EVENTS];

@@ -25,11 +25,8 @@ void ep_frame_before_ai(ep_game *g)
     ep_fuel_leak(g);
     ep_message_tick(g);
     int laser = ep_view_laser(g);
-    if (laser >= 0) { /* 4f34: the crosshair, by laser (3411 leaves DL 10h) */
-        ep_render_sprite(&g->render, (uint8_t)(laser + 1), 0x98, 0x3f);
-        g->f.reg_dl = 0x10;
-    }
-    if (g->test_dl_force) g->f.reg_dl = g->test_dl;
+    if (laser >= 0) ep_render_sprite(&g->render, (uint8_t)(laser + 1), 0x98, 0x3f); /* 4f34: the crosshair */
+    g->f.reg_dl = g->render.dl; /* DL as the drawing left it */
 }
 
 void ep_frame_from_ai(ep_game *g)

@@ -56,6 +56,8 @@ typedef struct {
     int ntext;
     int16_t pen_x, pen_y; /* where the next text goes on (bx, cx after 2e6d) */
     uint8_t pen_colour;   /* ds:10a2 */
+    uint8_t dl;           /* DL as the drawing leaves it: a sprite its width's low byte (3777),
+                           * text its last glyph's last row address (2e52); the AI reads it */
 } ep_render;
 
 /* The parts of an object slot (ds:76de + 64 n) and the globals draw_ship reads. */

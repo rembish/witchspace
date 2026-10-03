@@ -230,13 +230,37 @@ void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y)
 
 void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y)
 {
+    if (sprite < EP_SPRITES) r->dl = ep_sprite_width[sprite]; /* 3777: mov dx, the width */
     if (r->nprim >= EP_MAX_PRIMS) return;
     ep_render_pixel(r, sprite, x, y);
     r->prim[r->nprim - 1].kind = EP_PRIM_SPRITE;
 }
 
+/* 2e12 for each glyph: dx = y * 320 + x, then 8 rows of + 320 (2e52); the last glyph's */
+static void text_dl(ep_render *r, int16_t x, int16_t y, const uint8_t *s, int len)
+{
+    for (int i = 0; i < len && s[i];) {
+        uint8_t c = s[i];
+        if (c == 1) {
+            i += 2;
+        } else if (c == 2) {
+            if (i + 4 >= len) break;
+            x = (int16_t)(s[i + 1] | s[i + 2] << 8);
+            y = (int16_t)(s[i + 3] | s[i + 4] << 8);
+            i += 5;
+        } else {
+            if (c <= 0x7a) {
+                r->dl = (uint8_t)(y * 0x140 + x + 8 * 0x140);
+                if (c >= 0x20) x = (int16_t)(x + (int8_t)ep_glyph_width[c - 0x20]);
+            }
+            i++;
+        }
+    }
+}
+
 void ep_render_text(ep_render *r, uint8_t colour, int16_t x, int16_t y, const uint8_t *s, int len, int shadow)
 {
+    text_dl(r, x, y, s, len); /* the shadow is drawn first: the plain text leaves DL */
     if (r->nprim >= EP_MAX_PRIMS || r->ntext + len > EP_TEXT_POOL) return;
     ep_prim *p = &r->prim[r->nprim++];
     memset(p, 0, sizeof *p);
