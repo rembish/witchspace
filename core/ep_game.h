@@ -17,7 +17,8 @@
  * not reconstructed yet (so tests notice when a state reaches them). */
 /* EP_EV_ICON: function-key bar slot (high byte) gets icon sprite (low byte) */
 /* EP_EV_WAIT: the original stops for this many timer ticks (a sound playing out) */
-/* EP_EV_MUSIC: the music driver switched (arg: ds:45e7, 1 = sound off)
+/* EP_EV_MUSIC: the music driver switched (arg: ds:45e7, 1 = sound off or the music stops (4d55);
+ * 2 = the title music starts (4d21))
  * EP_EV_KEEP / EP_EV_PUT_BACK: the screen under a box (arg 1, 397c at 18,c 112x75) or the top
  * line (arg 2, at 8,0 130x9) is kept, then put back (3981) */
 enum {
@@ -218,7 +219,7 @@ typedef struct {
 /* Commander files, the frontend's (DOS 8.3 names in capitals: "JAMESON.CDR") */
 typedef struct {
     void *ctx;
-    int (*exists)(void *ctx, const char *name);                              /* 1 if it does */
+    int (*exists)(void *ctx, const char *name); /* 1 if it opens for reading (3d00), not merely is there */
     int (*read)(void *ctx, const char *name, uint8_t *data, int max);        /* bytes read, -1 none */
     int (*write)(void *ctx, const char *name, const uint8_t *data, int len); /* bytes written, -1 */
     int (*list)(void *ctx, char names[][13], int max);                       /* the *.CDR there */
