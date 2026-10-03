@@ -21,10 +21,9 @@ from eliteemu import CS, DS, Elite
 from unicorn import UC_HOOK_CODE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+ARGS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in ("--fuzz", "--show")]
 FUZZ_N = int(sys.argv[sys.argv.index("--fuzz") + 1]) if "--fuzz" in sys.argv else 0
-if FUZZ_N:
-    ARGS.remove(str(FUZZ_N))
+SHOW = int(sys.argv[sys.argv.index("--show") + 1]) if "--show" in sys.argv else 3
 NAME = ARGS[0]
 PATTERN = ARGS[1] if len(ARGS) > 1 else os.path.join(HERE, "corpus", "*.bin")
 TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep_subsys")
@@ -49,8 +48,8 @@ SOUND_WRAPPERS = {
     0x4EC5: lambda r: 0x1A, 0x4ECA: lambda r: 0x1B,
 }
 # Routines the core does not reconstruct yet: stubbed and logged on both sides.
-UNPORTED = [0x7EA8, 0x83F5, 0x8352, 0x84E1, 0x84FC, 0x8645, 0x873B]
-UNPORTED_FOR = {"laser_hits": [], "explode": [0x83F5, 0x8352, 0x84E1, 0x84FC, 0x8645, 0x873B]}
+UNPORTED = []  # routines the core reports as EP_EV_UNPORTED instead of running
+UNPORTED_FOR = {}
 
 # name -> (address, registers, {exit address: line printed}) - exits are where a routine
 # leaves without returning (the core reports them as a result line instead)
@@ -245,6 +244,105 @@ def ai_world(img, rng):
     img[d + 0x8362] = rng.choice([0, 1])
 
 
+def ai_handlers(img, rng):
+    """Ships of every class in every state, near the boxes their handlers test, with targets."""
+    d = DS * 16
+    slot = lambda i: 0x76DE + 0x40 * i
+    w = lambda a, v, n=1: img.__setitem__(slice(d + a, d + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    used = []
+    for i in range(2, 20):
+        b = slot(i)
+        if rng.random() < 0.35:
+            continue
+        cls = rng.choice([1, 2, 2, 3, 4, 4, 5, 5, 6, 6]) if i > 2 else 1
+        types = {1: [0, 1], 2: [20], 3: [3, 1, 7, 12, 5], 4: [9, 10, 28, 28, 5, 12, 13], 5: [22, 7, 22, 15, 25],
+                 6: [15, 17, 18]}[cls]
+        t = rng.choice(types)
+        w(b, (t << 1) | 1 | rng.choice([0, 0x80]))
+        w(b + 0x33, cls)
+        w(b + 0x17, rng.choice([0, 1, 2, 3, 4, 5, 10, 2, 3]))
+        w(b + 0x1E, rng.choice([0, 1, 2, 3, 3, 0x11, 0x13, 4, 6]))
+        w(b + 0x16, rng.choice([1, 2, 3]))
+        w(b + 0x30, rng.choice([0, 3, 9, 10, 0x18, 0x19, 0x80, 0xFF]))
+        w(b + 0x32, rng.choice([0, 1, 3]))
+        w(b + 0x1F, rng.choice([0, 1, 2]))
+        w(b + 0x2B, rng.choice([0, 2, 4, 7, 8, 9, 0x20, 0xFF]))
+        w(b + 0x35, rng.choice([0, 0, 1, 2, 5]))
+        w(b + 0x1C, rng.getrandbits(8))
+        w(b + 0x1D, rng.choice([1, 4, 0x10, 0x1E]))
+        w(b + 0x18, rng.choice([2, 9, 10, 12, 30]))
+        w(b + 0x3A, rng.choice([0, 1, 1, slot(rng.randint(2, 19))]), 2)
+        r = rng.choice([200, 450, 800, 1000, 2000, 5000, 0x1C2, 0x3000])
+        for k in range(3):
+            v = rng.choice([rng.randint(-r, r), rng.randint(-r - 20, -r + 20), rng.randint(r - 20, r + 20),
+                            rng.randint(-0x7FFF, 0x7FFF)])
+            w(b + 4 + 2 * k, v, 2)
+            w(b + 1 + k, 0xFF if v < 0 else 0)
+        if rng.random() < 0.1:
+            w(b + 1 + rng.randrange(3), rng.getrandbits(8))
+        for k in range(3):
+            w(b + 0x0A + 2 * k, rng.getrandbits(16), 2)
+        used.append(i)
+    for i in used:
+        b = slot(i)
+        if img[d + b + 0x33] in (2, 6) and rng.random() < 0.7:
+            j = rng.choice(used + [0, 2])
+            w(b + 0x29, slot(j) if j else 0, 2)
+            if img[d + b + 0x33] == 2 and j and rng.random() < 0.6:
+                for k in range(3):
+                    w(b + 4 + 2 * k, int.from_bytes(img[d + slot(j) + 4 + 2 * k:d + slot(j) + 6 + 2 * k], "little")
+                      + rng.randint(-220, 220), 2)
+    for i in used:
+        b = slot(i)
+        if img[d + b + 0x17] in (3, 4, 5) and rng.random() < 0.5:  # near the stale-DL range
+            k = rng.randrange(3)
+            for j in range(3):
+                v = (img[d + b + 0x1C] << 8) + rng.randint(-300, 300) if j == k else rng.randint(-200, 200)
+                v = rng.choice([v, -v])
+                w(b + 4 + 2 * j, v, 2)
+                w(b + 1 + j, 0xFF if v < 0 else 0)
+        if img[d + b + 0x33] == 2 and rng.random() < 0.3:  # a missile at the player
+            w(b + 0x29, 0, 2)
+            for j in range(3):
+                v = rng.randint(-230, 230)
+                w(b + 4 + 2 * j, v, 2)
+                w(b + 1 + j, 0xFF if v < 0 else 0)
+    if rng.random() < 0.5:  # the station was hit, far enough to launch
+        b = slot(2)
+        w(b, rng.choice([0, 1]) << 1 | 1)
+        w(b + 0x33, 1)
+        w(b + 0x1E, img[d + b + 0x1E] | 1)
+        for j in range(3):
+            v = rng.choice([rng.randint(-3000, 3000), 460, -460, 0x1C2])
+            w(b + 4 + 2 * j, v, 2)
+            w(b + 1 + j, 0xFF if v < 0 else 0)
+        if rng.random() < 0.5:  # slot 3 reads the DL the station left (c2, or a launch's)
+            b3 = slot(3)
+            w(b3, (rng.choice([9, 10, 15]) << 1) | 1)
+            w(b3 + 0x33, rng.choice([4, 5, 6]))
+            w(b3 + 0x17, rng.choice([3, 4]))
+            w(b3 + 0x2B, 0x20)
+            hi = rng.randrange(1, 0x30)
+            w(b3 + 0x1C, hi)
+            for j in range(3):
+                v = (hi << 8 | rng.choice([0xC2, 0xC3, 0xC1, rng.randrange(256)])) if j == 0 else rng.randint(-100, 100)
+                w(b3 + 4 + 2 * j, v, 2)
+                w(b3 + 1 + j, 0xFF if v < 0 else 0)
+    if rng.random() < 0.35:  # a generator about to give small numbers: every chance gate opens
+        for j in range(3):
+            w(0x830F + 2 * j, rng.randrange(4), 2)
+    w(0x836B, rng.choice([0, 4, 5, 9, 10, 39, 40, 0xFB, 0xFF]))
+    w(0x836C, rng.choice([0, 2, 3, 0xFF]))
+    w(0x83AA, rng.choice([0, 0, 1]))
+    w(0x8891, rng.choice([0, 0, 0, 1, 20]))
+    w(0xB126, rng.choice([0, 0, 0, 1]))
+    w(0xAE23, rng.choice([0, 0, 0, 1]))
+    w(0xB138, rng.choice([0, 0, 0, 1]))
+    w(0xB139, rng.choice([0, 1]))
+    w(0x7680, rng.choice([0, 1]))
+    w(0x76B6, rng.choice([0, 1, 3]))
+
+
 def attacker(img, rng):
     slot = rng.randint(2, 19)
     base = DS * 16 + 0x76DE + 0x40 * slot
@@ -278,7 +376,7 @@ FUZZ = {
                   (0x54C3, [0x1F, 0x20, 0x27, 0x28, 0x7F, 0x80, 0xFF]), (0x54C4, [0, 1, 0x7F, 0x80, 0xFF]),
                   (0x54C5, [0, 1, 0x7F, 0x80, 0xFF]), (0x54C2, [0, 1, 2, 0x80]), (0x835F, [0, 1]), (0xB126, [0, 0, 1]),
                   (0xAE23, [0, 0, 1]), (0x54C0, [0, 1]), (0, something_close), (0, dashboard_world)],
-    "ai": [(0, ai_world), (0xB0DD, [0, 0, 1]), (0x83A4, [0, 0, 0, 5]), (0x83A9, [0, 0, 0, 3]), (0x83B3, [0, 1]),
+    "ai": [(0, ai_handlers), (0, ai_world), (0xB0DD, [0, 0, 1]), (0x83A4, [0, 0, 0, 5]), (0x83A9, [0, 0, 0, 3]), (0x83B3, [0, 1]),
            (0x83A7, [0, 0, 1]), (0x83AA, [0, 0, 1]), (0x83B1, [0, 1]), (0x83AB, [0, 0, 1]), (0x7680, [0, 1]),
            (0x83A0, [0, 4, 5, 6]), (0x83A2, [0, 2, 3]), (0x83B0, [0, 1]), (0x839E, [0, 5, 0x0D]),
            (0x839F, [0, 1]), (0x83A3, [0, 7]), (0x8329, [7, 7, 3])],
@@ -403,10 +501,15 @@ def main():
                 unmodelled[i] += 1
         if diff or want_prims != got_prims:
             bad += 1
-            if bad <= 3:
+            if bad <= SHOW:
                 print(f"{os.path.basename(path)}{'' if variant is None else ' fuzz ' + str(variant)}: {len(diff)} modelled bytes differ "
-                      f"{[hex(i) for i in diff[:12]]}, primitives {len(want_prims)} vs {len(got_prims)}"
+                      f"{[f'{i:x}:{want[i]:02x}/{got[i]:02x}' for i in diff[:12]]}, primitives {len(want_prims)} vs {len(got_prims)}"
                       + ("" if want_prims == got_prims else " (differ)"))
+                if want_prims != got_prims and SHOW > 3:
+                    for k, (a, b) in enumerate(zip(want_prims + ["-"] * 99, got_prims + ["-"] * 99)):
+                        if a != b:
+                            print(f"    first difference at {k}: want {a} got {b}")
+                            break
     print(f"{NAME}: {len(cases)} states ({FUZZ_N} fuzzed per state), {bad} differ")
     if unmodelled:
         runs, start, prev = [], None, None

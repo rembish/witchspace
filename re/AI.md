@@ -1,7 +1,9 @@
 # AI class handlers of `77e0` (analysis notes)
 
-Static read of the handlers `83f4..873b`; to be confirmed by the subsystem difftest as they are
-ported. `o[+xx]` is a byte of the object unless "word". `r()` is one flight-generator step
+Static read of the handlers `83f4..873b`, ported as `core/ep_ships.c` and confirmed by the
+`ai` subsystem difftest (two corrections from the test are marked below). Only the station's
+paths leave a DL that the next handler can read stale (`c2`, or a launch's velocity); every
+other handler ends with `7e58`. `o[+xx]` is a byte of the object unless "word". `r()` is one flight-generator step
 (`4f20`, `ep_flight_random`). Compares are unsigned unless signed is said. None of the
 handlers steps the main generator `ds:0205`, and none calls a sound or drawing routine
 directly (only via `7ea8` explosion → sound 13h, `67ab` damage → `6cfa` crash, `ad4f` rewards).
@@ -24,7 +26,7 @@ directly (only via `7ea8` explosion → sound 13h, `67ab` damage → `6cfa` cras
   al = o[+30] - 5 (8-bit); if (al >= 0x14) o[+30] = al;   // +30 in 1..4 wraps and is stored
   if (!(|dB| < 200 && |dA| < 200)) return;
   7610 = o; 7612 = 2; 7681 = o[+3c] (stale if not in range);
-  if (|dB| < 70 && |dA| < 70) 7612 = 1;
+  if (o[+3c] < 70 && |dB| < 70 && |dA| < 70) 7612 = 1;   // ax = +3c from the mov al above
   ```
 - `886d` safe-zone block (CF = blocked): 83aa == 1 → no; police (`827e`) → no; else bit 0
   of 7680.
@@ -177,7 +179,7 @@ case 2: t = word o[+29]; if (8314(t, 2000)) { o[+17] = 4; move; return; }
 case 3: if (!in_box(o, (o[+1c]<<8)|DL)) { o[+17] = 0; move; return; }
         weave(o); aim(-pos); A += 0x400 + word +36; B += word +38; steer;
         launch_missile(1500); velocity; move; return;
-default: if (!in_box(o, 5000)) { o[+17] = 0; move; return; }
+default: if (in_box(o, 5000)) { o[+17] = 0; move; return; }   // (jae 8855: attack from outside)
         aim(-pos); steer; fire_laser; launch_missile(2500); velocity; move; return;
 }
 ```

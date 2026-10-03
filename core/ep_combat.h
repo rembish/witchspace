@@ -16,6 +16,9 @@ void ep_cash_text(ep_commander *c);
 void ep_laser_hits(ep_game *g);
 
 /* 67ab: damage to the player (shields, then energy; dying at 0) */
+/* ad4f: what killing this ship earns (or costs) */
+void ep_kill_reward(ep_game *g, ep_object *o);
+
 void ep_damage(ep_game *g, uint16_t amount);
 
 /* 66d6: collisions with the player: ramming, crashing into the station, docking */

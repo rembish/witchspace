@@ -90,6 +90,8 @@ typedef struct {
     uint8_t status;             /* ds:54cb: condition 0 red, 1 green, 2 yellow, 3 (between) */
     uint8_t ecm_shown;          /* ds:54c0: the ECM was just used (icon) */
     uint8_t class_count[9];     /* ds:8730: objects but debris, then per AI class 0..7 */
+    uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
+    uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
     uint8_t danger_gov;         /* ds:76b6: the government for spawning (0 in witchspace) */
     uint16_t spawn_gov8;        /* ds:8897: government x 8 */

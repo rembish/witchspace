@@ -41,7 +41,7 @@ for (i = 0; i < ds[0x76b5]; i++) {
   o = slot(i); if (!(o[0] & 1)) continue;
   if (o[0x33] != 7) ds[0x8730]++;
   ds[0x8731 + o[0x33]]++;
-  handler[o[0x33]](o);       // ds:8720
+  handler[o[0x33]](o);       // ds:8720, see AI.md
 }
 ds[0xb138] = 0;
 if (ds[0x8730] >= 10) return;

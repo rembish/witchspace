@@ -98,17 +98,26 @@ static void face_player(ep_game *g, ep_object *o)
     set16(o, 0x0c, c);
 }
 
-void ep_ship_velocity(ep_game *g, ep_object *o)
+/* 6d83's rounded product, for the DX it leaves */
+static uint16_t rmul(int16_t a, int16_t b)
+{
+    uint32_t p = (uint32_t)((int32_t)a * b);
+    return (uint16_t)((uint16_t)(p >> 15) + ((p >> 14) & 1));
+}
+
+uint16_t ep_ship_velocity(ep_game *g, ep_object *o)
 {
     set_slot(g, 3, get16(o, 0x0a));
     set_slot(g, 4, get16(o, 0x0c));
     int16_t a = 0, b = (int8_t)o->b[0x18];
     rot(g, 4, &a, &b);
     o->b[0x19] = (uint8_t)a;
+    uint16_t dx = rmul((int16_t)(uint16_t)((uint16_t)b << 1), g->space.rot[3].sin);
     a = 0;
     rot(g, 3, &a, &b);
     o->b[0x1a] = (uint8_t)a;
     o->b[0x1b] = (uint8_t)b;
+    return dx;
 }
 
 void ep_ship_move(ep_object *o)
@@ -252,16 +261,33 @@ static ep_object *debris_slot(ep_game *g)
     return pick;
 }
 
-void ep_particle_update(ep_object *o)
+int ep_particle_update(ep_object *o)
 {
     if (--o->b[0x2e] == 0) {
         o->b[EP_OBJ_FLAGS] &= 0xfe;
-        return;
+        return 0;
     }
     o->b[0x2f]++;
     set16(o, 0x0e, (uint16_t)(get16(o, 0x0e) + (int8_t)o->b[0x26]));
     set16(o, 0x0a, (uint16_t)(get16(o, 0x0a) + (int8_t)o->b[0x27]));
     ep_ship_move(o);
+    return 1;
+}
+
+/* 7e58 leaves DX the sign of the z velocity */
+static uint8_t move_dl(const ep_object *o) { return (o->b[0x1b] & 0x80) ? 0xff : 0; }
+
+static void move(ep_game *g, ep_object *o)
+{
+    ep_ship_move(o);
+    g->f.reg_dl = move_dl(o);
+}
+
+static void velocity(ep_game *g, ep_object *o) { g->f.reg_dl = (uint8_t)ep_ship_velocity(g, o); }
+
+static void particle(ep_game *g, ep_object *o)
+{
+    if (ep_particle_update(o)) g->f.reg_dl = move_dl(o);
 }
 
 static int safe_zone(const ep_game *g) { return g->f.safe_zone & 1; }
@@ -312,9 +338,9 @@ void ep_explode(ep_game *g, ep_object *o)
         if (mining) t = (uint8_t)(t + 0x3c);
         p->b[0x2e] = (uint8_t)(t + 0x14);
         p->b[EP_OBJ_FLAGS] = 0x17;
-        ep_particle_update(p);
+        particle(g, p);
         if (f->exploding_station)
-            for (int k = 0; k < 10; k++) ep_particle_update(p);
+            for (int k = 0; k < 10; k++) particle(g, p);
     }
     /* 7f80: canisters */
     unsigned count;
@@ -339,7 +365,7 @@ void ep_explode(ep_game *g, ep_object *o)
         set16(s, 0x0a, r);
         set16(s, 0x0c, (uint16_t)(r >> 8 | r << 8));
         ep_ship_velocity(g, s);
-        ep_ship_move(s);
+        move(g, s);
     }
 }
 
@@ -407,6 +433,572 @@ static void mission6(ep_game *g)
     ep_ship_velocity(g, s);
 }
 
+/* ---- the class handlers of 77e0 (re/AI.md) ---- */
+
+/* a slot from a data address (+29, +3a), NULL for 0 or anything else */
+static ep_object *obj_at(ep_game *g, uint16_t addr)
+{
+    if (addr < 0x76de) return NULL;
+    unsigned off = addr - 0x76deu;
+    if (off % 0x40 || off / 0x40 >= EP_OBJECTS) return NULL;
+    return &g->space.obj[off / 0x40];
+}
+
+static uint16_t abs16(uint16_t v) { return (v & 0x8000) ? (uint16_t)(0u - v) : v; }
+
+/* 6b54: every |coordinate| below d */
+static int in_box3(uint16_t x, uint16_t y, uint16_t z, uint16_t d)
+{
+    return abs16(x) < d && abs16(y) < d && abs16(z) < d;
+}
+
+/* 6b4b: the low position words (the high bytes are not looked at) */
+static int in_box(const ep_object *o, uint16_t d)
+{
+    return in_box3(get16(o, EP_OBJ_POS), get16(o, EP_OBJ_POS + 2), get16(o, EP_OBJ_POS + 4), d);
+}
+
+/* mov dh,[di+1c] with DL as some earlier routine left it */
+static uint16_t stale_range(const ep_game *g, const ep_object *o)
+{
+    return (uint16_t)(o->b[0x1c] << 8 | g->f.reg_dl);
+}
+
+static int is_rock(const ep_object *o)
+{
+    int t = type_of(o);
+    return t == 12 || t == 6 || t == 5 || t == 11;
+}
+
+static int is_police(const ep_object *o) { return type_of(o) == 28 && get16(o, 0x3a) == 1; }
+
+static uint8_t legal(const ep_game *g) { return g->cmdr.b[EP_CMDR_LEGAL]; }
+
+static void add_legal_sat(ep_game *g, unsigned v)
+{
+    unsigned l = legal(g) + v;
+    g->cmdr.b[EP_CMDR_LEGAL] = (uint8_t)(l > 0xff ? 0xff : l);
+}
+
+/* 886d: the station's peace stops this ship firing */
+static int held_by_safe_zone(const ep_game *g, const ep_object *o)
+{
+    if (g->f.station_angry == 1 || is_police(o)) return 0;
+    return safe_zone(g);
+}
+
+static int player_untouchable(const ep_game *g) { return g->f.scoop_lock | g->f.no_crash | g->f.ai_hold; }
+
+typedef struct {
+    uint16_t a, b; /* the target angles */
+} aim_t;
+
+/* 7de8 (towards the player) or 7dde (away) and 7df2 */
+static aim_t aim_at_player(ep_game *g, const ep_object *o, int away)
+{
+    aim_t t;
+    int16_t x = (int16_t)get16(o, EP_OBJ_POS), y = (int16_t)get16(o, EP_OBJ_POS + 2),
+            z = (int16_t)get16(o, EP_OBJ_POS + 4);
+    if (!away) {
+        x = (int16_t)(0u - (uint16_t)x);
+        y = (int16_t)(0u - (uint16_t)y);
+        z = (int16_t)(0u - (uint16_t)z);
+    }
+    ep_aim(g, x, y, z, &t.a, &t.b);
+    return t;
+}
+
+/* 8034 */
+static uint16_t turn_step(const ep_object *o, uint16_t target, uint16_t cur, uint16_t *err)
+{
+    int16_t d = (int16_t)((target & 0x7ff) - (cur & 0x7ff));
+    uint16_t m = abs16((uint16_t)d);
+    uint16_t turn = o->b[0x1d];
+    *err = m;
+    if (m < turn) return (uint16_t)d;
+    return d < 0 ? (uint16_t)(0u - turn) : turn;
+}
+
+typedef struct {
+    uint16_t ea, eb; /* |angle errors| */
+} steer_t;
+
+/* 8019: turn towards the angles, at most +1d per frame each */
+static steer_t steer(ep_game *g, ep_object *o, aim_t t)
+{
+    steer_t s;
+    set16(o, 0x0a, (uint16_t)(get16(o, 0x0a) + turn_step(o, t.a, get16(o, 0x0a), &s.ea)));
+    set16(o, 0x0c, (uint16_t)(get16(o, 0x0c) + turn_step(o, t.b, get16(o, 0x0c), &s.eb)));
+    g->f.reg_dl = (uint8_t)t.b;
+    return s;
+}
+
+/* 8059: fire the laser at the player when nearly lined up */
+static void fire_laser(ep_game *g, ep_object *o, steer_t s)
+{
+    ep_flight *f = &g->f;
+    if (!(o->b[EP_OBJ_FLAGS1E] & 2)) return;
+    if ((uint8_t)rng(g) >= o->b[0x30]) return;
+    if (held_by_safe_zone(g, o) || player_untouchable(g)) return;
+    uint8_t a = (uint8_t)(o->b[0x30] - 5);
+    if (a >= 0x14) o->b[0x30] = a;
+    f->reg_dl = 0xc8;
+    if (!in_box3(0, s.eb, s.ea, 200)) return;
+    f->attacker = SLOT_ADDR(slot_index(g, o));
+    f->under_fire = 2;
+    f->hit_from_behind = o->b[0x3c];
+    f->reg_dl = 0x46;
+    if (in_box3(o->b[0x3c], s.eb, s.ea, 70)) f->under_fire = 1; /* ax is +3c by now: close too */
+}
+
+/* 81e5: launch a missile (14h), escape pod (15h), thargon (7) or Krait (5) from o */
+static int launch_child(ep_game *g, ep_object *o, uint8_t kind)
+{
+    ep_object *c = ep_free_ship_slot(g);
+    if (!c) return 0;
+    if (kind != 0x14 && kind != 0x15 && kind != 7 && kind != 5) return 0;
+    memcpy(c->b, o->b, sizeof c->b);
+    switch (kind) {
+    case 0x14: /* 7b85 */
+        ep_ship_init(c, 0);
+        c->b[0x33] = 2;
+        for (int k = 0; k < 3; k++) move(g, c);
+        set16(c, 0x29, 0);
+        break;
+    case 0x15: /* 7bac, 7e1f */
+        ep_ship_init(c, 1);
+        c->b[0x33] = 3;
+        set16(c, 0x0a, rng(g));
+        set16(c, 0x0c, rng(g));
+        set16(c, 0x0e, rng(g));
+        velocity(g, c);
+        for (int k = 0; k < 3; k++) move(g, c);
+        break;
+    case 7: /* 7bd3 */
+        ep_ship_init(c, 28);
+        c->b[0x33] = 5;
+        velocity(g, c);
+        move(g, c);
+        move(g, c);
+        set16(c, 0x3a, SLOT_ADDR(slot_index(g, o)));
+        break;
+    default: /* 7bc6 */
+        ep_ship_init(c, 17);
+        c->b[0x33] = 6;
+        velocity(g, c);
+        move(g, c);
+        move(g, c);
+    }
+    return 1;
+}
+
+/* 829a: maybe launch a missile (chance p in 65536) */
+static void launch_missile(ep_game *g, ep_object *o, uint16_t p)
+{
+    if (g->cmdr.b[EP_CMDR_KILLS] < 3 || !(o->b[EP_OBJ_FLAGS1E] & 1) || held_by_safe_zone(g, o) ||
+        !o->b[0x32] || player_untouchable(g))
+        return;
+    if (rng(g) >= p) return;
+    g->f.reg_dl = 0x14;
+    if (launch_child(g, o, 0x14)) o->b[0x32]--;
+}
+
+/* 82d1: a Thargoid launches a thargon now and then */
+static void launch_thargon(ep_game *g, ep_object *o)
+{
+    if (type_of(o) != 22 || !o->b[0x1f]) return;
+    if (rng(g) >= 0x12c) return;
+    g->f.reg_dl = 7;
+    if (launch_child(g, o, 7)) o->b[0x1f]--;
+}
+
+/* 85bf, 87f3: a slow weave while fleeing */
+static void weave(ep_game *g, ep_object *o)
+{
+    if (!o->b[0x35]) {
+        for (int k = 0; k < 2; k++) {
+            uint16_t r = rng(g);
+            uint8_t lo = (uint8_t)r;
+            uint16_t w = (uint16_t)(0x100 | (uint8_t)(lo >> 1 | lo << 7));
+            if (lo & 1) w = (uint16_t)(0u - w);
+            set16(o, 0x36 + 2 * k, w);
+        }
+        o->b[0x35] = 10;
+    }
+    if (--o->b[0x35] == 0) {
+        o->b[0x35] = 10;
+        set16(o, 0x36, (uint16_t)(0u - get16(o, 0x36)));
+        set16(o, 0x38, (uint16_t)(0u - get16(o, 0x38)));
+    }
+}
+
+/* flee from the player, weaving */
+static void flee(ep_game *g, ep_object *o)
+{
+    aim_t t = aim_at_player(g, o, 0);
+    t.a = (uint16_t)(t.a + 0x400 + get16(o, 0x36));
+    t.b = (uint16_t)(t.b + get16(o, 0x38));
+    steer(g, o, t);
+}
+
+static void add_roll(ep_object *o, uint16_t v) { set16(o, 0x0e, (uint16_t)(get16(o, 0x0e) + v)); }
+
+/* 7e86: the station's ECM destroys every missile */
+static void ecm_sweep(ep_game *g)
+{
+    for (int i = 0; i < g->space.ship_slots && i < EP_OBJECTS; i++) {
+        ep_object *m = &g->space.obj[i];
+        if ((m->b[EP_OBJ_FLAGS] & 1) && type_of(m) == 20) m->b[EP_OBJ_FLAGS] &= 0xfe;
+    }
+}
+
+/* 83f5: the station launches traffic when hit, and watches for missiles */
+static void ai_station(ep_game *g, ep_object *o)
+{
+    ep_flight *f = &g->f;
+    add_roll(o, 10);
+    if (f->danger_gov >= 1 && (o->b[EP_OBJ_FLAGS1E] & 1) && fits16(o)) {
+        f->reg_dl = 0xc2;
+        if (!in_box(o, 0x1c2) && legal(g) >= 10) {
+            int ok = legal(g) >= 40 ? rng(g) < 0x7d0 : rng(g) < 0x5a;
+            ep_object *s;
+            if (ok && (s = ep_free_ship_slot(g))) {
+                memcpy(s->b, o->b, sizeof s->b);
+                uint16_t r = rng(g);
+                if (r >= 10000) { /* 7a50: a Viper */
+                    ep_ship_init(s, 14);
+                    s->b[0x33] = 4;
+                    set16(s, 0x3a, 1);
+                    s->b[0x30] = 0x64;
+                } else if (r >= 5000) { /* 7bb9: a shuttle */
+                    ep_ship_init(s, 7);
+                    s->b[0x33] = 3;
+                } else {
+                    spawn_trader(g, s);
+                }
+                uint32_t z = (uint32_t)s->b[EP_OBJ_POS_HI + 2] << 16 | get16(s, EP_OBJ_POS + 4);
+                uint32_t nz = (uint32_t)get16(s, EP_OBJ_POS + 4) + 0xf0;
+                set16(s, EP_OBJ_POS + 4, (uint16_t)nz);
+                s->b[EP_OBJ_POS_HI + 2] = (uint8_t)((z >> 16) + (nz >> 16));
+                set16(s, 0x0c, (uint16_t)(get16(s, 0x0c) + 0x400));
+                set16(s, 0x0e, (uint16_t)(0u - get16(s, 0x0e)));
+                velocity(g, s);
+            }
+        }
+    }
+    if (f->station_ecm == 0) { /* 8471: missiles at the station or at the police nearby */
+        unsigned add = 0;
+        uint16_t self = SLOT_ADDR(slot_index(g, o));
+        for (int i = 0; i < g->space.ship_slots && i < EP_OBJECTS && !add; i++) {
+            const ep_object *m = &g->space.obj[i];
+            uint16_t t = get16(m, 0x29);
+            if (!(m->b[EP_OBJ_FLAGS] & 1) || type_of(m) != 20 || !t) continue;
+            const ep_object *to = obj_at(g, t);
+            if (t == self)
+                add = 40;
+            else if (to && is_police(to) && safe_zone(g))
+                add = 10;
+        }
+        if (!add) return;
+        add_legal_sat(g, add);
+        if (f->energy_drain == 1) return;
+        f->station_ecm = 20;
+    }
+    if (f->station_angry == 1) {
+        f->station_ecm = 0;
+        return;
+    }
+    f->ecm_shown = 1;
+    ecm_sweep(g);
+    f->station_ecm--;
+}
+
+/* 8352: a missile homes in on its target (+29) or the player */
+static void ai_missile(ep_game *g, ep_object *o)
+{
+    ep_flight *f = &g->f;
+    f->missile_alert = 0;
+    add_roll(o, 0x28);
+    uint16_t taddr = get16(o, 0x29);
+    ep_object *t = obj_at(g, taddr);
+    uint16_t d[3];
+    if (taddr) {
+        if (!t || !(t->b[EP_OBJ_FLAGS] & 1)) {
+            ep_explode(g, o);
+            return;
+        }
+        for (int k = 0; k < 3; k++)
+            d[k] = (uint16_t)(get16(t, EP_OBJ_POS + 2 * k) - get16(o, EP_OBJ_POS + 2 * k));
+    } else {
+        for (int k = 0; k < 3; k++) d[k] = (uint16_t)(0u - get16(o, EP_OBJ_POS + 2 * k));
+        f->missile_alert = 1;
+    }
+    f->reg_dl = 0xc8;
+    if (!in_box3(d[0], d[1], d[2], 200)) {
+        aim_t a;
+        ep_aim(g, (int16_t)d[0], (int16_t)d[1], (int16_t)d[2], &a.a, &a.b);
+        steer(g, o, a);
+        velocity(g, o);
+        move(g, o);
+        return;
+    }
+    ep_explode(g, o);
+    taddr = get16(o, 0x29);
+    t = obj_at(g, taddr);
+    if (!taddr) {
+        ep_damage(g, 0x320);
+        return;
+    }
+    if (!t) return;
+    if (type_of(t) <= 1) {
+        if (f->station_angry == 1) {
+            uint8_t e = t->b[0x2b];
+            t->b[0x2b] = (uint8_t)(e - 10);
+            if (e < 10) {
+                ep_explode(g, t);
+                f->station_hit = 1;
+                f->station_angry = 0;
+            }
+        } else {
+            add_legal_sat(g, 5);
+        }
+        return;
+    }
+    ep_kill_reward(g, t);
+    if (!(t->b[EP_OBJ_FLAGS1E] & 4)) ep_explode(g, t);
+}
+
+/* 84e1: junk drifts; rocks tumble */
+static void ai_junk(ep_game *g, ep_object *o)
+{
+    move(g, o);
+    if (!is_rock(o)) return;
+    uint16_t a = 0x37, b = 0xffdf;
+    if (!(o->b[EP_OBJ_FLAGS] & 2)) {
+        a = 0xffdf;
+        b = 0x37;
+    }
+    set16(o, 0x0a, (uint16_t)(get16(o, 0x0a) + a));
+    add_roll(o, b);
+}
+
+/* 84fc: traders and police: fly on, attack when hit (police: when wanted), flee */
+static void ai_trader(ep_game *g, ep_object *o)
+{
+    uint8_t *state = &o->b[0x17];
+    if (is_rock(o)) { /* the armed asteroid: a Krait hides inside */
+        add_roll(o, 20);
+        if ((o->b[EP_OBJ_FLAGS1E] & 1) && !(o->b[EP_OBJ_FLAGS1E] & 0x10)) {
+            g->f.reg_dl = 5;
+            if (launch_child(g, o, 5)) o->b[EP_OBJ_FLAGS1E] |= 0x10;
+        }
+        move(g, o);
+        return;
+    }
+    switch (*state) {
+    case 0: *state = 1; break;
+    case 1:
+        if (is_police(o) && legal(g) >= 5)
+            *state = 2;
+        else if (o->b[EP_OBJ_FLAGS1E] & 1)
+            *state = rng(g) < 0x53fc ? 3 : 2;
+        break;
+    case 2: {
+        if (!is_police(o) && o->b[0x2b] < 8) {
+            *state = 3;
+            break;
+        }
+        g->f.reg_dl = 0x20;
+        if (in_box(o, 0x320)) {
+            *state = 4;
+            break;
+        }
+        steer_t s = steer(g, o, aim_at_player(g, o, 0));
+        fire_laser(g, o, s);
+        if (is_police(o) && legal(g)) launch_missile(g, o, legal(g) < 10 ? 100 : 3000);
+        velocity(g, o);
+        break;
+    }
+    case 3:
+        if (o->b[0x2b] < 3) launch_missile(g, o, 1000);
+        weave(g, o);
+        flee(g, o);
+        velocity(g, o);
+        if (rng(g) < 0x32) g->f.station_ecm = 20;
+        break;
+    default:
+        if (!in_box(o, stale_range(g, o))) {
+            *state = 2;
+            break;
+        }
+        if (o->b[0x2b] < 5 && !is_police(o)) {
+            *state = 3;
+            break;
+        }
+        steer(g, o, aim_at_player(g, o, 1));
+        velocity(g, o);
+    }
+    move(g, o);
+}
+
+/* 8645: pirates, Thargoids and thargons: attack in passes */
+static void ai_hostile(ep_game *g, ep_object *o)
+{
+    uint8_t *state = &o->b[0x17];
+    int type = type_of(o);
+    if (type == 22) {
+        if (rng(g) < 100) g->f.station_ecm = 30;
+        add_roll(o, 20);
+    } else if (type == 7) {
+        add_roll(o, 20);
+    }
+    switch (*state) {
+    case 0: *state = 1; break;
+    case 1:
+        if (!((o->b[EP_OBJ_FLAGS1E] & 1) && o->b[0x30] < 10)) {
+            o->b[0x16] = (uint8_t)(((rng(g) >> 8) & 3) + 2);
+            *state = 2;
+        }
+        break;
+    case 2: {
+        g->f.reg_dl = 0xe8;
+        if (in_box(o, 1000)) {
+            *state = 3;
+            break;
+        }
+        steer_t s = steer(g, o, aim_at_player(g, o, 0));
+        fire_laser(g, o, s);
+        launch_missile(g, o, 1000);
+        launch_thargon(g, o);
+        velocity(g, o);
+        move(g, o);
+        add_roll(o, 15);
+        return;
+    }
+    case 3: {
+        if (in_box(o, stale_range(g, o))) { /* fly through and away */
+            steer(g, o, aim_at_player(g, o, 1));
+            velocity(g, o);
+            launch_thargon(g, o);
+            break;
+        }
+        int give_up = --o->b[0x16] == 0;
+        if (!give_up && type == 7) {
+            const ep_object *p = obj_at(g, get16(o, 0x3a));
+            if (get16(o, 0x3a) && (!p || type_of(p) != 22 || !(p->b[EP_OBJ_FLAGS1E] & 2))) give_up = 1;
+        }
+        if (give_up) {
+            o->b[0x30] = 9;
+            o->b[EP_OBJ_FLAGS1E] &= 0xfe;
+            *state = type == 7 ? 10 : 1;
+        } else {
+            *state = 2;
+        }
+        break;
+    }
+    default: /* an orphaned thargon slows down */
+        if (o->b[0x18] >= 10) {
+            o->b[0x18] -= 3;
+            velocity(g, o);
+        }
+    }
+    move(g, o);
+}
+
+/* 82ef: other loners on the scanner (inactive slots too); the last one found */
+static int count_loners(const ep_game *g, const ep_object *o, uint16_t *last)
+{
+    int n = 0;
+    for (int i = 0; i < g->space.ship_slots && i < EP_OBJECTS; i++) {
+        const ep_object *s = &g->space.obj[i];
+        if (s->b[0x33] != 6 || !(s->b[EP_OBJ_FLAGS1E] & 2) || s == o) continue;
+        *last = SLOT_ADDR(i);
+        n++;
+    }
+    return (uint8_t)n;
+}
+
+/* 873b: loners and bounty hunters */
+static void ai_loner(ep_game *g, ep_object *o)
+{
+    uint8_t *state = &o->b[0x17];
+    switch (*state) {
+    case 0: {
+        if (!(o->b[EP_OBJ_FLAGS1E] & 2)) {
+            steer(g, o, aim_at_player(g, o, 0));
+            velocity(g, o);
+            break;
+        }
+        if (o->b[EP_OBJ_FLAGS1E] & 1) {
+            *state = 3;
+            break;
+        }
+        uint16_t last = 0;
+        int n = count_loners(g, o, &last);
+        if (n >= 2) {
+            if (legal(g) >= 40 || rng(g) < 0x32) *state = 1;
+        } else if (n == 1) {
+            set16(o, 0x29, last);
+            *state = 2;
+        }
+        break;
+    }
+    case 1: {
+        g->f.reg_dl = 0xe8;
+        if (in_box(o, 1000)) {
+            *state = 3;
+            break;
+        }
+        steer_t s = steer(g, o, aim_at_player(g, o, 0));
+        fire_laser(g, o, s);
+        launch_missile(g, o, 1500);
+        velocity(g, o);
+        add_roll(o, 20);
+        break;
+    }
+    case 2: { /* 8314: close in on the other loner */
+        const ep_object *t = obj_at(g, get16(o, 0x29));
+        uint16_t d[3];
+        for (int k = 0; k < 3; k++) {
+            int16_t tv = t ? (int16_t)get16(t, EP_OBJ_POS + 2 * k) : 0;
+            d[k] = (uint16_t)((tv >> 2) - ((int16_t)get16(o, EP_OBJ_POS + 2 * k) >> 2));
+        }
+        g->f.reg_dl = 0xf4;
+        if (in_box3(d[0], d[1], d[2], 2000 >> 2)) {
+            *state = 4;
+            break;
+        }
+        aim_t a;
+        ep_aim(g, (int16_t)d[0], (int16_t)d[1], (int16_t)d[2], &a.a, &a.b);
+        steer(g, o, a);
+        velocity(g, o);
+        break;
+    }
+    case 3:
+        if (!in_box(o, stale_range(g, o))) {
+            *state = 0;
+            break;
+        }
+        weave(g, o);
+        flee(g, o);
+        launch_missile(g, o, 1500);
+        velocity(g, o);
+        break;
+    default: {
+        g->f.reg_dl = 0x88;
+        if (in_box(o, 5000)) { /* close: start over */
+            *state = 0;
+            break;
+        }
+        steer_t s = steer(g, o, aim_at_player(g, o, 0));
+        fire_laser(g, o, s);
+        launch_missile(g, o, 2500);
+        velocity(g, o);
+    }
+    }
+    move(g, o);
+}
+
 static uint16_t jump(const ep_game *g, uint16_t p) { return g->f.jump_speed ? (uint16_t)(p << 5) : p; }
 
 void ep_ai_frame(ep_game *g)
@@ -420,13 +1012,15 @@ void ep_ai_frame(ep_game *g)
         if (cls != 7) f->class_count[0]++;
         if (cls < 8) f->class_count[1 + cls]++;
         switch (cls) {
-        case 0: break;                        /* 83f4: nothing */
-        case 7: ep_particle_update(o); break; /* 81c7 */
-        default: {
-            static const uint16_t handler[8] = { 0x83f4, 0x83f5, 0x8352, 0x84e1,
-                                                 0x84fc, 0x8645, 0x873b, 0x81c7 };
-            ep_event_add(g, EP_EV_UNPORTED, handler[cls & 7]); /* the class handlers: next */
-        }
+        case 0: break; /* 83f4: nothing (sun, planet, hulk) */
+        case 1: ai_station(g, o); break;
+        case 2: ai_missile(g, o); break;
+        case 3: ai_junk(g, o); break;
+        case 4: ai_trader(g, o); break;
+        case 5: ai_hostile(g, o); break;
+        case 6: ai_loner(g, o); break;
+        case 7: particle(g, o); break;                 /* 81c7 */
+        default: ep_event_add(g, EP_EV_UNPORTED, cls); /* a jump through the table's tail */
         }
     }
     f->ai_hold = 0;

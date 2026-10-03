@@ -189,7 +189,7 @@ static void bounty_message(ep_game *g, uint16_t v)
 }
 
 /* ad4f: what killing this ship earns (or costs) */
-static void kill_reward(ep_game *g, ep_object *o)
+void ep_kill_reward(ep_game *g, ep_object *o)
 {
     ep_flight *f = &g->f;
     if (f->mission == 4 && f->mission_state == 2 && o->b[0x25] == 1) {
@@ -289,7 +289,7 @@ void ep_laser_hits(ep_game *g)
                 }
             }
             if (destroy) {
-                kill_reward(g, o);
+                ep_kill_reward(g, o);
                 target_note(g, slot);
                 ep_explode(g, o);
                 beam(g);
@@ -410,7 +410,7 @@ void ep_collisions(ep_game *g)
                 dmg = 0x1e;
             }
         }
-        kill_reward(g, o);
+        ep_kill_reward(g, o);
         target_note(g, i);
         if (dmg == 0x5dc || !is_station(o)) o->b[EP_OBJ_FLAGS] &= 0xfe; /* 7e82 */
         ep_damage(g, dmg);

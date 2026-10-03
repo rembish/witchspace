@@ -11,7 +11,9 @@ files are included.
 galaxy and system generation, descriptions, market and equipment prices, the commander
 block (save files), ship models and rendering, the title screen (frame by frame), and in
 flight: the object update with sun, planet and scanner, the player's controls and movement,
-the laser, messages and warnings, fuel leak and energy. Flight subsystems are checked on
+the laser, messages and warnings, fuel leak and energy, the dashboard's state, star dust,
+combat (hits, damage, collisions, enemy fire, explosions), trading, and the ship AI (every
+class handler, spawning, missions). Flight subsystems are checked on
 game states taken from the running original (`re/emu/corpus.py`, `re/emu/subtest.py`). The
 port (`eliteplus`) shows the title screen so far.
 
