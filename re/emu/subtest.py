@@ -42,7 +42,8 @@ EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
 SOUND_WRAPPERS = {
     0x4D9F: lambda r: 0x0B, 0x4DC9: lambda r: 0x14 + (r["ax"] & 3), 0x4DEB: lambda r: 0x0F,
     0x4DF5: lambda r: 0x12, 0x4DFF: lambda r: 0x13, 0x4EA7: lambda r: 2, 0x4EAC: lambda r: 5,
-    0x4EB1: lambda r: 6, 0x4EB6: lambda r: 0x0D, 0x4EBB: lambda r: 0x0E, 0x4EC0: lambda r: 0x18,
+    0x4EB1: lambda r: 6, 0x4DA4: lambda r: 0x17, 0x4E98: lambda r: 0x0C, 0x4E9D: lambda r: 0x19,
+    0x4EA2: lambda r: 1, 0x4EB6: lambda r: 0x0D, 0x4EBB: lambda r: 0x0E, 0x4EC0: lambda r: 0x18,
     0x4EC5: lambda r: 0x1A, 0x4ECA: lambda r: 0x1B,
 }
 # Routines the core does not reconstruct yet: stubbed and logged on both sides.
@@ -59,6 +60,8 @@ ROUTINES = {
     "tunnel": (0xA0CC, {}, {0xA0E9: "end 1"}),
     "controls": (0xA63D, {}, {}),
     "laser_hits": (0xAC52, {}, {}),
+    "collisions": (0x66D6, {}, {}),
+    "enemy_fire": (0xAE50, {}, {}),
 }
 
 
@@ -82,6 +85,57 @@ def ship_in_sights(img, rng):
         img[DS * 16 + 0xB0E1:DS * 16 + 0xB0E3] = (0x76DE + 0x40 * slot).to_bytes(2, "little")
 
 
+def something_close(img, rng):
+    """A ship or a station near the player, possibly lined up for docking."""
+    slot = rng.randint(0, 19)
+    base = DS * 16 + 0x76DE + 0x40 * slot
+    t = rng.choice([0, 1, 0, 1, rng.randrange(30)])
+    img[base] = (t << 1) | 1 | rng.choice([0, 0x80, 0x80, 0xC0])
+    r = 275 if t <= 1 else 100
+    for k in range(3):
+        v = rng.choice([rng.randint(-r + 1, r - 1), rng.randint(-89, 89), r, -r, rng.randint(-400, 400)])
+        img[base + 4 + 2 * k:base + 6 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
+        img[base + 1 + k] = 0xFF if v < 0 else 0
+    img[base + 0x0C] = rng.getrandbits(8)
+    roll = rng.randrange(2048)
+    img[base + 0x0E:base + 0x10] = roll.to_bytes(2, "little")
+    img[base + 0x1E] = rng.choice([0, 0, 1, rng.getrandbits(8)])
+    img[base + 0x31] = rng.choice([0, 0xFF, rng.getrandbits(8)])
+    near = lambda c: (c + rng.randint(-260, 260)) & 0x7FF
+    a0 = near(rng.choice([0, 0x400]))
+    angles = [a0, near(rng.choice([0, 0x400])), near(rng.choice([roll, roll + 0x400]))]
+    for k, a in enumerate(angles):
+        img[DS * 16 + 0x76D8 + 2 * k:DS * 16 + 0x76DA + 2 * k] = a.to_bytes(2, "little")
+
+
+def docking_approach(img, rng):
+    """The station just ahead, nearly lined up: docking, bouncing off or crashing."""
+    slot = rng.choice([1, 2, 3])
+    base = DS * 16 + 0x76DE + 0x40 * slot
+    img[base] = (rng.choice([0, 1]) << 1) | 0x81
+    for k, v in enumerate((rng.randint(-130, 130), rng.randint(-130, 130), rng.randint(-274, 274))):
+        img[base + 4 + 2 * k:base + 6 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
+        img[base + 1 + k] = 0xFF if v < 0 else 0
+    img[base + 0x0C] = rng.choice([0, 0, 1])
+    img[base + 0x1E] = rng.choice([0, 0, 0, 1])
+    roll = rng.randrange(2048)
+    img[base + 0x0E:base + 0x10] = roll.to_bytes(2, "little")
+    near = lambda c: (c + rng.randint(-120, 120)) & 0x7FF
+    first = rng.choice([0, 0x400])
+    angles = [near(first), near(0x400 - first), near(rng.choice([roll, roll + 0x400]))]
+    for k, a in enumerate(angles):
+        img[DS * 16 + 0x76D8 + 2 * k:DS * 16 + 0x76DA + 2 * k] = a.to_bytes(2, "little")
+
+
+def attacker(img, rng):
+    slot = rng.randint(2, 19)
+    base = DS * 16 + 0x76DE + 0x40 * slot
+    img[base] = (rng.randrange(30) << 1) | 1 | rng.choice([0, 0x80])
+    for k, v in enumerate((rng.randint(-3000, 3000), rng.randint(-3000, 3000), rng.choice([0, 100, 500, 4000]))):
+        img[base + 0x10 + 2 * k:base + 0x12 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
+    img[DS * 16 + 0x7610:DS * 16 + 0x7612] = (0x76DE + 0x40 * slot).to_bytes(2, "little")
+
+
 # name -> data-segment fields (address, size) given random values when fuzzing; a value list
 # picks from interesting values instead of all
 FUZZ = {
@@ -99,6 +153,10 @@ FUZZ = {
                    (0x83AA, [0, 0, 1]), (0x83A0, [0, 4, 6]), (0x83A2, [0, 1, 2, 3]), (0x836B, [0, 0xD7, 0xD8, 0xFF]),
                    (0x7680, [0, 1]), (0x83A4, [0, 0, 1, 5, 6, 0x23, 0x24, 0x40]), (0x805A, [0, 0, 3]),
                    (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
+    "collisions": [(0, something_close), (0, docking_approach), (0x83AA, [0, 0, 1]), (0xAE23, [0, 0, 0, 1]),
+                   (0x54C4, [0, 10, 0x80, 0xFF]), (0x54C8, [0, 0x10, 0x200, 0x3FF])],
+    "enemy_fire": [(0, attacker), (0x7612, [1, 1, 1, 0]), (0x7681, [0, 0x80]), (0x54C4, [0, 5, 14, 15, 16, 0xFF]),
+                   (0x54C5, [0, 5, 14, 15, 16, 0xFF]), (0x54C8, [0, 1, 0x10, 0x3FF])],
     "controls": [(0x020D + 0x48, [0, 0x80, 0x80]), (0x020D + 0x50, [0, 0x80, 0x80]),
                  (0x020D + 0x4B, [0, 0x80, 0x80]), (0x020D + 0x4D, [0, 0x80, 0x80]),
                  (0x020D + 0x34, [0, 0x80, 0x80]), (0x020D + 0x33, [0, 0x80, 0x80]),
@@ -164,6 +222,7 @@ def run_original(image, addr, regs, exits=None):
     for stub in UNPORTED:
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
+    e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
         e.call(addr, **regs)
     except RuntimeError:

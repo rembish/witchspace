@@ -49,6 +49,7 @@ extern const uint8_t ep_dac[768];
 
 extern const uint16_t ep_tan256[256];
 extern const uint16_t ep_hit_size[32];
+extern const uint16_t ep_crash_radius[32];
 
 #define EP_COMMANDER_SIZE 226
 

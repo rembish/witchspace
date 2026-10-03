@@ -170,3 +170,16 @@ void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_
     p->pt[2] = x0;
     p->pt[3] = y0;
 }
+
+void ep_render_clipped_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (r->nprim >= EP_MAX_PRIMS) return;
+    ep_prim *p = &r->prim[r->nprim++];
+    memset(p, 0, sizeof *p);
+    p->kind = EP_PRIM_CLIPPED_LINE;
+    p->colour = colour;
+    p->pt[0] = x0;
+    p->pt[1] = y0;
+    p->pt[2] = x1;
+    p->pt[3] = y1;
+}

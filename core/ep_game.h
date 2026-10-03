@@ -79,6 +79,12 @@ typedef struct {
     uint8_t safe_zone;        /* ds:7680: bit 0, near the station */
     uint8_t ap_flag;          /* ds:b0e0 */
     char bounty_text[16];     /* ds:805c: "BOUNTY: ... Cr", shown as a message */
+    uint8_t docked;           /* ds:7613: docking succeeded */
+    uint8_t under_fire;       /* ds:7612: an enemy laser hit us this frame */
+    uint16_t attacker;        /* ds:7610: data address of its slot */
+    uint8_t hit_from_behind;  /* ds:7681: bit 7, the aft shield takes it */
+    uint8_t fore_shield;      /* ds:54c4 */
+    uint8_t aft_shield;       /* ds:54c5 */
     uint8_t scoop_lock;       /* ds:b126 */
     uint8_t video;            /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
 } ep_flight;

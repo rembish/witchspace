@@ -15,4 +15,13 @@ void ep_cash_text(ep_commander *c);
 /* ac52: the laser shot fired this frame (ds:b0e4): hit, damage, kill, beam */
 void ep_laser_hits(ep_game *g);
 
+/* 67ab: damage to the player (shields, then energy; dying at 0) */
+void ep_damage(ep_game *g, uint16_t amount);
+
+/* 66d6: collisions with the player: ramming, crashing into the station, docking */
+void ep_collisions(ep_game *g);
+
+/* ae50: an enemy laser hit the player this frame (ds:7612): its beam, shield and energy */
+void ep_enemy_fire(ep_game *g);
+
 #endif

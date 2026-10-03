@@ -303,3 +303,188 @@ void ep_laser_hits(ep_game *g)
     f->mining = 0;
     f->firing = 0;
 }
+
+/* 67ab: damage to the player: the fore shield takes it first, then energy */
+void ep_damage(ep_game *g, uint16_t amount)
+{
+    ep_flight *f = &g->f;
+    if (f->no_crash) return;
+    uint16_t rest;
+    if (amount >= 0x100) {
+        rest = (uint16_t)(amount - f->fore_shield);
+        f->fore_shield = 0;
+    } else {
+        uint8_t s = (uint8_t)(f->fore_shield - (uint8_t)amount);
+        int borrow = f->fore_shield < (uint8_t)amount;
+        f->fore_shield = s;
+        if (!borrow) return;
+        f->fore_shield = 0;
+        rest = (uint16_t)(int16_t)(int8_t)(uint8_t)(0u - s);
+    }
+    if (f->energy < rest) {
+        if (!f->no_crash) {
+            f->dead = 1;
+            ep_event_add(g, EP_EV_SOUND, 0x12); /* 6cfa: 4df5 */
+        }
+        f->energy = 0;
+    } else {
+        f->energy = (uint16_t)(f->energy - rest);
+    }
+}
+
+/* 67eb: |a - b| as 11-bit signed angles, compared with a tolerance: 1 when within */
+static int angle_near(uint16_t a, uint16_t b, uint16_t tol)
+{
+    int16_t d = (int16_t)(a & 0x7ff), c = (int16_t)(b & 0x7ff);
+    if (d & 0x400) d = (int16_t)(d | (int16_t)0xf800);
+    if (c & 0x400) c = (int16_t)(c | (int16_t)0xf800);
+    int16_t x = (int16_t)((d - c) & 0x7ff);
+    if (x & 0x400) x = (int16_t)(x | (int16_t)0xf800);
+    uint16_t m = (uint16_t)(x < 0 ? -x : x);
+    return m < tol;
+}
+
+/* 681f: lined up with the station within tol */
+static int lined_up(const ep_game *g, const ep_object *o, uint16_t tol)
+{
+    const uint16_t *a = g->space.player_angle;
+    uint16_t want;
+    if (angle_near(a[0], 0, tol))
+        want = 0x400;
+    else if (angle_near(a[0], 0x400, tol))
+        want = 0;
+    else
+        return 0;
+    if (!angle_near(a[1], want, tol)) return 0;
+    uint16_t roll = (uint16_t)(get16(o, 0x0e) & 0x7ff);
+    if (angle_near(a[2], roll, tol)) return 1;
+    return angle_near(a[2], (uint16_t)((roll + 0x400) & 0x7ff), tol);
+}
+
+/* 6b54: |x|, |y|, |z| all below r (16-bit, unsigned after neg) */
+static int within(int16_t x, int16_t y, int16_t z, uint16_t r)
+{
+    return ep_abs16((uint16_t)x) < r && ep_abs16((uint16_t)y) < r && ep_abs16((uint16_t)z) < r;
+}
+
+void ep_collisions(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    int n = g->space.ship_slots;
+    for (int i = 0; i < n && i < EP_OBJECTS; i++) {
+        ep_object *o = &g->space.obj[i];
+        if (!(o->b[EP_OBJ_FLAGS] & 1)) continue;
+        uint16_t r = ep_crash_radius[(o->b[EP_OBJ_FLAGS] & 0x3e) >> 1];
+        int16_t x = (int16_t)get16(o, EP_OBJ_POS), y = (int16_t)get16(o, EP_OBJ_POS + 2);
+        int16_t z = (int16_t)get16(o, EP_OBJ_POS + 4);
+        if (!within(x, y, z, r)) {
+            if (is_station(o)) o->b[0x0c] &= 0xfe;
+            continue;
+        }
+        uint16_t dmg;
+        if (!is_station(o)) {
+            dmg = 0x1c2;
+        } else if (o->b[0x0c] & 1) {
+            dmg = 0x5dc;
+        } else {
+            o->b[0x0c] |= 1;
+            if (!(o->b[EP_OBJ_FLAGS] & 0x80)) {
+                dmg = 0x5dc;
+            } else if (lined_up(g, o, 0x64)) {
+                if (f->station_angry == 1 || !within(x, y, 0, 0x5a) || (o->b[EP_OBJ_FLAGS1E] & 1)) {
+                    dmg = 0x5dc;
+                } else { /* docked */
+                    f->docked = 1;
+                    f->autopilot = 0;
+                    f->steer = 0;
+                    f->ap_flag = 0;
+                    continue;
+                }
+            } else if (!lined_up(g, o, 0xfa)) {
+                dmg = 0x5dc;
+            } else if (!within(x, y, 0, 0x6e)) {
+                dmg = 0x190;
+            } else {
+                o->b[0x0c] &= 0xfe;
+                dmg = 0x1e;
+            }
+        }
+        kill_reward(g, o);
+        target_note(g, i);
+        if (dmg == 0x5dc || !is_station(o)) o->b[EP_OBJ_FLAGS] &= 0xfe; /* 7e82 */
+        ep_damage(g, dmg);
+        ep_event_add(g, EP_EV_SOUND, 0x12); /* 4df5 */
+    }
+}
+
+/* aef7: screen point of a camera position, (x·256/z + 98h, (y − y/8)·256/z + 3eh); the view
+ * centre on a divide error */
+static void screen_point(int16_t x, int16_t y, uint16_t z, int16_t *sx, int16_t *sy)
+{
+    uint16_t ax = ep_abs16((uint16_t)x), ay = ep_abs16((uint16_t)y);
+    uint32_t nx = (uint32_t)(ax >> 8) << 16 | (uint32_t)(ax & 0xff) << 8;
+    if (!z || nx / z > 0xffff) {
+        *sx = 0x98;
+        *sy = 0x3e;
+        return;
+    }
+    uint16_t qx = (uint16_t)(nx / z);
+    uint16_t yy = (uint16_t)(ay - (ay >> 3));
+    uint32_t ny = (uint32_t)(yy >> 8) << 16 | (uint32_t)(yy & 0xff) << 8;
+    if (ny / z > 0xffff) {
+        *sx = 0x98;
+        *sy = 0x3e;
+        return;
+    }
+    uint16_t qy = (uint16_t)(ny / z);
+    if (y < 0) qy = (uint16_t)(0u - qy);
+    if (x < 0) qx = (uint16_t)(0u - qx);
+    *sx = (int16_t)(qx + 0x98);
+    *sy = (int16_t)(qy + 0x3e);
+}
+
+void ep_enemy_fire(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    if (!f->under_fire) return;
+    ep_event_add(g, EP_EV_SOUND, 0x17); /* 4da4 */
+    const ep_object *o = &g->space.obj[(uint16_t)(f->attacker - 0x76de) / 0x40 % EP_OBJECTS];
+    if (o->b[EP_OBJ_FLAGS] & 0x80) { /* the beam, from an edge of the view to the attacker */
+        int16_t sx, sy;
+        screen_point((int16_t)get16(o, EP_OBJ_CAM), (int16_t)get16(o, EP_OBJ_CAM + 2),
+                     get16(o, EP_OBJ_CAM + 4), &sx, &sy);
+        uint16_t r = ep_flight_random(g);
+        int16_t ex, ey;
+        if (r < 0x53fc) {
+            ex = (int16_t)(r & 0xff);
+            ey = 0;
+        } else if (r < 0xa7f8) {
+            ex = (int16_t)(r & 0xff);
+            ey = 0x7f;
+        } else if (r < 0xd2f0) {
+            ex = 0;
+            ey = (int16_t)(r & 0x7f);
+        } else {
+            ex = 0xff;
+            ey = (int16_t)(r & 0x7f);
+        }
+        ep_render_clipped_line(&g->render, 0x0e, ex, ey, sx, sy);
+    }
+    f->under_fire = 0;
+    uint8_t *shield = (f->hit_from_behind & 0x80) ? &f->aft_shield : &f->fore_shield;
+    if (*shield >= 0x0f) {
+        *shield = (uint8_t)(*shield - 0x0f);
+        ep_event_add(g, EP_EV_SOUND, 0x19); /* 4e9d */
+        return;
+    }
+    uint8_t over = (uint8_t)(*shield - 0x0f);
+    *shield = 0;
+    uint16_t rest = (uint16_t)(int16_t)(int8_t)(uint8_t)(0u - over);
+    if (f->energy < rest) {
+        f->energy = 0;
+        f->dead = 1;
+        return;
+    }
+    f->energy = (uint16_t)(f->energy - rest);
+    ep_event_add(g, EP_EV_SOUND, 1); /* 4ea2 */
+}

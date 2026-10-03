@@ -25,7 +25,7 @@ typedef struct {
     int16_t x, y, z, sx, sy;
 } ep_vertex;
 
-enum { EP_PRIM_TRI = 0, EP_PRIM_QUAD = 2, EP_PRIM_LINE = 4 };
+enum { EP_PRIM_TRI = 0, EP_PRIM_QUAD = 2, EP_PRIM_LINE = 4, EP_PRIM_CLIPPED_LINE = 6 };
 
 typedef struct {
     uint8_t kind;   /* EP_PRIM_* */
@@ -63,6 +63,9 @@ void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m
 
 /* A line (as 261b gets it: end point first) */
 void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
+
+/* A line clipped to the 3D view when drawn (2576) */
+void ep_render_clipped_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
 /* draw_ship (43ce). Appends to r->prim. */
 void ep_draw_ship(ep_render *r, const ep_ship_view *v);

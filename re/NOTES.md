@@ -429,3 +429,26 @@ Flight loop (`a027`, top `a040`): `0299` key map, `3921` flash, `a3f4`, `3130` c
 - Beam (`53e2`): one flight-generator step jitters the end (96h + r&3, 3ch + (r>>8)&3);
   lines from the bottom of the view, colours cycling in `ds:54b9–54bb` by laser type.
 - Checked: `subtest.py laser_hits --fuzz 10` (a random ship placed near the crosshair).
+
+## Collisions, docking and enemy fire
+
+- Collisions (`66d6`, slots 0 .. `ds:7fde`−1): inside the type's radius (`ds:7614`: 275
+  for stations, 100 else) on all three position words. Ships: 450 damage, rewards (`ad4f`,
+  `ad1e`) and removed. Stations (`+0c` bit 0 marks "already touching"; cleared when
+  outside): touching again, out of view, or not lined up within 250 → crash 1500 (and the
+  station slot is cleared!); lined up within 100 (`681f`: angle 0 ≈ 0 and angle 1 ≈ 400h,
+  or angle 0 ≈ 400h and angle 1 ≈ 0; angle 2 ≈ the station's `+0e` or + 400h; 11-bit signed
+  differences, `67eb`) → docked (`ds:7613` = 1, docking computer off) if the station is
+  not hostile, `|x|, |y| < 90` and the station was not hit this frame, else crash; lined up
+  within 250: inside ±110 → bounce, 30 damage, else 400.
+- Damage (`67ab`, not in the launch tunnel): ≥ 256 takes the fore shield `ds:54c4` and the
+  rest from energy; else the fore shield takes it, any overflow from energy; energy below
+  zero → crash (dead).
+- Enemy fire (`ae50`, `ds:7612` set by an attacker in slot `ds:7610`): sound 17h; when the
+  attacker is in view a beam from a random edge point of the view (one flight-generator
+  step: top / bottom / left / right by the value) to its screen point (`aef7`, centre on a
+  divide error), drawn clipped (`2576`); 15 off the aft shield `54c5` if `ds:7681` bit 7,
+  else the fore shield (sound 19h); overflow from energy (sound 1), energy below zero →
+  dead.
+- Checked: `subtest.py collisions|enemy_fire --fuzz 10` (ships and stations placed close,
+  docking approaches, attackers).

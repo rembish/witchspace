@@ -55,6 +55,11 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "laser_hits")) {
             ep_laser_hits(&g);
             print_prims(&g.render);
+        } else if (!strcmp(argv[1], "collisions")) {
+            ep_collisions(&g);
+        } else if (!strcmp(argv[1], "enemy_fire")) {
+            ep_enemy_fire(&g);
+            print_prims(&g.render);
         } else if (!strcmp(argv[1], "controls")) {
             ep_controls(&g);
         } else if (!strcmp(argv[1], "tunnel")) {
