@@ -72,6 +72,7 @@ ROUTINES = {
     "missile_lock": (0xA3F4, {}, {}),
     "jump_drive": (0xA5EE, {}, {}),
     "flight_start": (0x64D0, {}, {}),
+    "select_system": (0x5EE8, {}, {}),
     "new_system": (0x666B, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
@@ -190,6 +191,15 @@ def far_masses(img, rng):
         if rng.random() < 0.1:
             img[b] = (rng.choice([5, 17, 6, 11, 9]) << 1) | 1
             img[b + 0x1E] |= 2
+
+
+def near_centre(img, rng):
+    """A zoomed chart with the cursor near its middle and the centre on a busy area."""
+    if rng.random() < 0.5:
+        d = DS * 16
+        img[d + 0x831E] = 1
+        img[d + 0x8318] = 0x50 + rng.randint(-60, 60)
+        img[d + 0x8319] = 0x40 + rng.randint(-40, 40)
 
 
 def arrival_world(img, rng):
@@ -439,6 +449,8 @@ FUZZ = {
     "dust": [(0, dust_world)],
     "tribbles": [(0, tribble_world)],
     "flight_start": [(0, arrival_world)],
+    "select_system": [(0x8315, [0, 1, 2, 3, 4, 5, 6, 7, 8]), (0x8318, 1), (0x8319, 1), (0x831E, [0, 0, 1, 2]),
+                      (0x8316, 1), (0x8317, 1), (0, near_centre), (0x834A, 1), (0x834B, 1), (0x834C, 1)],
     "new_system": [(0, arrival_world)],
     "jump_drive": [(0xB0DD, [0, 1, 1, 1]), (0xAF14, [0, 0, 1]), (0xAF56, [0x30, 0x30, 0x2F, 4]), (0xAE20, [0, 1]),
                    (0x7680, [0, 0, 1]), (0, far_masses), (0x76B5, [36, 36, 36, 2, 3, 4])],

@@ -128,13 +128,14 @@ typedef struct {
 } ep_input;
 
 typedef struct {
-    ep_commander cmdr; /* ds:82db */
-    ep_space space;    /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */
-    ep_rng rng;        /* ds:0205 */
-    ep_seed seed;      /* ds:5503: the current system's seed (galaxy generator) */
-    uint32_t clock;    /* ds:45e0: timer ticks */
-    uint32_t flip;     /* ds:267c: tick count at the last frame flip */
-    ep_render render;  /* its vertex buffer (ds:28e6) carries over between ships */
+    ep_commander cmdr;    /* ds:82db */
+    ep_space space;       /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */
+    ep_rng rng;           /* ds:0205 */
+    ep_seed seed;         /* ds:5503: the current system's seed (galaxy generator) */
+    uint8_t dist_text[5]; /* ds:5562: the selected system's distance as digits */
+    uint32_t clock;       /* ds:45e0: timer ticks */
+    uint32_t flip;        /* ds:267c: tick count at the last frame flip */
+    ep_render render;     /* its vertex buffer (ds:28e6) carries over between ships */
     ep_flight f;
     ep_input in;
     /* output of the last update */

@@ -123,6 +123,7 @@ static const field fields[] = {
     F(0xae61, f.hyper_tick, 0),
     F(0xb1f8, f.missile_block, 0),
     F(0x5503, seed.w, 1),
+    F(0x5562, dist_text, 1),
     F(0x8081, f.lock_text, 1),
     F(0x4801, f.sound_device, 0),
     F(0x76b6, f.danger_gov, 0),
