@@ -73,6 +73,7 @@ static const field fields[] = {
     F(0xaf56, f.speed, 0),
     F(0xaf58, f.moved, 0),
     F(0xaf14, f.autopilot, 0),
+    F(0xae20, f.jump_new, 0),
     F(0xaf15, f.autopilot_in, 0),
     F(0x09d1, f.roll, 0),
     F(0x09d2, f.pitch, 0),

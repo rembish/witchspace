@@ -482,3 +482,53 @@ void ep_tribbles_tick(ep_game *g)
         ep_render_sprite(&g->render, sprite, (int16_t)x, (int16_t)w16(t + 2));
     }
 }
+
+static int fits16(const ep_object *o)
+{
+    for (int k = 0; k < 3; k++) {
+        uint8_t hi = o->b[EP_OBJ_POS_HI + k];
+        int neg = o->b[EP_OBJ_POS + 2 * k + 1] & 0x80;
+        if (!((hi == 0 && !neg) || (hi == 0xff && neg))) return 0;
+    }
+    return 1;
+}
+
+int ep_mass_locked(const ep_game *g)
+{
+    if (g->f.safe_zone & 1) return 1;
+    if (fits16(&g->space.obj[0]) || fits16(&g->space.obj[1])) return 1;
+    uint8_t n = g->space.count;
+    if (n < 3) return 1; /* sub cl,3 borrows: CF */
+    if ((int8_t)(n - 3) <= 0) return 0;
+    for (int i = 3; i < 3 + (uint8_t)(n - 3) && i < EP_OBJECTS; i++) {
+        const ep_object *o = &g->space.obj[i];
+        if (!(o->b[EP_OBJ_FLAGS] & 1)) continue;
+        int t = (o->b[EP_OBJ_FLAGS] >> 1) & 0x1f;
+        if (t == 5 || t == 17 || t == 6 || t == 11) continue;
+        if (o->b[EP_OBJ_FLAGS1E] & 2) return 1;
+    }
+    return 0;
+}
+
+void ep_jump_drive(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    if (!f->jump_speed) return;
+    uint16_t text;
+    if (f->autopilot == 1 || (f->speed == 0x30 && ep_mass_locked(g))) {
+        f->jump_speed = 0;
+        text = 0xb030; /* Mass-Locked */
+    } else if (f->speed != 0x30) {
+        f->jump_speed = 0;
+        text = 0xb04a; /* Velocity-Locked */
+    } else {
+        if (f->jump_new) {
+            ep_event_add(g, EP_EV_SOUND, 0x0c); /* 4e98 */
+            f->jump_new = 0;
+        }
+        text = 0xb01d; /* Engaged */
+    }
+    f->message = text;
+    f->message_time = 0x19;
+    f->moved = 1;
+}

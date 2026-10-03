@@ -70,6 +70,7 @@ ROUTINES = {
     "dust_reset": (0x5374, {}, {}),
     "tribbles": (0x1221, {}, {}),
     "missile_lock": (0xA3F4, {}, {}),
+    "jump_drive": (0xA5EE, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
@@ -172,6 +173,21 @@ def lock_roles(img, rng):
             img[b] = (img[b] & 0xC1) | rng.randrange(32) << 1
             img[b + 0x33] = rng.choice([0, 1, 2, 3, 3, 4, 4, 5, 6, 7])
             img[b + 0x1E] = rng.choice([0, 2, 0x20, 0x60, 0x40])
+
+
+def far_masses(img, rng):
+    """Sun and planet beyond 16 bits, ships on or off the scanner."""
+    for i in (0, 1):
+        b = DS * 16 + 0x76DE + 0x40 * i
+        if rng.random() < 0.7:
+            img[b + 1 + rng.randrange(3)] = rng.choice([1, 0x10, 0xFE])
+    for i in range(3, 36):
+        b = DS * 16 + 0x76DE + 0x40 * i
+        if img[b] & 1 and rng.random() < 0.5:
+            img[b + 0x1E] &= 0xFD
+        if rng.random() < 0.1:
+            img[b] = (rng.choice([5, 17, 6, 11, 9]) << 1) | 1
+            img[b + 0x1E] |= 2
 
 
 def tribble_world(img, rng):
@@ -404,6 +420,8 @@ FUZZ = {
     "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
     "dust": [(0, dust_world)],
     "tribbles": [(0, tribble_world)],
+    "jump_drive": [(0xB0DD, [0, 1, 1, 1]), (0xAF14, [0, 0, 1]), (0xAF56, [0x30, 0x30, 0x2F, 4]), (0xAE20, [0, 1]),
+                   (0x7680, [0, 0, 1]), (0, far_masses), (0x76B5, [36, 36, 36, 2, 3, 4])],
     "missile_lock": [(0, ship_in_sights), (0, ship_in_sights), (0x54CA, [1, 1, 1, 0, 2]), (0x4801, [0, 2]),
                      (0, lock_roles)],
     "dust_reset": [(0x805A, [0, 0x100, 0x128, 0x28])],

@@ -54,6 +54,7 @@ typedef struct {
     uint8_t missile_alert;      /* ds:8892 */
     uint16_t speed;             /* ds:af56: 4..48 */
     uint8_t moved;              /* ds:af58: speed or attitude changed: recompute the velocity */
+    uint8_t jump_new;           /* ds:ae20: the jump drive was just switched on (sound once) */
     uint8_t autopilot;          /* ds:af14: docking computer flying */
     uint16_t autopilot_in;      /* ds:af15 */
     int8_t roll, pitch;         /* ds:09d1, 09d2: steering, -23..23 */

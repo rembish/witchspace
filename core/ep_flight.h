@@ -33,6 +33,13 @@ void ep_controls(ep_game *g);
  * (sprites 5d/5e into g->render) */
 void ep_tribbles_tick(ep_game *g);
 
+/* afa9: mass-locked (the jump drive cannot run): the station's zone, the sun or planet
+ * within 16 bits, or a ship on the scanner but rocks; also when there are fewer than 3 slots */
+int ep_mass_locked(const ep_game *g);
+
+/* a5ee: the jump drive stays on only at full speed and away from masses */
+void ep_jump_drive(ep_game *g);
+
 /* 549f, the dashboard's state: the condition (585c), cooling, recharging and equipment loss
  * (579d), the station zone (6a45), the ECM icon flag; the gauges are the frontend's */
 void ep_dashboard_tick(ep_game *g);
