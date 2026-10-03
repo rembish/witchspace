@@ -231,3 +231,49 @@ uint16_t ep_text_width(const uint8_t *s)
         s++;
     }
 }
+
+void ep_pen(ep_render *r, int16_t x, int16_t y, uint8_t colour)
+{
+    r->pen_x = x;
+    r->pen_y = y;
+    r->pen_colour = colour;
+}
+
+void ep_text(ep_render *r, const uint8_t *s, int len, int shadow)
+{
+    ep_render_text(r, r->pen_colour, r->pen_x, r->pen_y, s, len, shadow);
+    for (int i = 0; i < len && s[i];) { /* the pen moves on as the glyphs are drawn */
+        uint8_t c = s[i];
+        if (c == 1) {
+            i += 2;
+        } else if (c == 2) {
+            if (i + 4 >= len) break;
+            r->pen_x = (int16_t)(s[i + 1] | s[i + 2] << 8);
+            r->pen_y = (int16_t)(s[i + 3] | s[i + 4] << 8);
+            i += 5;
+        } else {
+            if (c >= 0x20 && c <= 0x7a) r->pen_x = (int16_t)(r->pen_x + ep_glyph_width[c - 0x20]);
+            i++;
+        }
+    }
+}
+
+void ep_text_header(ep_render *r, const uint8_t *s, int len, int shadow)
+{
+    if (len < 5) return;
+    ep_pen(r, (int16_t)(s[0] | s[1] << 8), (int16_t)(s[2] | s[3] << 8), s[4]);
+    ep_text(r, s + 5, len - 5, shadow);
+}
+
+void ep_render_rect(ep_render *r, uint8_t colour, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    if (r->nprim >= EP_MAX_PRIMS) return;
+    ep_prim *p = &r->prim[r->nprim++];
+    memset(p, 0, sizeof *p);
+    p->kind = EP_PRIM_RECT;
+    p->colour = colour;
+    p->pt[0] = x;
+    p->pt[1] = y;
+    p->pt[2] = w;
+    p->pt[3] = h;
+}

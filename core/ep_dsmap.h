@@ -28,4 +28,10 @@ int ep_ds_string(const ep_game *g, uint16_t addr, uint8_t *out, int max);
  * so data bytes may be 0), the final NUL included in the count; returns the length */
 int ep_ds_text(const ep_game *g, uint16_t addr, uint8_t *out, int max);
 
+/* a header text (2e5f): x, y (words), colour, then a text as ep_ds_text */
+int ep_ds_header_text(const ep_game *g, uint16_t addr, uint8_t *out, int max);
+
+/* the word at ds:addr */
+uint16_t ep_ds_word(const ep_game *g, uint16_t addr);
+
 #endif

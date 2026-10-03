@@ -77,6 +77,7 @@ ROUTINES = {
     "arrive": (0x72D8, {}, {}),
     "frame": (0xA040, {}, {0xA073: "end"}),
     "launch": (0xA027, {}, {0xA040: "end"}),
+    "status": (0xA012, {}, {0x8DAC: "end"}),
     "dock": (0x6864, {}, {}),
     "loop": (0xA040, {"di": 0x7BDE}, {0xA021: "frame 1", 0x9E80: "frame 3"}),
     "key_bar": (0x0299, {}, {}),
@@ -334,6 +335,49 @@ def autopilot_world(img, rng):
         w(b + 0x0E, roll + rng.choice([0, 0x400]) + rng.randint(-0x0C, 0x0C), 2)
 
 
+def status_world(img, rng):
+    """Docking with any equipment, cash, legal status, kills, Tribbles; no dialogs (yet)."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    kills = rng.choice([0, 1, 2, 3, 8, 9, 0x13, 0x14, 0x5A, 0x3E7, 0x3E8, 0xEA5F])
+    w(0x836C, kills, 2)
+    w(0x836E, kills, 2)
+    w(0x83B7, 0, 2)
+    w(0x83A0, 0)
+    w(0x83B5, rng.choice([0, 0, 1, 2, 30000]), 2)
+    w(0x839B, rng.choice([0, 0, 0x14]))
+    w(0x836B, rng.choice([0, 1, 0x27, 0x28, 0xFF]))
+    w(0x8356, rng.choice([0, 1, 0x46, 0xFF]))
+    w(0x83A4, rng.choice([0, 0, 1]))
+    w(0x54CB, rng.randrange(4))
+    for k in range(14):
+        w(0x8357 + k, rng.choice([0, 0, 1] if k else [0, 1, 4]))
+    w(0x8365, rng.randrange(16))
+    w(0x8366, rng.getrandbits(8))
+
+
+def arrival_dialogs(img, rng):
+    """Promotions, the Tribble offer, briefings and debriefings, and the keys answering them."""
+    if rng.random() < 0.3:
+        return
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    t = [2, 4, 9, 0x14, 0x23, 0x5A, 0x9B, 0x3E8, 0xEA5E]  # 60000 and up overrun the table (garbage)
+    k = rng.choice(t)
+    w(0x836E, k - rng.choice([1, 0, 0]), 2)
+    w(0x836C, k + rng.choice([0, 0, 1]), 2)
+    w(0x83B7, rng.choice([0, 0, 0x100, 0xFFFF]), 2)
+    w(0x8367, rng.choice([0, 0xFF, 0x10000, 0xC350]), 4)
+    w(0x83A0, rng.choice([0, 1, 2, 3, 4, 5, 6]))
+    w(0x83B0, rng.choice([0, 1, 1, 2]))
+    w(0x7613, rng.choice([0, 1, 1]))
+    for a in (0x83A7, 0x83B1, 0x83A8, 0x83B2, 0x83AA, 0x8358):
+        w(a, rng.choice([0, 1]))
+    w(0x83A2, rng.choice([0, 1, 3]))
+    w(0x83A3, rng.choice([img[DS * 16 + 0x8329], 7]))
+    w(0x839B, rng.choice([0, 0x14, 0x23]))
+    for j in range(8):
+        w(0xFF10 + j, ord(rng.choice("YNynx ")))
+
+
 def arrival_world(img, rng):
     """Any galaxy (the hidden 8 too), system, tech, government; witchspace; docked here before."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -586,6 +630,7 @@ FUZZ = {
     "commands": [(0, bar_world), (0, command_world), (0, ship_in_sights)],
     "countdowns": [(0, jump_world), (0xAE60, [0, 0, 1, 2, 10, 11]), (0xAE61, [1, 1, 2, 10]), (0xAE25, [0, 1, 5]),
                    (0xB3D5, [0, 0, 1, 2, 7, 15, 0x28]), (0x54C8, [0x100, 0x2FE, 0x2FF, 0x3FF]), (0, ai_world)],
+    "status": [(0, status_world), (0, arrival_dialogs)],
     "launch": [(0, arrival_world), (0x8711, [0, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world)],
     "dock": [(0x7613, [0, 1, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world), (0, ai_world)],
     "loop": [(0, ai_handlers), (0, autopilot_world), (0, dust_world), (0, ship_in_sights), (0, bar_world), (0, command_world),
@@ -753,8 +798,26 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME == "tribbles":
-        e.hook(0x3411, lambda e, r: prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}"))
+    if NAME in ("tribbles", "status"):
+        def sprite_or_icon(e, r):
+            if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":  # the bar's (0312)
+                sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
+            else:
+                prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
+        e.hook(0x3411, sprite_or_icon)
+    if NAME == "status":  # scripted keys for the waits (ds:ff10, then Y); no palette cycling
+        keys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF18])
+
+        def key(e, r):
+            k = keys.pop(0) if keys else ord("Y")
+            e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
+            return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
+        e.hook(0x0276, key)
+        e.hook(0x3BB1, lambda e, r: None)
+        e.hook(0x3821, lambda e, r: None)  # the palette (waits for the retrace)
+    if NAME in ("status",):  # filled rectangles
+        e.hook(0x2FD4, lambda e, r: prims.append(
+            f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
         if NAME == "explode":

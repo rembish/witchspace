@@ -10,6 +10,7 @@
 #include "ep_chart.h"
 #include "ep_frame.h"
 #include "ep_commands.h"
+#include "ep_station.h"
 #include "ep_flight.h"
 #include "ep_ships.h"
 #include "ep_trade.h"
@@ -24,6 +25,10 @@ static void print_prims(const ep_render *r)
 {
     for (int k = 0; k < r->nprim; k++) {
         const ep_prim *p = &r->prim[k];
+        if (p->kind == EP_PRIM_RECT) {
+            printf("rect %d:%d,%d,%d,%d\n", p->colour, p->pt[0], p->pt[1], p->pt[2], p->pt[3]);
+            continue;
+        }
         if (p->kind == EP_PRIM_TEXT) {
             printf("text %d,%d,%d,%d:", p->pt[0], p->pt[1], p->colour, p->pt[4]);
             for (int j = 0; j < p->pt[3]; j++) printf("%02x", r->text[p->pt[2] + j]);
@@ -92,6 +97,16 @@ int main(int argc, char **argv)
             printf("cmd %d\n", ep_commands(&g));
         } else if (!strcmp(argv[1], "countdowns")) {
             ep_countdowns(&g);
+        } else if (!strcmp(argv[1], "status")) {
+            ep_enter_station(&g);
+            int w = ep_status_screen(&g), k = 0;
+            while (w != EP_WAIT_NONE) { /* the scripted keys (ds:ff10, 8 of them), then Y */
+                uint8_t key = k < 8 ? ds[0xff10 + k] : 'Y';
+                k++;
+                w = ep_station_key(&g, key);
+            }
+            print_prims(&g.render);
+            printf("end\n");
         } else if (!strcmp(argv[1], "launch")) {
             ep_launch(&g);
             printf("end\n");

@@ -122,6 +122,10 @@ static const field fields[] = {
     F(0x8730, f.class_count, 1),
     F(0xb138, f.ai_hold, 0),
     F(0x8891, f.station_ecm, 0),
+    F(0x8e14, f.fuel_text, 1),
+    F(0x8de6, f.tribble_text, 1),
+    F(0x88e0, f.screen_redraw, 0),
+    F(0x9972, f.reward_digit, 0),
     F(0x45e7, f.sound_off, 0),
     F(0xae21, f.launching, 0),
     F(0xaf59, f.ap_roll, 0),
@@ -275,4 +279,16 @@ int ep_ds_text(const ep_game *g, uint16_t addr, uint8_t *out, int max)
         for (; extra && n < max; extra--, n++) out[n] = ep_ds_byte(g, (uint16_t)(addr + n));
     }
     return n;
+}
+
+int ep_ds_header_text(const ep_game *g, uint16_t addr, uint8_t *out, int max)
+{
+    if (max < 6) return 0;
+    for (int k = 0; k < 5; k++) out[k] = ep_ds_byte(g, (uint16_t)(addr + k));
+    return 5 + ep_ds_text(g, (uint16_t)(addr + 5), out + 5, max - 5);
+}
+
+uint16_t ep_ds_word(const ep_game *g, uint16_t addr)
+{
+    return (uint16_t)(ep_ds_byte(g, addr) | ep_ds_byte(g, (uint16_t)(addr + 1)) << 8);
 }

@@ -128,6 +128,12 @@ typedef struct {
     uint8_t ap_passes;          /* ds:af5b: lining-up passes done (two each) */
     uint8_t sound_off;          /* ds:45e7 */
     uint8_t launching;          /* ds:ae21: 1 from the launch on, 0 at the station */
+    uint8_t fuel_text[0x1e];    /* ds:8e14: "Fuel: x.y Light Years" with its digits (8e2d) */
+    uint8_t tribble_text[0x0f]; /* ds:8de6: the Tribble count and its plural */
+    uint8_t screen_redraw;      /* ds:88e0: a command asks the screen to be drawn again */
+    uint8_t reward_digit;       /* ds:9972: the thousands of mission 1's reward, in its text */
+    uint8_t station_step;       /* where a screen waits for a key (the original's place in the code) */
+    uint8_t station_rating;     /* the promotion shown: Elite gets the ending picture */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

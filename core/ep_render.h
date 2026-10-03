@@ -33,7 +33,8 @@ enum {
     EP_PRIM_CLIPPED_LINE = 6,
     EP_PRIM_PIXEL = 8,
     EP_PRIM_SPRITE = 10,
-    EP_PRIM_TEXT = 12
+    EP_PRIM_TEXT = 12,
+    EP_PRIM_RECT = 14
 };
 
 typedef struct {
@@ -48,6 +49,8 @@ typedef struct {
     int nprim;
     uint8_t text[EP_TEXT_POOL]; /* EP_PRIM_TEXT: pt[2] offset, pt[3] length here */
     int ntext;
+    int16_t pen_x, pen_y; /* where the next text goes on (bx, cx after 2e6d) */
+    uint8_t pen_colour;   /* ds:10a2 */
 } ep_render;
 
 /* The parts of an object slot (ds:76de + 64 n) and the globals draw_ship reads. */
@@ -91,8 +94,17 @@ void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y);
 void ep_render_text(ep_render *r, uint8_t colour, int16_t x, int16_t y, const uint8_t *s, int len,
                     int shadow);
 
+/* 2fd4: a filled rectangle: pt = x, y, width, height */
+void ep_render_rect(ep_render *r, uint8_t colour, int16_t x, int16_t y, int16_t w, int16_t h);
+
 /* 2f84: the width of a text in pixels, up to its end or a move (code 2) */
 uint16_t ep_text_width(const uint8_t *s);
+
+/* 2e6d: text at the pen, which then stands after it (moves included); 2e5f: the text starts
+ * with its own x, y (words) and colour; shadow: 2ec0 (2eb2 with the header) */
+void ep_text(ep_render *r, const uint8_t *s, int len, int shadow);
+void ep_text_header(ep_render *r, const uint8_t *s, int len, int shadow);
+void ep_pen(ep_render *r, int16_t x, int16_t y, uint8_t colour);
 
 void ep_draw_ship(ep_render *r, const ep_ship_view *v);
 
