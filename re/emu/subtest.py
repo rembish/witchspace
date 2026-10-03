@@ -77,7 +77,7 @@ ROUTINES = {
     "dock": (0x6864, {}, {}),
     "loop": (0xA040, {"di": 0x7BDE}, {0xA021: "frame 1", 0x9E80: "frame 3"}),
     "key_bar": (0x0299, {}, {}),
-    "commands": (0x03C0, {"di": 0x7BDE}, {0xA040: "cmd 1"}),  # DI as the frame leaves it
+    "commands": (0x03C0, {"di": 0xD828}, {0xA040: "cmd 1"}),  # DI as the frame's flip leaves it (MCGA)
     "countdowns": (0xA0ED, {}, {}),
     "jump_missions": (0x753C, {}, {}),
     "witchspace": (0x7500, {}, {}),
@@ -1177,14 +1177,15 @@ def run_original(image, addr, regs, exits=None):
     def view_clear(e, r):  # 3130 as the core emits it
         prims.extend(["rect 0:8,9,304,124", "10:0,96,160", "10:51,296,157"])
 
-    def flip(e, r):  # 301a: the frame wait done, the flip noted
-        e.mu.mem_write(DS * 16 + 0x267C, bytes(e.mu.mem_read(DS * 16 + 0x45E0, 4)))
+    def flip(e, r):  # 301a runs (its registers matter), all but its wait for the clock (3027)
         sounds.append(f"event {EV_FLIP}:0")
     for at, kind in ((0x397C, 7), (0x3981, 8)):  # the screen under a box or the top line kept, put back
         e.hook(at, lambda e, r, kind=kind: sounds.append(f"event {kind}:{1 if r['ax'] == 0x18 else 2}"))
     if NAME in ("arrive", "countdowns", "commands"):
         e.hook(0x3130, view_clear)
-        e.hook(0x301A, flip)
+        watch(0x301A, flip)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: mu.reg_write(UC_X86_REG_IP, 0x3035),
+                      begin=CS * 16 + 0x3027, end=CS * 16 + 0x3027)
     if NAME == "key_bar":  # icon redraws
         def icon(e, r):  # only the bar's own (from 0312); the Esc menu's marks are the frontend's
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
@@ -1211,7 +1212,9 @@ def run_original(image, addr, regs, exits=None):
         intr_handlers.append(fake_dos({}, []))  # no commander files
     if NAME in ("frame", "loop", "launch", "dock"):
         e.hook(0x3130, view_clear)
-        e.hook(0x301A, flip)
+        watch(0x301A, flip)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: mu.reg_write(UC_X86_REG_IP, 0x3035),
+                      begin=CS * 16 + 0x3027, end=CS * 16 + 0x3027)
     if NAME in ("launch", "dock", "loop", "commands"):
         e.hook(0x028D, lambda e, r: None)  # the mouse driver
     def pixel(e, r):
@@ -1334,7 +1337,9 @@ def run_original(image, addr, regs, exits=None):
             e.hook(stub, lambda e, r: None)
         e.hook(0x3821, lambda e, r: sounds.append(f"event 10:{r['si']}"))  # a palette loaded
         e.hook(0x3130, view_clear)
-        e.hook(0x301A, flip)
+        watch(0x301A, flip)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: mu.reg_write(UC_X86_REG_IP, 0x3035),
+                      begin=CS * 16 + 0x3027, end=CS * 16 + 0x3027)
 
     if NAME == "title_session":  # a key at each pass (9f21), 12 passes
         tkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
@@ -1348,7 +1353,9 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, title_pass, begin=CS * 16 + 0x9F21, end=CS * 16 + 0x9F21)
         e.hook(0x028D, lambda e, r: None)
         e.hook(0x3130, view_clear)
-        e.hook(0x301A, flip)
+        watch(0x301A, flip)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: mu.reg_write(UC_X86_REG_IP, 0x3035),
+                      begin=CS * 16 + 0x3027, end=CS * 16 + 0x3027)
     if NAME == "chart_session":  # a key and the arrows held at each pass (5c80, 595a), 12 passes
         ckeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
         carrows = list(image[DS * 16 + 0xFF20:DS * 16 + 0xFF2C])
