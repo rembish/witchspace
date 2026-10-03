@@ -1,23 +1,38 @@
 # AI class handlers of `77e0` (analysis notes)
 
-Static read of the handlers `83f4..873b`, ported as `core/ep_ships.c` and confirmed by the
-`ai` subsystem difftest (two corrections from the test are marked below). Only the station's
-paths leave a DL that the next handler can read stale (`c2`, or a launch's velocity); every
-other handler ends with `7e58`. `o[+xx]` is a byte of the object unless "word". `r()` is one flight-generator step
-(`4f20`, `ep_flight_random`). Compares are unsigned unless signed is said. None of the
-handlers steps the main generator `ds:0205`, and none calls a sound or drawing routine
-directly (only via `7ea8` explosion → sound 13h, `67ab` damage → `6cfa` crash, `ad4f` rewards).
+This file describes how each kind of ship behaves in flight: the per-class AI handlers that
+the AI frame `77e0` calls once per object (see SHIPS.md, "AI frame"). It is a static read
+of the handlers `83f4..873b`, ported as `core/ep_ships.c` and confirmed by the `ai`
+subsystem difftest (two corrections from the test are marked below).
+
+How to read it:
+
+- A 4-digit hex value such as `83f4` is a code offset in segment `0000` of the unpacked
+  `ELITE.EXE`; bare numbers used as variables (`836b`, `7680`) are data-segment (`ds:`)
+  addresses.
+- `o[+xx]` is a byte of the object's 64-byte slot unless "word" is said.
+- `r()` is one flight-generator step (`4f20`, `ep_flight_random`).
+- Compares are unsigned unless signed is said.
+
+General facts:
+
+- Only the station's paths leave a DL that the next handler can read stale (`c2`, or a
+  launch's velocity); every other handler ends with `7e58`.
+- None of the handlers steps the main generator `ds:0205`.
+- None calls a sound or drawing routine directly; they do so only via `7ea8` explosion →
+  sound 13h, `67ab` damage → `6cfa` crash, and `ad4f` rewards.
 
 ## Shared helpers
 
-- `6b4b`/`6b54` in_box(d): ax, bx, cx = low words `o+04/06/08` (`6b4b`); CF iff |ax| < d and
-  |bx| < d and |cx| < d (unsigned; |8000h| = 8000h never inside; short-circuits). The 24-bit
-  high bytes +01..+03 are ignored.
-- `7dde`: (x, y, z) low words (away from the player); `7de8`: their negations (towards).
-- `8019` steer(A, B): `8034(t, cur)`: d = (t & 7ff) − (cur & 7ff) (signed, no wrap); step = d
-  if |d| < turn (`o+1d`) else ±turn; word `o+0a` += step(A), word `o+0c` += step(B) (not
-  masked). Returns ax = |dA|, bx = |dB|, dx = B.
-- `8059` fire laser (right after `8019`):
+- **`6b4b`/`6b54` in_box(d).** `6b4b` loads ax, bx, cx = the low words `o+04/06/08`. CF is
+  set iff |ax| < d and |bx| < d and |cx| < d (unsigned; |8000h| = 8000h is never inside;
+  the test short-circuits). The 24-bit high bytes +01..+03 are ignored.
+- **Position words.** `7dde` gives the (x, y, z) low words (pointing away from the player);
+  `7de8` their negations (towards).
+- **`8019` steer(A, B).** The step is `8034(t, cur)`: d = (t & 7ff) − (cur & 7ff) (signed,
+  no wrap); step = d if |d| < turn (`o+1d`), else ±turn. Then word `o+0a` += step(A) and
+  word `o+0c` += step(B) (not masked). Returns ax = |dA|, bx = |dB|, dx = B.
+- **`8059` fire laser** (called right after `8019`):
   ```
   if (!(o[+1e]&2)) return;            // not on scanner: no rng
   r = r(); if ((u8)r >= o[+30]) return;
@@ -28,28 +43,49 @@ directly (only via `7ea8` explosion → sound 13h, `67ab` damage → `6cfa` cras
   7610 = o; 7612 = 2; 7681 = o[+3c] (stale if not in range);
   if (o[+3c] < 70 && |dB| < 70 && |dA| < 70) 7612 = 1;   // ax = +3c from the mov al above
   ```
-- `886d` safe-zone block (CF = blocked): 83aa == 1 → no; police (`827e`) → no; else bit 0
-  of 7680.
-- `829a(p)` missile: needs byte 836c ≥ 3 (low byte of kills), `o+1e` bit 0, not `886d`,
-  `o+32` ≠ 0, b126|ae23|b138 == 0; then r() < p (16-bit) → `81e5(14h)`, on CF `o+32--`.
-- `82d1` thargon: type 22 and `o+1f` ≠ 0: r() < 12ch → `81e5(7)`, on CF `o+1f--`.
-- `81e5(dl)` launch a child: `80ae` free slot (none: CF 0), `81b7` copy 64 bytes parent →
-  child, then 14h missile `7b85` (e0, class 2), `7e58`×3 with the copied +19..+1b, word +29 = 0;
-  15h pod `7bac`, `7e1f` (3 rng: +0a, +0c, +0e), `7e32`, `7e58`×3; 7 thargon `7bd3` (e28,
-  class 5), `7e32`, `7e58`×2, word +3a = parent; 5 Krait `7bc6` (e17, class 6), `7e32`,
-  `7e58`×2. CF 1; other dl: CF 0. Children keep what `7d14` does not reset (+35..+3a, +29,
-  +26..+28).
-- Type tests: `825e` ∈ {12, 6, 5, 11}; `8273` 28 (Viper); `827e` police = 28 and word +3a == 1;
-  `8288` 22; `8291` 7; `43b2` station (type 0 or 1).
-- `8314(t, d)`: deltas (t.x sar 2) − (o.x sar 2) on low words (16-bit wrap), box d shr 2.
-- `7e86` ECM sweep: slots 0..7fde−1 active and type 20 → clear bit 0. Also the player's ECM.
-- `6d83` rotation leaves dx = R(2b·sin), the last rounded product. Only stale slot read:
-  `7d72` (trader launch from the station) uses rotation slots 3/4 as last left.
+- **`886d` safe-zone block** (CF = blocked): if 83aa == 1 → not blocked; police (`827e`) →
+  not blocked; else bit 0 of 7680.
+- **`829a(p)` launch a missile.** Needs: byte 836c ≥ 3 (the low byte of kills), `o+1e`
+  bit 0, not `886d`, `o+32` ≠ 0, and b126|ae23|b138 == 0. Then if r() < p (16-bit) →
+  `81e5(14h)`, and on CF `o+32--`.
+- **`82d1` launch a thargon.** Type 22 and `o+1f` ≠ 0: if r() < 12ch → `81e5(7)`, and on CF
+  `o+1f--`.
+- **`81e5(dl)` launch a child.** `80ae` finds a free slot (none: CF 0); `81b7` copies the
+  64 bytes parent → child; then by dl:
+
+  | dl | Child | Steps |
+  |----|-------|-------|
+  | 14h | missile | `7b85` (e0, class 2), `7e58`×3 with the copied +19..+1b, word +29 = 0 |
+  | 15h | pod | `7bac`, `7e1f` (3 rng: +0a, +0c, +0e), `7e32`, `7e58`×3 |
+  | 7 | thargon | `7bd3` (e28, class 5), `7e32`, `7e58`×2, word +3a = parent |
+  | 5 | Krait | `7bc6` (e17, class 6), `7e32`, `7e58`×2 |
+
+  Returns CF 1; for any other dl, CF 0. Children keep what `7d14` does not reset
+  (+35..+3a, +29, +26..+28).
+- **Type tests:**
+
+  | Routine | Test |
+  |---------|------|
+  | `825e` | type ∈ {12, 6, 5, 11} (rocks) |
+  | `8273` | type 28 (Viper) |
+  | `827e` | police: type 28 and word +3a == 1 |
+  | `8288` | type 22 |
+  | `8291` | type 7 |
+  | `43b2` | station (type 0 or 1) |
+
+- **`8314(t, d)`**: deltas (t.x sar 2) − (o.x sar 2) on the low words (16-bit wrap), box
+  d shr 2.
+- **`7e86` ECM sweep:** slots 0..7fde−1 that are active and type 20 → clear bit 0. Also
+  used by the player's ECM.
+- **Rotation leftovers.** `6d83` rotation leaves dx = R(2b·sin), the last rounded product.
+  The only stale slot read: `7d72` (trader launch from the station) uses rotation slots
+  3/4 as last left.
 
 ## Stale DL
 
-Class 4 state ≥ 4, class 5 state 3, class 6 state 3 use `mov dh,[di+1c]; call 6b4b`: d =
-(`o+1c` << 8) | DL, DL left from the previous handler. DL at handler exit:
+Three AI states test the box with a range built partly from a stale register: class 4
+state ≥ 4, class 5 state 3 and class 6 state 3 use `mov dh,[di+1c]; call 6b4b`, so
+d = (`o+1c` << 8) | DL, with DL left over from the previous handler. DL at handler exit:
 
 | Handler | DL at exit |
 |---|---|
@@ -94,10 +130,13 @@ hit: 836b = min(836b + add, 0xff);
 if (83aa == 1) { 8891 = 0; return; }
 54c0 = 1; ecm_sweep(); 8891--;
 ```
-`7c01` in a station launch: r → e9..e14 = (r & ff)/43, `7d72` (2 rng, stale slots 3/4), `7daf`
-(`800c` + 1 rng → +0e), class 4, `7e32`; type 28: r → word +3a = r & 1, if 1 word +30 =
-legal. RNG order: gate, r2, trader draws. 8891 is set by fleeing traders (14h) and Thargoids
-(1eh), consumed only here.
+Notes on the station:
+
+- `7c01` in a station launch: r → e9..e14 = (r & ff)/43; `7d72` (2 rng, stale slots 3/4);
+  `7daf` (`800c` + 1 rng → +0e); class 4; `7e32`. For type 28: r → word +3a = r & 1, and if
+  1, word +30 = legal.
+- RNG order: gate, r2, then the trader's draws.
+- 8891 is set by fleeing traders (14h) and Thargoids (1eh), and consumed only here.
 
 ## Class 2 missile `8352`
 ```
@@ -115,6 +154,7 @@ rewards(t); /*ad4f*/ if (!(t[+1e] & 4)) explode(t);
 ```
 
 ## Class 3 junk `84e1`
+
 `move` first; then rocks: odd types (5, 11) word +0a += 37h, +0e += ffdfh; 12, 6 the other way.
 
 ## Class 4 trader / police `84fc`
@@ -140,8 +180,11 @@ default: if (!in_box(o, (o[+1c]<<8)|DL)) { o[+17] = 2; move; return; }
         aim(+pos); steer; velocity; move; return;
 }
 ```
-weave (`85bf`, `87f3`): if +35 == 0: r → w = 100h | ror8(r & ff, 1), negated if r & 1 → word
-+36; again → word +38; +35 = 10. Then if --+35 == 0: +35 = 10, negate +36 and +38.
+Weave (`85bf`, `87f3`):
+
+- if +35 == 0: r → w = 100h | ror8(r & ff, 1), negated if r & 1 → word +36; again → word
+  +38; +35 = 10;
+- then if --+35 == 0: +35 = 10, and negate +36 and +38.
 
 ## Class 5 hostile `8645`
 ```
@@ -185,8 +228,13 @@ default: if (in_box(o, 5000)) { o[+17] = 0; move; return; }   // (jae 8855: atta
 ```
 
 ## Not reached from the AI
-- `6ab2` energy bomb (a4d6): in the safe zone legal += 40 (clamped); every active on-scanner
-  slot 3..7fde−1: +2c = 0, `7ea8`.
-- `6aeb` launch (from a170): ae60 = 0, ae23 = 64h, free slot (`80cb` if none) zeroed (`6bbe`),
-  Cobra III hulk (`7b9f`); 76d8 += 400h, b0de = 400h, b0e0 = 1; af56 = 20, af58 = 1, 835d = 0;
-  `a768`, `a7b1`×12; cargo held = 0, 839c = 0, legal = 0.
+
+- **`6ab2` energy bomb** (a4d6): in the safe zone legal += 40 (clamped); every active
+  on-scanner slot 3..7fde−1 gets +2c = 0 and `7ea8`.
+- **`6aeb` launch** (from a170), in order:
+  - ae60 = 0, ae23 = 64h;
+  - a free slot (`80cb` if none) is zeroed (`6bbe`) and becomes a Cobra III hulk (`7b9f`);
+  - 76d8 += 400h, b0de = 400h, b0e0 = 1;
+  - af56 = 20, af58 = 1, 835d = 0;
+  - `a768`, `a7b1`×12;
+  - cargo held = 0, 839c = 0, legal = 0.

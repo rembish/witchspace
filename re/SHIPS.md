@@ -1,37 +1,82 @@
 # Ships: spawning, AI frame, explosions (analysis notes)
 
-Working notes from a full read of `77e0` and the 7700–8352 helpers (Ghidra listing, `disasm.py`,
-table dumps). Everything here is to be confirmed by the subsystem tests as it is ported; items
-the tests have confirmed move to NOTES.md.
+This file covers the ships other than the player's: the object slots and their fields, the
+AI frame `77e0` that runs every ship and spawns new ones, the spawn table, the spawn and
+movement helpers, and explosions. The per-class AI handlers are in AI.md.
+
+Working notes from a full read of `77e0` and the 7700–8352 helpers (Ghidra listing,
+`disasm.py`, table dumps). Everything here is to be confirmed by the subsystem tests as it is
+ported; items the tests have confirmed move to NOTES.md. (The ships are now ported as
+`core/ep_ships.c`.)
+
+How to read it: a 4-digit hex value such as `77e0` is a code offset in segment `0000` of the
+unpacked `ELITE.EXE`; `ds:xxxx` and bare variable numbers (`7fde`, `83a4`) are data-segment
+addresses. `+xx` is a byte offset into a 64-byte object slot. `eN` is entry N of the spawn
+table (see "Spawning"). "rng" / `r` is the flight generator (`4f20`).
 
 ## Corrections
 
-- The explosion does not turn the ship into type 23: `7ea8` clears the ship's active bit and
-  writes flags `17h` (active, type 11) into each debris particle.
-- `77e0` dispatches per AI class through `ds:8720`: `83f4 83f5 8352 84e1 84fc 8645 873b 81c7`
-  for classes 0–7 (0 inert: sun, planet, hulk; 1 station; 2 missile; 3 drifting junk; 4
-  trader/police; 5 hostile: pirate, Thargoid; 6 loner/bounty hunter; 7 particle).
+- **Explosions.** The explosion does not turn the ship into type 23: `7ea8` clears the
+  ship's active bit and writes flags `17h` (active, type 11) into each debris particle.
+- **AI classes.** `77e0` dispatches per AI class through `ds:8720`:
+
+  | Class | Handler | Ships |
+  |-------|---------|-------|
+  | 0 | `83f4` | inert: sun, planet, hulk |
+  | 1 | `83f5` | station |
+  | 2 | `8352` | missile |
+  | 3 | `84e1` | drifting junk |
+  | 4 | `84fc` | trader / police |
+  | 5 | `8645` | hostile: pirate, Thargoid |
+  | 6 | `873b` | loner / bounty hunter |
+  | 7 | `81c7` | particle |
 
 ## Slots
 
-`ds:76de + 64·i`, count `ds:76b5` (36; title 3). At system entry `64d0`: `7fde` = 20,
-`7fdf` = 16, `816b` clears all. 0 sun (flags 3dh, class 0, `+1e` 6, `+3f` ff, colour `+0b` =
-b6h + (seed>>8 & 3)); 1 planet (3fh, z 6e00h); 2 station (`ds:775e`, type 0 if tech ≥ 9 else
-1, `+0c` 400h, z −300, `+1e` 4, class 1, `+1f` = (rng>>8 & 7) + 10, `+2b` 96h, `+31` 0; not in
-witchspace); 3–19 ships (`80ae` free slot search over 3..`7fde`−1); 20–35 particles (`8183`).
-Removal (`7e82`) only clears bit 0 of `+00`; several routines read stale slots (`79fa`, `80cb`,
-`82ef`; spawners that leave fields: `7ad3`, `81e5`, `7a12`, `80fb`).
+Slot i is at `ds:76de + 64·i`; the count is at `ds:76b5` (36; 3 on the title).
 
-Fields: `+17` AI state; `+18` speed (signed); `+19/1a/1b` per-frame velocity (signed bytes,
-`7e32`); `+1c` engagement range byte; `+1d` max turn per frame; `+1e` bit 0 hostile, 1 on
-scanner, 2 sun/planet/station, 3 debris/canister, 4 scoopable fragment, 5 mission ship, 6
-mission canister / blink phase; `+1f` children to launch; `+25` spawn tag (1 mission-4 Viper,
-2 mission-6 object); `+26/27` particle spin; `+29` missile target (word, 0 = player); `+2b`
-energy; `+2c` canisters on death; `+2d` debris count; `+2e` particle life; `+2f` particle
-age; `+30` aggression (fires if rng_lo < `+30`); `+31` bounty (0 none, ff innocent, 200
-mission); `+32` missiles; `+33` AI class; `+34` off-scanner lifetime (spawn 1; 0 never);
-`+35/36/38` weave state (handlers); `+3a` word: thargon parent / police flag; `+3f` table byte
-8 (no reader found).
+At system entry (`64d0`): `7fde` = 20, `7fdf` = 16, and `816b` clears all slots. The slots
+are then used as follows:
+
+| Slot | Contents |
+|------|----------|
+| 0 | sun: flags 3dh, class 0, `+1e` 6, `+3f` ff, colour `+0b` = b6h + (seed>>8 & 3) |
+| 1 | planet: flags 3fh, z 6e00h |
+| 2 | station (`ds:775e`): type 0 if tech ≥ 9 else 1, `+0c` 400h, z −300, `+1e` 4, class 1, `+1f` = (rng>>8 & 7) + 10, `+2b` 96h, `+31` 0; not in witchspace |
+| 3–19 | ships (`80ae` free slot search over 3..`7fde`−1) |
+| 20–35 | particles (`8183`) |
+
+Removal (`7e82`) only clears bit 0 of `+00`. Several routines read stale slots (`79fa`,
+`80cb`, `82ef`), and some spawners leave fields as they were (`7ad3`, `81e5`, `7a12`,
+`80fb`).
+
+Fields:
+
+| Offset | Meaning |
+|--------|---------|
+| `+17` | AI state |
+| `+18` | speed (signed) |
+| `+19/1a/1b` | per-frame velocity (signed bytes, `7e32`) |
+| `+1c` | engagement range byte |
+| `+1d` | max turn per frame |
+| `+1e` | bit 0 hostile, 1 on scanner, 2 sun/planet/station, 3 debris/canister, 4 scoopable fragment, 5 mission ship, 6 mission canister / blink phase |
+| `+1f` | children to launch |
+| `+25` | spawn tag (1 mission-4 Viper, 2 mission-6 object) |
+| `+26/27` | particle spin |
+| `+29` | missile target (word, 0 = player) |
+| `+2b` | energy |
+| `+2c` | canisters on death |
+| `+2d` | debris count |
+| `+2e` | particle life |
+| `+2f` | particle age |
+| `+30` | aggression (fires if rng_lo < `+30`) |
+| `+31` | bounty (0 none, ff innocent, 200 mission) |
+| `+32` | missiles |
+| `+33` | AI class |
+| `+34` | off-scanner lifetime (spawn 1; 0 never) |
+| `+35/36/38` | weave state (handlers) |
+| `+3a` | word: thargon parent / police flag |
+| `+3f` | table byte 8 (no reader found) |
 
 ## AI frame `77e0`
 
@@ -73,22 +118,43 @@ convoy: (794e) if (ds[0x83a7] == 1) return;
 siege: (79d1) if (!safe_zone) return; if (ds[0x8736] >= 8) return; s = free; spawn_thargoid(s);
 ```
 
-`jump(p)` (`79e8`): ×32 while the jump drive is on (`b0dd`). Limits `ds:886f + 4·gov(76b6)`
-(junk, trader, loner, pirate): 0: 1 0 4 10; 1: 2 1 4 4; 2: 2 2 3 2; 3: 1 4 3 1; 4: 1 5 3 1; 5: 1 5
-2 1; 6: 1 7 2 1; 7: 1 9 1 0 (junk +1 with the mining laser `8362`). Chances `ds:8899 + 8·gov(832c)`:
-0: 50 5 70 200; 1: 40 9 65 100; 2: 35 18 55 70; 3: 30 29 43 40; 4: 23 30 37 15; 5: 10 30 30 10;
-6: 8 20 8 5; 7: 5 20 5 3. `76b6` = `832c` except in witchspace (0).
+`jump(p)` (`79e8`) multiplies the chance by 32 while the jump drive is on (`b0dd`).
 
-Missions: `7ad3` (mission 4 stage 2: a Viper `+33` 5, `+30` c8h, `+25` 1 if none with `+25` 1,
-when rng ≤ 190h; no position set: stale), `7a66` (mission 5: Thargoids), `7b32` (mission 6
-in system `83a3`: rng > 1388h returns; ≤ 12ch pirate; then a type-5 object `+33` 3, `+1d` 1eh,
-`+25` 2). `6a3f` safe zone = bit 0 of `ds:7680` (`6a45`: station in slot 2, fits16, magnitude
-`6a72` < 32c8h).
+The spawn limits (at most this many of each kind) are at `ds:886f + 4·gov(76b6)`, and the
+chances at `ds:8899 + 8·gov(832c)` (words). `76b6` = `832c` except in witchspace, where it
+is 0. The junk limit is +1 with the mining laser (`8362`).
+
+| gov | limit junk | trader | loner | pirate | chance junk | trader | loner | pirate |
+|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| 0 | 1 | 0 | 4 | 10 | 50 | 5 | 70 | 200 |
+| 1 | 2 | 1 | 4 | 4 | 40 | 9 | 65 | 100 |
+| 2 | 2 | 2 | 3 | 2 | 35 | 18 | 55 | 70 |
+| 3 | 1 | 4 | 3 | 1 | 30 | 29 | 43 | 40 |
+| 4 | 1 | 5 | 3 | 1 | 23 | 30 | 37 | 15 |
+| 5 | 1 | 5 | 2 | 1 | 10 | 30 | 30 | 10 |
+| 6 | 1 | 7 | 2 | 1 | 8 | 20 | 8 | 5 |
+| 7 | 1 | 9 | 1 | 0 | 5 | 20 | 5 | 3 |
+
+Missions:
+
+- `7ad3`, mission 4 stage 2: a Viper with `+33` 5, `+30` c8h, `+25` 1, if there is none with
+  `+25` 1, when rng ≤ 190h. No position is set: it is stale.
+- `7a66`, mission 5: Thargoids.
+- `7b32`, mission 6 in system `83a3`: rng > 1388h returns; ≤ 12ch a pirate; then a type-5
+  object with `+33` 3, `+1d` 1eh, `+25` 2.
+
+`6a3f` safe zone = bit 0 of `ds:7680` (`6a45`: station in slot 2, fits16, magnitude `6a72`
+< 32c8h).
 
 ## Spawning
 
-`7d14` (DI slot, table entry `ds:8739 + 10·n`): `+17 +1e +30` 0, `+34` 1, flags e0·2+1, `+18`
-e1, `+1d` e2, `+31` e3, `+32` e4, `+2c` e5, `+2d` e6, `+2b` e7, `+3f` e8, `+1c` e9, `+25` 0.
+`7d14` fills the slot at DI from spawn table entry n at `ds:8739 + 10·n` (bytes e0..e9 of
+the entry; the table below lists them by column):
+
+- `+17`, `+1e`, `+30` = 0; `+34` = 1; `+25` = 0;
+- flags = e0·2+1 (e0 is the type);
+- `+18` = e1 (spd), `+1d` = e2 (turn), `+31` = e3 (bounty), `+32` = e4 (msl), `+2c` = e5
+  (can), `+2d` = e6 (debris), `+2b` = e7 (energy), `+3f` = e8, `+1c` = e9.
 
 | e | type | spd | turn | bounty | msl | can | debris | energy | 3f | 1c |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -124,42 +190,72 @@ e1, `+1d` e2, `+31` e3, `+32` e4, `+2c` e5, `+2d` e6, `+2b` e7, `+3f` e8, `+1c` 
 | 29 | 18 (escort) | 54 | 30 | 0 | 4 | 0 | 7 | 40 | 1e | 28 |
 | 30 | 19 (escort) | 60 | 30 | 0 | 5 | 3 | 7 | 42 | 1e | 28 |
 
-Spawners: `7b85` missile (e0, class 2), `7bac` pod (e1, 3), `7b92` canister (e3, 3), `7b9f`
-Cobra III hulk (e9, 0), `7bb9` shuttle (e7, 3), `7bc6` Krait (e17, 6), `7bd3` Thargon (e28, 5),
-`7a50` Viper (e14, `+3a` 1, `+30` 64h). Random position ones: `7be0` junk (index
-`((r>>1)^(r>>9))&7` → e1..e8, `7d72`, `7daf`, class 3, `+1d` 1eh, `7e32`), `7c01` trader
-(`(r&ff)/43` → e9..e14, class 4; a Viper: word `+3a` = r&1, if 1 word `+30` = legal status),
-`7c34` loner (`(r&ff)/37` → e15..e21, class 6, `+30` = r&1f), `7c59` pirate (witchspace: e27;
-else `(r&ff)/52` → e22..e26; class 5; `+30` = r&3fh (+20h in anarchies); Thargoid `+1f` =
-((r_lo^r_hi)>>3 & 3) + 2), `7ca7` mission ship (CF: type 24, else type 18/19 by rng bit 15;
-e23 stats; class 5, `+30` r&7fh, `+2b` 96h, `+2c` 0, `+32` 6, `+31` c8h; no `7e32`), `7ce9`
-Thargoid (e27, class 5, `+30` r&7fh, `+2b` 32h, `+2c` 0, `+32` 6, `+1f` 8), `7a12` copy +00..+0f
-and jitter x, y, z by `(rng & 7ffh) − 400h` each.
+Fixed spawners (entry, class, extras):
 
-`7d72` position from the current rotation slots 3, 4: `a = (r&7ff)>>1, neg if r&1; b = 10000;
-rot(3,a,b); x = a; a = (r2&7ff)>>1 ...; rot(4,a,b); y = a; z = b`. `7daf`: `800c` (face the
-player), `+0e` = rng.
+| Routine | Spawns | Entry | Class | Extras |
+|---------|--------|-------|-------|--------|
+| `7b85` | missile | e0 | 2 | |
+| `7bac` | pod | e1 | 3 | |
+| `7b92` | canister | e3 | 3 | |
+| `7b9f` | Cobra III hulk | e9 | 0 | |
+| `7bb9` | shuttle | e7 | 3 | |
+| `7bc6` | Krait | e17 | 6 | |
+| `7bd3` | Thargon | e28 | 5 | |
+| `7a50` | Viper | e14 | 4 | `+3a` 1, `+30` 64h |
+
+Spawners with a random position or choice:
+
+- **`7be0` junk:** index `((r>>1)^(r>>9))&7` → e1..e8; `7d72`, `7daf`; class 3; `+1d` 1eh;
+  `7e32`.
+- **`7c01` trader:** `(r&ff)/43` → e9..e14; class 4. A Viper gets word `+3a` = r&1, and if
+  1, word `+30` = legal status.
+- **`7c34` loner:** `(r&ff)/37` → e15..e21; class 6; `+30` = r&1f.
+- **`7c59` pirate:** in witchspace e27, else `(r&ff)/52` → e22..e26; class 5; `+30` = r&3fh
+  (+20h in anarchies); a Thargoid gets `+1f` = ((r_lo^r_hi)>>3 & 3) + 2.
+- **`7ca7` mission ship:** with CF type 24, else type 18/19 by rng bit 15; e23 stats; class
+  5, `+30` r&7fh, `+2b` 96h, `+2c` 0, `+32` 6, `+31` c8h; no `7e32`.
+- **`7ce9` Thargoid:** e27, class 5, `+30` r&7fh, `+2b` 32h, `+2c` 0, `+32` 6, `+1f` 8.
+- **`7a12`:** copies +00..+0f and jitters x, y, z by `(rng & 7ffh) − 400h` each.
+
+Positions and headings:
+
+- **`7d72`** places the ship using the current rotation slots 3, 4:
+  `a = (r&7ff)>>1, neg if r&1; b = 10000; rot(3,a,b); x = a; a = (r2&7ff)>>1 ...;
+  rot(4,a,b); y = a; z = b`.
+- **`7daf`**: `800c` (face the player), `+0e` = rng.
 
 ## Helpers
 
-`7df2` angles toward (x, y, z): all `sar 2`; `t = atan2(y, z)`; slot 5 = t; rot(5, y, z);
-`u = atan2(x, z')`; returns −t, −u (not masked). `800c`: from (−x, −y, −z) → `+0a`, `+0c`.
-`7e32` velocity: slots 3 = `+0a`, 4 = `+0c`; `rot(4, 0, speed)` → `+19`; `rot(3, 0, b)` → `+1a`,
-`+1b`. `7e58`: 24-bit pos += signed velocity bytes, removed if not fits16. `8034` turn step
-(no shortest-way wrap); `8019` steer `+0a`, `+0c` towards target angles. `8059` ship fires
-(on scanner, rng_lo < `+30`, not `886d`, not `b126|ae23|b138`; `+30` −= 5 if result ≥ 14h;
-within ±200 → `7610`, `7612` = 2, `7681` = `+3c`; ±70 → `7612` = 1 hit). `80cb` make room,
-`80fb` player missile, `81e5` launch child (missile, pod, thargon, Krait), `829a` ship fires
-missile (kills ≥ 3, hostile, missiles, rng < BX), `82d1` Thargoid launches thargon (rng <
-12ch), `8183` particle slot (free, else the last oldest), `81c7` particle update.
+- **`7df2` angles toward (x, y, z):** all `sar 2`; `t = atan2(y, z)`; slot 5 = t;
+  rot(5, y, z); `u = atan2(x, z')`; returns −t, −u (not masked).
+- **`800c`:** angles from (−x, −y, −z) → `+0a`, `+0c`.
+- **`7e32` velocity:** slots 3 = `+0a`, 4 = `+0c`; `rot(4, 0, speed)` → `+19`;
+  `rot(3, 0, b)` → `+1a`, `+1b`.
+- **`7e58` move:** 24-bit pos += signed velocity bytes; removed if not fits16.
+- **`8034`** turn step (no shortest-way wrap); **`8019`** steers `+0a`, `+0c` towards target
+  angles.
+- **`8059` ship fires:** on scanner, rng_lo < `+30`, not `886d`, not `b126|ae23|b138`;
+  `+30` −= 5 if the result ≥ 14h; within ±200 → `7610`, `7612` = 2, `7681` = `+3c`; within
+  ±70 → `7612` = 1 (hit).
+- **`80cb`** make room; **`80fb`** player missile.
+- **`81e5`** launch child (missile, pod, thargon, Krait).
+- **`829a`** ship fires a missile (kills ≥ 3, hostile, missiles, rng < BX).
+- **`82d1`** Thargoid launches a thargon (rng < 12ch).
+- **`8183`** particle slot (a free one, else the last oldest); **`81c7`** particle update.
 
 ## Explosion `7ea8`
 
-`7fe5` convoy count; not in view → just removed. Else removed, sound 13h, `8896` = station;
-`+2d` particles: `8183`, copy, `+17` 0, `r = rng`, word `+26` = r, al = (r&1f)−15, ah =
-((r>>8)&1f)−15, `+19/+1a` sar 1 then + al/ah (halved again for the mining laser kill), bl =
-((r>>3)&1f)−15 likewise for `+1b`, `+1e` = 8 (| 10h if mining and rng < 2000), `+2b` 0, word
-`+2c` 0, `+2f` 0, `+33` 7, `+2e` = (rng&f) (+3ch mining) + 14h, flags 17h, `81c7` (×11 for a
-station). Canisters: mission ship 1; else c = `+2c`: n = (rng&ff)/(255/(c+1)+1); each: free
-slot, copy, `7b92`, `+1e` = 8 | (`+1e`&20h)<<1, r = rng, word `+0a` = r, word `+0c` = swap(r),
-`7e32`, `7e58`.
+- `7fe5` updates the convoy count.
+- Not in view → the ship is just removed.
+- Else: removed, sound 13h, `8896` = station.
+- **Debris:** `+2d` particles, each:
+  - `8183`, copy, `+17` 0;
+  - `r = rng`, word `+26` = r;
+  - al = (r&1f)−15, ah = ((r>>8)&1f)−15; `+19/+1a` sar 1, then + al/ah (halved again for
+    the mining laser kill); bl = ((r>>3)&1f)−15, likewise for `+1b`;
+  - `+1e` = 8 (| 10h if mining and rng < 2000), `+2b` 0, word `+2c` 0, `+2f` 0, `+33` 7;
+  - `+2e` = (rng&f) (+3ch mining) + 14h;
+  - flags 17h, then `81c7` (×11 for a station).
+- **Canisters:** a mission ship drops 1; else with c = `+2c`, n = (rng&ff)/(255/(c+1)+1).
+  Each: free slot, copy, `7b92`, `+1e` = 8 | (`+1e`&20h)<<1, r = rng, word `+0a` = r, word
+  `+0c` = swap(r), `7e32`, `7e58`.
