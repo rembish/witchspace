@@ -200,3 +200,35 @@ quantities are random.
 - `re/tools/grf.py dump` writes all images as PNG with these palettes. The 16-colour set
   looks right; the MCGA title picture has wrong colours in places, so that screen must load
   its own palette **[verify]**.
+
+## Objects and ship rendering
+
+- Object slots at `ds:76de`, 64 bytes each, count `ds:76b5`. `+00` flags: bit 0 active,
+  bits 1–5 type, bit 6 drawn-this-frame candidate, bit 7 in view; `+04/06/08` position
+  relative to the player, `+0a/0c/0e` angles, `+10/12/14` camera-space position, `+1e`
+  flags (`60h` both set = not drawn), `+3c/3e` distance keys. Types 30/31 are planet and sun.
+- `update_objects` (`4154`): player angles `ds:76d8/da/dc` → sin/cos slots (`6d0a…`, table
+  `ds:6410`: 2048 words, angle & 7ffh, cosine 512 entries on); per object `6e01` rotates the
+  position by the player's axes (`6d83`: rotate a pair with rounding), the in-view test is
+  `|x|·2 ≤ z`, `|y|·2 ≤ z`, z ≥ 100. Then painter's order: planet/sun farthest first
+  (`44c7`), ships farthest first by camera z (`draw_ship` `43ce`).
+- `draw_ship` (`43ce`): angles a = −(obj a + player a)·32, b = −obj b·32, c = obj c·32,
+  player b, c and `ds:b0de` likewise; single-axis matrices `3f4d` (X), `3f99` (Y), `3fe5`
+  (Z) from the sine table `ds:2cc0` (1024 words, index angle >> 6, cosine = angle + 4000h;
+  1.0 = 7ffeh); product (`4031`, row-major `out = a·b`) `Ry(b0de)·Rz(−pc)·Ry(−pb)·Rx(a)·Ry(b)
+  ·Rz(c)`; camera position doubled (overflow → not drawn); `draw_model` (`3c90`).
+- Q15 multiply everywhere: high word of the `imul` product shifted left once (the top bit of
+  the low word is lost); sums wrap at 16 bits.
+- Models (`draw_model`): table of 32 words at **ss:65bc** (the stack segment `1c0c`, read
+  bp-relative), models at `ss:4010…`. Vertex count, vertices (3 × i16); transformed (+
+  position) into a 10-byte record each at `ds:28e6` (X, Y, Z, screen x, y): `x = 98h +
+  (X·256 + (X & ff)) / Z`, `y = 3eh + (Y' · 256 + (Y' & ff)) / Z` with `Y' = Y − Y >> 3`
+  (the low byte appears twice because `al` is not cleared). A divide error (via `ds:01f8`
+  → `3d63`) sets X and screen y to 400 and leaves screen x as it was, so the buffer keeps
+  state between ships. Face groups: `01`, reference vertex (byte offset = 10·index), normal
+  (3 × i16). The group is drawn if the rotated normal · the reference vertex ≤ 0, where the
+  last addition is compared exactly (`jg` after `add`) and the rest wraps. Primitives:
+  `00` triangle (3 vertices, colour → `172c`), `02` quad (4, → `1a7a`), `04` line (2, →
+  `261b`); `03` ends the model. 30 models (types 0–29), 12–37 vertices.
+- Checked: `re/emu/rendertest.py` (random types, angles, positions from inside the ship to
+  far away, player angles) compares the primitives with `core/ep_render.c`.

@@ -49,15 +49,86 @@ class Elite:
         mu.mem_write(LOAD * 16, bytes(img))
         mu.hook_add(UC_HOOK_INTR, self._intr)
         self.pyfuncs = {}
+        self._resume = None
+        self._hook_divisions(img)
 
     def _intr(self, mu, intno, _):
         ip = mu.reg_read(UC_X86_REG_IP)
-        if intno == 0:
-            # Divide error: the game's INT 0 handler (00d6) resumes at the address it stored
-            # in ds:01f8 before the division, with registers and stack unchanged.
-            mu.reg_write(UC_X86_REG_IP, self.r16(0x01F8))
-            return
         raise RuntimeError(f"unhandled int {intno:#x} near {ip:04x}")
+
+    def _hook_divisions(self, img):
+        """Divide errors: the game's INT 0 handler (00d6) resumes at the address stored in
+        ds:01f8 before the division, registers and stack unchanged. Unicorn's exception
+        delivery does not cope with that, so every div/idiv of segment 0000 is checked before
+        it runs and skipped to that address when it would fault."""
+        from capstone import CS_ARCH_X86, CS_MODE_16, Cs
+        from capstone.x86 import X86_OP_MEM, X86_OP_REG
+        md = Cs(CS_ARCH_X86, CS_MODE_16)
+        md.detail = True
+        self._divs = {}
+        sys.path.insert(0, os.path.join(HERE, "..", "tools"))
+        import explore
+        ex = explore.Explorer(img)
+        ex.funcs[(0, 0)] = set()
+        stderr, sys.stderr = sys.stderr, open(os.devnull, "w")  # explorer warnings
+        try:
+            for r in [(0, 0)] + explore.EXTRA_ROOTS:
+                ex.walk(*r)
+            ex.resolve()
+        finally:
+            sys.stderr.close()
+            sys.stderr = stderr
+        for (seg, off), i in ex.insns.items():
+            if seg == 0 and i.mnemonic in ("div", "idiv"):
+                op = i.operands[0]
+                if op.type == X86_OP_REG:
+                    src = ("reg", i.reg_name(op.reg), op.size)
+                elif op.type == X86_OP_MEM:
+                    m = op.mem
+                    src = ("mem", i.reg_name(m.base) if m.base else None,
+                           i.reg_name(m.index) if m.index else None, m.disp,
+                           i.reg_name(m.segment) if m.segment else None, op.size)
+                self._divs[off] = (i.mnemonic == "idiv", src)
+                self.mu.hook_add(UC_HOOK_CODE, self._div, begin=CS * 16 + off, end=CS * 16 + off)
+
+    def _reg(self, name):
+        mu = self.mu
+        full = {"al": "ax", "ah": "ax", "bl": "bx", "bh": "bx", "cl": "cx", "ch": "cx",
+                "dl": "dx", "dh": "dx"}
+        v = mu.reg_read(REGS[full.get(name, name)]) if name not in ("ds", "es", "ss", "cs") else \
+            mu.reg_read({"ds": UC_X86_REG_DS, "es": UC_X86_REG_ES, "ss": UC_X86_REG_SS,
+                         "cs": UC_X86_REG_CS}[name])
+        if name.endswith("h") and name in full:
+            return v >> 8
+        if name.endswith("l") and name in full:
+            return v & 0xFF
+        return v
+
+    def _div(self, mu, addr, size, _):
+        signed, src = self._divs[addr - CS * 16]
+        if src[0] == "reg":
+            d, width = self._reg(src[1]), src[2]
+        else:
+            _, base, index, disp, seg, width = src
+            ea = (disp + (self._reg(base) if base else 0) + (self._reg(index) if index else 0)) & 0xFFFF
+            seg = seg or ("ss" if base in ("bp",) else "ds")
+            raw = bytes(mu.mem_read(self._reg(seg) * 16 + ea, width))
+            d = int.from_bytes(raw, "little")
+        ax, dx = self._reg("ax"), self._reg("dx")
+        if width == 1:
+            num, bits = ax, 16
+        else:
+            num, bits = dx << 16 | ax, 32
+        if signed:
+            num -= (1 << bits) if num >> (bits - 1) else 0
+            d -= (1 << (8 * width)) if d >> (8 * width - 1) else 0
+        lim = 8 * width
+        fault = d == 0
+        if not fault:
+            q = abs(num) // abs(d) * (1 if (num < 0) == (d < 0) else -1) if signed else num // d
+            fault = not (-(1 << (lim - 1)) <= q < (1 << (lim - 1))) if signed else q >= (1 << lim)
+        if fault:
+            mu.reg_write(UC_X86_REG_IP, self.r16(0x01F8))
 
     def hook(self, func, fn):
         """Replace the near routine at CS:func by fn(emu, regs) followed by a near `ret`.
@@ -120,7 +191,13 @@ class Elite:
         mu.mem_write(SS * 16 + sp, struct.pack("<H", SENTINEL))
         mu.reg_write(UC_X86_REG_SP, sp)
         stop = SENTINEL if until is None else until
-        mu.emu_start(CS * 16 + func, CS * 16 + stop, count=max_insns)
+        start = func
+        while True:
+            self._resume = None
+            mu.emu_start(CS * 16 + start, CS * 16 + stop, count=max_insns)
+            if self._resume is None:
+                break
+            start = self._resume
         if until is not None:
             if mu.reg_read(UC_X86_REG_IP) != until:
                 raise RuntimeError(f"call {func:04x} did not reach {until:04x}")
