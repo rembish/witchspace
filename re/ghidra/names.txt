@@ -65,3 +65,21 @@ ds:5a3e desc_buffer
 ds:5b3e text_codes
 ds:5b4a desc_tokens
 ds:8341 system_name_len
+72f0 arrive_in_system  # copy selected system record to the current one, clear market flag
+8e6b sell_price
+8ea2 draw_market_table
+9048 market_screen
+9161 equipment_list
+97d8 market_prices
+9880 market_random
+ds:831f current_system  # record copied from ds:8338: name .. 832c gov, 832d eco, 832e tech
+ds:8370 commander_name
+ds:8379 cargo  # 17 x (held, on offer)
+ds:839d market_drawn
+ds:8d0a price_table  # 17 x (buy, sell)
+ds:905f goods_eco_factor
+ds:916f goods_gov_factor
+ds:927f goods_base_price
+ds:92a1 goods_tech_adj
+ds:92e0 market_rng
+ds:8bef equipment_records

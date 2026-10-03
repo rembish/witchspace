@@ -149,3 +149,30 @@ paragraph, line, word.
   such as "wierd" are the original's.
 - Checked: `re/emu/desctest.py` compares all 2048 systems and 20 000 random seeds with
   `core/ep_desc.c`.
+
+## Market
+
+Elite Plus's market is not the original Elite's: prices are fixed per system type, only the
+quantities are random.
+
+- Arrival (`72f0`, after a hyperspace jump): copies the selected system record (`ds:8338`,
+  `[82d9]` bytes) to the current system record `ds:831f` (so government `832c`, economy
+  `832d`, tech `832e`), clears `ds:839d` (market drawn).
+- `market_prices` (`97d8`), 17 commodities: `v = 100h`, then `v = (v·f) >> 8` (16-bit
+  middle word of the `mul`) with f = economy factor (`ds:905f`, row of 8 words per
+  commodity), government factor (`ds:916f`), `100h`, base price (`ds:927f`), and
+  `100h + a + b·min(tech, 9)` from `ds:92a1` (3 bytes per commodity: a, b signed, third byte
+  1 for Slaves, Narcotics, Firearms, presumably illegal). a and b are 0 in the shipped data,
+  so tech does not change prices **[verify]** that nothing writes them. Result in tenths of a
+  credit at `ds:8d0a + 4k`, selling price at `+2`.
+- `sell_price` (`8e6b`): `s = price >> 5`, halved while ≥ 100; `price − (s + 1)`.
+- Quantities: the table drawer (`8ea2`) draws them while `839d` = 0 (`market` at `9048`
+  then sets it): `r = market_random()` (`9880`, the twist on `ds:92e0..92e4`, returns old
+  `w0 + w1`), `q = (r & 1f) − 7`, 0 if negative, else `q ^ ((r >> 8) & 3)`. Stored as the
+  second byte of the cargo pairs at `ds:8379` (commander block, name at `ds:8370`). The
+  generator starts at `007b 01c8 0315` and is never reseeded **[verify]** (save files?).
+- Equipment (`9161`): records at `ds:8bef` {min tech, name, i8 gov factor, i8 eco factor,
+  word base}; listed while `tech + 1 ≥ min tech`, up to 14; price `base + gf·gov + ef·eco`.
+  Not ported yet.
+- Checked: `re/emu/markettest.py`: every government × economy × tech byte, 200 arrivals,
+  and the selling price of all 65536 buying prices.

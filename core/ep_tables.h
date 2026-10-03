@@ -13,4 +13,13 @@ extern const char ep_desc_template[];
 extern const char ep_desc_ian[];
 extern const char *const ep_desc_tokens[EP_DESC_TOKENS][5];
 
+#define EP_GOODS 17
+
+extern const char *const ep_goods_names[EP_GOODS];
+extern const uint16_t ep_goods_eco_factor[EP_GOODS][8];
+extern const uint16_t ep_goods_gov_factor[EP_GOODS][8];
+extern const uint16_t ep_goods_base_price[EP_GOODS];
+extern const int8_t ep_goods_tech_adj[EP_GOODS][3];
+extern const uint16_t ep_market_rng0[3];
+
 #endif
