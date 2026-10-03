@@ -6,8 +6,9 @@ set -e
 cd "$(dirname "$0")"
 GHIDRA=${GHIDRA:-$(ls -d ~/tools/ghidra_*_PUBLIC | tail -1)}
 python3 ../tools/unexepack.py ../../original/ELITE.EXE ../../original/elite_unpacked.exe
+~/tools/venv/bin/python ../tools/explore.py --funcs entries.txt
 mkdir -p proj
 "$GHIDRA/support/analyzeHeadless" "$PWD/proj" elite -import "$PWD/../../original/elite_unpacked.exe" -overwrite \
-    -scriptPath "$PWD" -preScript SetDS.java -postScript ApplyNames.java "$PWD/names.txt" \
+    -scriptPath "$PWD" -preScript SetDS.java -postScript CreateFuncs.java "$PWD/entries.txt" -postScript ApplyNames.java "$PWD/names.txt" \
     -postScript DumpAll.java "$PWD/elite_decomp.c" -postScript DumpListing.java "$PWD/elite_disasm.txt" > headless.log 2>&1
 grep -c '=====' elite_decomp.c

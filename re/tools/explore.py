@@ -20,6 +20,19 @@ WORD_REGS = ("ax", "bx", "cx", "dx", "si", "di", "bp")
 ALIASES = {"ax": ("ax",), "al": ("ax",), "ah": ("ax",), "bx": ("bx",), "bl": ("bx",), "bh": ("bx",),
            "cx": ("cx",), "cl": ("cx",), "ch": ("cx",), "dx": ("dx",), "dl": ("dx",), "dh": ("dx",),
            "si": ("si",), "di": ("di",), "bp": ("bp",)}
+DATA_SEG = 0x0B00
+# Indirect calls/jumps through word tables in the data segment: site -> (table, entries).
+# Bounds come from the code that builds the index (see NOTES.md).
+JUMP_TABLES = {
+    (0, 0x02F0): (0x0368, 6),
+    (0, 0x041F): (0x0399, 32),  # command index from the per-screen key map ds:030d
+    (0, 0x3DFB): (0x2B6C, 3),
+    (0, 0x7155): (0x81EA, 4),
+    (0, 0x7813): (0x8720, 8),
+    (0, 0x63B0): (0x5B3E, 31),  # text control codes 1..31; handlers return to 63d8
+}
+# Code reached only through values the walker cannot see (pushed return addresses etc.).
+EXTRA_ROOTS = [(0, 0x63D8)]
 CODE_SEGS = {0x0000: 0xB000, 0x2270: 0x3010}  # segment -> size in bytes
 
 
@@ -39,6 +52,7 @@ class Explorer:
         self.indirect = []  # (seg, off, text)
         self.labels = set()
         self.trampolines = []  # (seg, off of ret, target)
+        self.vectors = {}  # data cell -> constants stored into it
         self.computed = []  # (seg, off, text, resolved target)
 
     def insn_at(self, seg, off):
@@ -130,6 +144,21 @@ class Explorer:
         if m in ("pushf", "pushaw", "pusha"):
             stack.append(None)
             return
+        if m == "popf":
+            if stack:
+                stack.pop()
+            return
+        if ops and ops[0].type == X86_OP_REG and name(ops[0]) == "sp" and m != "cmp":
+            # add/sub sp,imm drops or reserves words; anything else loses track entirely.
+            if m in ("add", "sub") and ops[1].type == X86_OP_IMM and ops[1].imm % 2 == 0:
+                n = ops[1].imm // 2
+                if m == "add":
+                    del stack[max(0, len(stack) - n):]
+                else:
+                    stack.extend([None] * n)
+            else:
+                stack.clear()
+            return
         _, written = i.regs_access()
         dst = name(ops[0]) if ops else None
         known = None
@@ -154,6 +183,45 @@ class Explorer:
                 regs.pop(w, None)
         if dst in WORD_REGS and known is not None:
             regs[dst] = known & 0xFFFF
+
+    def word(self, off):
+        return struct.unpack_from("<H", self.img, DATA_SEG * 16 + off)[0]
+
+    def resolve(self):
+        """Feed jump-table entries and constants stored into call-vector cells
+        (`mov word ptr [cell], imm` where `call/jmp word ptr [cell]` exists) back in as roots,
+        until nothing new is found."""
+        done = set()
+        while True:
+            new = []
+            cells = {}
+            for (seg, off, text) in self.indirect:
+                if (seg, off) in JUMP_TABLES:
+                    base, n = JUMP_TABLES[(seg, off)]
+                    for k in range(n):
+                        t = self.word(base + 2 * k)
+                        if t:
+                            new.append((seg, t, "call" in text, (seg, off)))
+                elif text.split()[-1].startswith("[0x") and "ptr" in text:
+                    cells[int(text.split("[")[1].rstrip("]"), 16)] = (seg, off, "call" in text)
+            for (seg, off), i in self.insns.items():
+                if i.mnemonic == "mov" and i.op_str.startswith("word ptr [0x") and len(i.operands) == 2 \
+                        and i.operands[1].type == X86_OP_IMM:
+                    cell = i.operands[0].mem.disp & 0xFFFF
+                    if cell in cells and i.operands[0].mem.base == 0:
+                        cs, co, is_call = cells[cell]
+                        new.append((cs, i.operands[1].imm & 0xFFFF, is_call, (cs, co)))
+                        self.vectors.setdefault(cell, set()).add(i.operands[1].imm & 0xFFFF)
+            new = [x for x in new if x[:2] not in done]
+            if not new:
+                return
+            for seg, t, is_call, site in new:
+                done.add((seg, t))
+                if is_call:
+                    self.funcs.setdefault((seg, t), set()).add(site)
+                else:
+                    self.labels.add((seg, t))
+                self.walk(seg, t)
 
     def coverage(self):
         for seg, size in CODE_SEGS.items():
@@ -188,13 +256,14 @@ def main():
     a = ap.parse_args()
     ex = Explorer(load())
     ex.funcs[(0, 0)] = set()
-    roots = [(0, 0)]
+    roots = [(0, 0)] + EXTRA_ROOTS
     for r in filter(None, a.roots.split(",")):
         s, o = r.split(":")
         roots.append((int(s, 16), int(o, 16)))
         ex.funcs.setdefault(roots[-1], set())
     for s, o in roots:
         ex.walk(s, o)
+    ex.resolve()
     ex.coverage()
     if a.indirect:
         for s, o, t in sorted(ex.indirect):
@@ -202,6 +271,8 @@ def main():
     if a.indirect:
         for s, o, t, v in sorted(ex.computed):
             print(f"computed {s:04x}:{o:04x}  {t} -> {v:04x}")
+        for cell, vals in sorted(ex.vectors.items()):
+            print(f"vector ds:{cell:04x} = " + " ".join(f"{v:04x}" for v in sorted(vals)))
         for s, o, v in sorted(ex.trampolines):
             print(f"trampoline {s:04x}:{o:04x}  ret -> {v:04x}")
     if a.gaps:
