@@ -18,7 +18,7 @@ import sys
 import tempfile
 
 from corpus import load
-from eliteemu import CS, DS, REGS, SS, Elite
+from eliteemu import CS, DS, LOAD, REGS, SS, Elite
 from unicorn import UC_HOOK_CODE
 from unicorn.x86_const import UC_X86_REG_EFLAGS, UC_X86_REG_IP, UC_X86_REG_SP
 
@@ -29,6 +29,7 @@ SHOW = int(sys.argv[sys.argv.index("--show") + 1]) if "--show" in sys.argv else 
 NAME = ARGS[0]
 PATTERN = ARGS[1] if len(ARGS) > 1 else os.path.join(HERE, "corpus", "*.bin")
 TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep_subsys")
+os.environ["EP_ORIGINAL"] = os.path.join(HERE, "..", "..", "original")  # where ep_subsys reads the music
 
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary; and sound state (the core
@@ -95,6 +96,7 @@ ROUTINES = {
     "title_open": (0x9E9A, {}, {0x9F21: "end"}),
     "protection_pick": (0x32B8, {}, {}),
     "timer": (0x4A50, {}, {}),
+    "adlib_music": (0x14A8, {}, {}),
     "define_keys": (0x0674, {}, {}),
     "joystick": (0x0736, {}, {}),
     "mouse": (0x0779, {}, {}),
@@ -625,6 +627,16 @@ def device_world(img, rng):
         w(0x020D + k, rng.choice([0x80, 0x80, 0x80, 0]))
 
 
+SONG = open(os.path.join(HERE, "..", "..", "original", "ADBLUE.MID"), "rb").read()
+
+
+def adlib(img, rng=None):
+    """An AdLib (4ecf: A), the title music not on yet."""
+    img[DS * 16 + 0x4801] = 1
+    img[DS * 16 + 0xB5B7] = 1
+    img[DS * 16 + 0x45E7] = 0
+
+
 def speaker_world(img, rng):
     """The speaker part way through a sequence, a note, a pattern, a rest or a loop."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -1034,6 +1046,7 @@ FUZZ = {
     "joystick": [(0, controls_world)],
     "mouse": [(0, controls_world)],
     "key_event": [(0, key_bytes)],
+    "adlib_music": [(0, adlib)],
     "title_open": [(0, title_world)],
     "protection_pick": [(0x0205, 8)],  # any generator state
     "title_session": [(0, title_world)],
@@ -1056,6 +1069,9 @@ FUZZ = {
                  (0xB137, [0, 0, 1]), (0xAF56, [4, 8, 0x2C, 0x30]), (0xAF58, [0, 1]), (0xB0DD, [0, 0, 1]),
                  (0x76D8, 2), (0x76DA, 2), (0x76DC, 2), (0xAE23, [0, 0, 0, 3]), (0xB126, [0, 0, 0, 0x3C, 5]), (0, device_world)],
 }
+
+
+PREPARE = {"adlib_music": adlib}  # applied to every state, fuzzed or not
 
 
 def fuzz(image, rng):
@@ -1132,7 +1148,7 @@ def run_original(image, addr, regs, exits=None):
     watch(0x16DA, span)
     watch(0x1514, span)
     sounds = []
-    e.devices()
+    e.devices(drivers=True)
     # the joystick and the mouse as ds:ff40.. say (tests/subsys.c reads the same): there, the
     # joystick's counts, its buttons (port 201h), the mouse's mickeys and buttons (int 33h)
     dev = image[DS * 16 + 0xFF40:DS * 16 + 0xFF4B]
@@ -1419,7 +1435,30 @@ def run_original(image, addr, regs, exits=None):
     try:
         if NAME == "explode":
             regs = dict(regs, di=0x76DE + 0x40 * image[DS * 16 + 0xFF00] % (0x40 * 36))
-        if NAME == "key_event":  # the interrupt for each of 8 bytes from port 60h (ds:ff10); its iret a ret
+        if NAME == "adlib_music":  # the driver started (far: through 14a8), then 80000 of its ticks
+            drv = (LOAD + 0x2270) * 16
+            e.mu.mem_write((LOAD + 0x16E4) * 16, SONG)  # 003b's load
+            e.mu.mem_write(CS * 16 + 0x14A8, b"\x9a\x00\x00" + (LOAD + 0x2270).to_bytes(2, "little") + b"\xc3")
+            e.call(0x14A8)
+            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: mu.reg_write(UC_X86_REG_IP, 0x0E8A),  # no BIOS
+                          begin=drv + 0x0E8C, end=drv + 0x0E8C)
+            # the tick's own trampoline (rewriting 14a8 would leave its old translation running)
+            e.mu.mem_write(CS * 16 + 0x14B0, b"\x9c\x9a\xf8\x0d" + (LOAD + 0x2270).to_bytes(2, "little") + b"\xc3")
+            for _ in range(80000):
+                e.call(0x14B0)
+            regs8 = e.ports
+            reg = None
+            for port, v in regs8:
+                if port == 0x388:
+                    reg = v
+                elif port == 0x389:
+                    sounds.append(f"opl {reg},{v}")
+            pit = [v for p, v in regs8 if p == 0x40]
+            if len(pit) >= 2:
+                sounds.append(f"pit {pit[-2] | pit[-1] << 8}")
+            cs = lambda o, n=2: int.from_bytes(e.mu.mem_read(drv + o, n), "little")
+            sounds.append(f"drv {cs(0xDA7)},{cs(0xDA9, 1)},{cs(0xDAA)},{cs(0xDAC)},{cs(0xDAE)},{cs(0xDB0)}")
+        elif NAME == "key_event":  # the interrupt for each of 8 bytes from port 60h (ds:ff10); its iret a ret
             e.hook(0x0274, lambda e, r: None)
             for k in range(8):
                 e.port_in[0x60] = image[DS * 16 + 0xFF10 + k]
@@ -1467,6 +1506,10 @@ def main():
     cases = [(p, None) for p in files] + [(p, k) for p in files for k in range(FUZZ_N)]
     for path, variant in cases:
         image = load(path)
+        if NAME in PREPARE:
+            image = bytearray(image)
+            PREPARE[NAME](image)
+            image = bytes(image)
         if variant is not None:
             image = fuzz(image, rng)
         before = image[DS * 16:DS * 16 + 0x10000]
@@ -1484,6 +1527,9 @@ def main():
         for i in range(0x10000):
             if not mask[i] and want[i] != before[i] and not any(a <= i <= b for a, b in SCRATCH):
                 unmodelled[i] += 1
+        if os.environ.get("EP_DUMP"):  # both sides of the last state, for a closer look
+            open(os.environ["EP_DUMP"] + ".want", "w").write("\n".join(want_prims) + "\n")
+            open(os.environ["EP_DUMP"] + ".got", "w").write("\n".join(got_prims) + "\n")
         if diff or want_prims != got_prims:
             bad += 1
             if bad <= SHOW:

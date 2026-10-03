@@ -55,19 +55,23 @@ class Elite:
         self._resume = None
         self._hook_divisions(img)
 
-    def devices(self):
+    def devices(self, drivers=False):
         """No hardware: port reads give 0, writes to the speaker's ports (PIT 42h/43h, 61h) are
-        noted in self.ports; the music drivers' far entries (segment 2270) return at once."""
+        noted in self.ports. The music driver's far entries (segment 2270) return at once; with
+        drivers, only its Roland ones do (008f, 0116, and 0000 and 0045 on a Roland: ds:b5b7 0),
+        the AdLib's run."""
         from unicorn.x86_const import UC_X86_INS_IN, UC_X86_INS_OUT
         self.ports = []
         self.port_in = {}  # what a port reads, if not 0
         self.mu.hook_add(UC_HOOK_INSN, lambda mu, port, size, u: self.port_in.get(port, 0), None, 1, 0,
                          UC_X86_INS_IN)
-        self.mu.hook_add(UC_HOOK_INSN, lambda mu, port, size, value, u: port in (0x42, 0x43, 0x61) and
-                         self.ports.append((port, value & 0xFF)), None, 1, 0, UC_X86_INS_OUT)
-        for off in (0x0000, 0x003B, 0x0045, 0x008F, 0x0116, 0x17C6, 0x1819, 0x185A):
-            self.mu.hook_add(UC_HOOK_CODE, self._retf, begin=(LOAD + 0x2270) * 16 + off,
-                             end=(LOAD + 0x2270) * 16 + off)
+        self.mu.hook_add(UC_HOOK_INSN, lambda mu, port, size, value, u: port in (0x40, 0x42, 0x43, 0x61, 0x388, 0x389)
+                         and self.ports.append((port, value & 0xFF)), None, 1, 0, UC_X86_INS_OUT)
+        roland = lambda mu, addr, size, u: self.r8(0xB5B7) or self._retf(mu, addr, size, u)
+        stubs = {0x008F: self._retf, 0x0116: self._retf, 0x0000: roland, 0x0045: roland} if drivers else \
+            {off: self._retf for off in (0x0000, 0x003B, 0x0045, 0x008F, 0x0116, 0x17C6, 0x1819, 0x185A)}
+        for off, stub in stubs.items():
+            self.mu.hook_add(UC_HOOK_CODE, stub, begin=(LOAD + 0x2270) * 16 + off, end=(LOAD + 0x2270) * 16 + off)
 
     def _retf(self, mu, addr, size, _):
         sp = mu.reg_read(UC_X86_REG_SP)
@@ -78,6 +82,16 @@ class Elite:
 
     def _intr(self, mu, intno, _):
         if self.on_intr and self.on_intr(self, intno):
+            return
+        ah = mu.reg_read(UC_X86_REG_AX) >> 8
+        if intno == 0x21 and ah in (0x25, 0x35):  # the vectors (the music driver's timer interrupts)
+            at = (mu.reg_read(UC_X86_REG_AX) & 0xFF) * 4
+            if ah == 0x25:
+                mu.mem_write(at, struct.pack("<HH", mu.reg_read(UC_X86_REG_DX), mu.reg_read(UC_X86_REG_DS)))
+            else:
+                off, seg = struct.unpack("<HH", mu.mem_read(at, 4))
+                mu.reg_write(UC_X86_REG_BX, off)
+                mu.reg_write(UC_X86_REG_ES, seg)
             return
         ip = mu.reg_read(UC_X86_REG_IP)
         raise RuntimeError(f"unhandled int {intno:#x} near {ip:04x}")

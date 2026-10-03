@@ -11,6 +11,7 @@
 #include "ep_frame.h"
 #include "ep_commands.h"
 #include "ep_station.h"
+#include "ep_adlib.h"
 #include "ep_sound.h"
 #include "ep_boot.h"
 #include "ep_title.h"
@@ -115,6 +116,21 @@ static int disk_list(void *ctx, char names[][13], int max)
 }
 
 static const ep_io disk = { NULL, disk_exists, disk_read, disk_write, disk_list };
+
+/* the original's own files (EP_ORIGINAL: the music) */
+static int original_read(void *ctx, const char *name, uint8_t *data, int max)
+{
+    (void)ctx;
+    char p[1024];
+    snprintf(p, sizeof p, "%s/%s", getenv("EP_ORIGINAL") ? getenv("EP_ORIGINAL") : "original", name);
+    FILE *f = fopen(p, "rb");
+    if (!f) return -1;
+    int n = (int)fread(data, 1, (size_t)max, f);
+    fclose(f);
+    return n;
+}
+
+static const ep_io original = { NULL, NULL, original_read, NULL, NULL };
 
 /* a dialog given the scripted keys (ds:ff10, 32 of them) until it is done */
 static void dialog_keys(ep_game *g, int w)
@@ -229,6 +245,20 @@ int main(int argc, char **argv)
             print_prims(&g.render);
             printf("end\n");
             if (g.f.leave) printf("leave %d\n", g.f.leave);
+        } else if (!strcmp(argv[1], "adlib_music")) {
+            g.io = &original;
+            g.f.sound_device = 1;
+            ep_adlib_init(&g);
+            ep_adlib_music(&g);
+            for (int t = 0; t <= 80000; t++) { /* the writes taken after each tick, as the frontend does */
+                for (int k = 0; k < g.nopl; k++) printf("opl %d,%d\n", g.opl[k][0], g.opl[k][1]);
+                g.nopl = 0;
+                if (t < 80000) ep_adlib_tick(&g);
+            }
+            printf("pit %d\n", g.pit);
+            const ep_adlib *a = &g.adlib;
+            printf("drv %d,%d,%d,%d,%d,%d\n", a->countdown, a->busy, a->divisor, a->clock_acc,
+                   a->clock_acc_hi, a->bios_acc);
         } else if (!strcmp(argv[1], "key_event")) {
             for (int k = 0; k < 8; k++) ep_key_event(&g, ds[0xff10 + k]);
         } else if (!strcmp(argv[1], "define_keys") || !strcmp(argv[1], "joystick") ||
