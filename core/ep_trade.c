@@ -19,7 +19,7 @@ uint16_t ep_goods_buy_price(const ep_game *g, int row)
 }
 
 /* 8e23: pay if the cash (32 bits) covers it */
-static int pay(ep_game *g, uint32_t amount)
+int ep_pay(ep_game *g, uint32_t amount)
 {
     uint32_t cash = ep_commander_cash(&g->cmdr);
     if (cash < amount) return 0;
@@ -45,7 +45,7 @@ uint16_t ep_trade_buy(ep_game *g, int row)
     } else if (space <= g->cmdr.b[EP_CMDR_CARGO_USED]) {
         return 0xad2e; /* CARGO BAY FULL */
     }
-    if (!pay(g, ep_goods_buy_price(g, row))) return 0xad50; /* not enough cash */
+    if (!ep_pay(g, ep_goods_buy_price(g, row))) return 0xad50; /* not enough cash */
     c[0]++;
     c[1]--;
     if (row < 13) g->cmdr.b[EP_CMDR_CARGO_USED]++;
@@ -105,7 +105,7 @@ uint16_t ep_equip_buy(ep_game *g, int row)
         uint16_t per = equipment_price(g, 0);
         uint32_t p = (uint32_t)(uint16_t)((0xff - *fuel) * 7) * per;
         uint16_t cost = (uint16_t)(p >> 8);
-        if (pay(g, cost)) {
+        if (ep_pay(g, cost)) {
             *fuel = 0xff;
             return 0xadc3;
         }
@@ -114,7 +114,7 @@ uint16_t ep_equip_buy(ep_game *g, int row)
         uint32_t q = ((uint32_t)lo << 8) / per; /* 937a: the cash's low word buys fuel */
         uint8_t add = (uint8_t)((q & 0xffff) / 7);
         *fuel = (uint8_t)(*fuel + add);
-        pay(g, lo);
+        ep_pay(g, lo);
         return EP_TRADE_OK;
     }
     int lt = laser_type(row);
@@ -129,7 +129,7 @@ uint16_t ep_equip_buy(ep_game *g, int row)
         if (g->cmdr.b[EP_CMDR_LASERS] == 0x0f) return 0x92e6; /* every mount has a laser */
         if (row == 12 && g->cmdr.b[EP_CMDR_EQUIPMENT + 5] != 1) return 0x8d7a;
     }
-    if (!pay(g, equipment_price(g, row))) return 0xad50;
+    if (!ep_pay(g, equipment_price(g, row))) return 0xad50;
     fuel[row]++;
     if (lt < 0) return EP_TRADE_OK;
     uint8_t free = ep_free_mounts(g);

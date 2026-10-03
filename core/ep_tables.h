@@ -45,6 +45,9 @@ extern const uint16_t ep_title_min_dist[32];
 extern const char *const ep_ship_names[30];
 
 extern const uint8_t ep_ring_start[30];
+extern const uint8_t ep_key_rows[6][12];
+extern const uint8_t ep_icon_sprite[37];
+extern const uint8_t ep_bar_colour[3];
 #define EP_SHIP_TEXT_TYPES 0x40 /* the type names start here (ds:80e9) */
 extern const uint8_t ep_ship_text[321];
 

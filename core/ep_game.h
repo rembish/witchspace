@@ -15,7 +15,8 @@
 
 /* Things the original does that the core reports instead of doing: sounds, and code paths
  * not reconstructed yet (so tests notice when a state reaches them). */
-enum { EP_EV_SOUND = 1, EP_EV_SURFACE_SOUND, EP_EV_UNPORTED };
+/* EP_EV_ICON: function-key bar slot (high byte) gets icon sprite (low byte) */
+enum { EP_EV_SOUND = 1, EP_EV_SURFACE_SOUND, EP_EV_UNPORTED, EP_EV_ICON };
 
 typedef struct {
     uint8_t kind;
@@ -106,6 +107,21 @@ typedef struct {
     uint8_t hyper_target[0x19]; /* ds:8611: the target system's record */
     uint8_t jump_fuel;          /* ds:82d6: fuel the jump costs */
     uint8_t galaxy_digit;       /* ds:829b: '1' + galaxy, in the galactic jump message */
+    uint8_t other_screen;       /* ds:8711: a screen other than the space view is up (1, 2) */
+    uint8_t screen;             /* ds:02f9: 0 flight, 1/2 docked screens, 3/4 Esc menu, 5 */
+    uint8_t screen_shown;       /* ds:02fa: the screen the key bar is set up for */
+    uint8_t bar_colour;         /* ds:02fe */
+    uint8_t bar_redraw;         /* ds:0300: the bar was set up anew this frame */
+    uint8_t bar_active[12];     /* ds:0301: command id of each function key, as drawn */
+    uint8_t bar_wanted[12];     /* ds:030d: what the screen wants there */
+    uint8_t space_pressed;      /* ds:0319 */
+    uint8_t screen_flag;        /* ds:031d */
+    uint8_t screen_bits;        /* ds:031e */
+    uint8_t hyper_text_time;    /* ds:ae25: frames the countdown message stays */
+    uint8_t hyper_digits[2];    /* ds:ae5d: the countdown as text */
+    uint8_t escape_countdown;   /* ds:b3d5: frames to the escape capsule launch */
+    uint8_t escape_digit;       /* ds:b0c1: its count as shown */
+    uint8_t autopilot_step;     /* ds:af17 */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

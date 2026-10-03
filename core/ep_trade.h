@@ -14,6 +14,9 @@ enum { EP_TRADE_OK = 0, EP_TRADE_NOTHING = 1, EP_TRADE_CHOOSE_MOUNT = 2 };
 uint16_t ep_goods_buy_price(const ep_game *g, int row);
 
 /* One unit of a commodity */
+/* 8e23: pay if the cash covers it (and redo the cash text); 0 if not */
+int ep_pay(ep_game *g, uint32_t amount);
+
 uint16_t ep_trade_buy(ep_game *g, int row);
 uint16_t ep_trade_sell(ep_game *g, int row);
 

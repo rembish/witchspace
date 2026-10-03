@@ -200,7 +200,7 @@ static void rotate_back(ep_game *g, int16_t *x, int16_t *y, int16_t *z)
 static void set_slot(ep_game *g, int n, uint16_t angle) { g->space.rot[n] = ep_rot_from_angle(angle); }
 
 /* a768: velocity from the attitude and speed, when something changed */
-static void velocity(ep_game *g)
+void ep_player_velocity(ep_game *g)
 {
     ep_flight *f = &g->f;
     if (f->moved != 1) return;
@@ -218,7 +218,7 @@ static void velocity(ep_game *g)
 }
 
 /* a7b1: everything moves by minus the velocity (24-bit positions) */
-static void move_objects(ep_game *g)
+void ep_player_move(ep_game *g)
 {
     int n = g->space.count < EP_OBJECTS ? g->space.count : EP_OBJECTS;
     for (int i = 0; i < n; i++) {
@@ -241,7 +241,7 @@ void ep_controls(ep_game *g)
     ep_space *s = &g->space;
     if (f->scoop_lock && f->scoop_lock != 0x3c) return;
     if (f->no_crash) {
-        move_objects(g);
+        ep_player_move(g);
         return;
     }
     uint16_t ax;
@@ -309,8 +309,8 @@ void ep_controls(ep_game *g)
         f->moved = 1;
     }
     if (f->autopilot == 1) return;
-    velocity(g);
-    move_objects(g);
+    ep_player_velocity(g);
+    ep_player_move(g);
 }
 
 /* 6a72: an approximate |(x, y, z)| (integer square root of the high bits of the sum of

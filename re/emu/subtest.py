@@ -17,8 +17,9 @@ import sys
 import tempfile
 
 from corpus import load
-from eliteemu import CS, DS, REGS, Elite
+from eliteemu import CS, DS, REGS, SS, Elite
 from unicorn import UC_HOOK_CODE
+from unicorn.x86_const import UC_X86_REG_SP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARGS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in ("--fuzz", "--show")]
@@ -75,6 +76,9 @@ ROUTINES = {
     "select_system": (0x5EE8, {}, {}),
     "arrive": (0x72D8, {}, {}),
     "frame": (0xA040, {}, {0xA073: "end"}),
+    "key_bar": (0x0299, {}, {}),
+    "commands": (0x03C0, {"di": 0x7BDE}, {0xA040: "cmd 1"}),  # DI as the frame leaves it
+    "countdowns": (0xA0ED, {}, {}),
     "jump_missions": (0x753C, {}, {}),
     "witchspace": (0x7500, {}, {}),
     "rings": (0x7499, {}, {}),
@@ -242,6 +246,48 @@ def jump_world(img, rng):
             w(0x85DC + 3 * k, rng.choice([0, 0, 1, 5]))
             w(0x85DD + 3 * k, rng.choice([0, 6, 0x13, 0x14, 0x80, 0x95, 0x96]))
     if rng.random() < 0.3:  # the flight generator about to misjump
+        for j in range(3):
+            w(0x830F + 2 * j, rng.randrange(4), 2)
+
+
+def bar_world(img, rng):
+    """Any screen, the bar as drawn, the equipment the flight bar looks at."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0x02F9, rng.choice([0, 0, 0, 1, 2, 3, 4]))
+    w(0x02FA, rng.choice([0, 0, 1, 2, 0xFF]))
+    w(0x8711, rng.choice([0, 0, 1, 2]))
+    ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xE, 0xF, 0x23, 0x24, 0x0C, 0x10, 0x20]
+    for k in range(12):
+        w(0x0301 + k, rng.choice(ids + [0xFF]))
+    for a, vals in ((0x8357, [0, 1, 4]), (0x8359, [0, 1]), (0x835D, [0, 1]), (0x835E, [0, 1]), (0x8364, [0, 1]),
+                    (0x83AC, [0, 1]), (0x8361, [0, 1]), (0x54CA, [0, 1, 2]), (0xAE60, [0, 0, 0, 3]), (0xAE23, [0, 0, 5]),
+                    (0x031D, [0, 1]), (0x031E, [0, 1, 2, 4, 8, 0xF])):
+        w(a, rng.choice(vals))
+
+
+def command_world(img, rng):
+    """A key pressed, and the state the flight commands test."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    for k in range(12):  # 0299 has run: no ff (redraw marker) left
+        if img[DS * 16 + 0x0301 + k] == 0xFF:
+            img[DS * 16 + 0x0301 + k] = 0
+    slot = rng.randrange(12)
+    w(0x0301 + slot, rng.choice([1, 5, 6, 7, 8, 8, 9, 0xA, 0xB, 0xE, 0xF, 0x23, 0x24]))
+    keys = [0x97 + slot, ord("1234567890-="[slot])]
+    w(0x0D2F, rng.choice(keys * 4 + [0xFF, 0x20, 0x1B, 0x41]))
+    w(0x54CA, rng.choice([0, 1, 2, 2]))
+    w(0xB0DE, rng.choice([0, 0x400, 0x200, 0x600, 0x4FF]), 2)
+    for a, vals in ((0xAF14, [0, 0, 1]), (0xB126, [0, 0, 1]), (0xB0E0, [0, 0, 1]), (0x83AA, [0, 0, 1]),
+                    (0x83AB, [0, 1]), (0x83B1, [0, 1]), (0xAE25, [0, 0, 3]), (0xAE60, [0, 0, 0, 2]), (0xAE23, [0, 0, 3]),
+                    (0xB1F8, [0, 0, 1]), (0xB3D5, [0, 0, 5]), (0x7680, [0, 1, 1]), (0x8360, [0, 1]),
+                    (0xB139, [0, 1]), (0x8711, [0, 0, 0, 1]), (0xAF56, [0, 4, 0x14]), (0x8356, [0, 0x23, 0x46, 0xFF])):
+        w(a, rng.choice(vals))
+    w(0x54C8, rng.choice([0x10, 0x77, 0x78, 0x2FF, 0x300, 0x3FF]), 2)
+    w(0x8343, rng.choice([0, 1, 0x10, 0x46, 0x47, 0x80]), 2)
+    w(0x8367, rng.choice([0, 0x1F3, 0x1F4, 100000]), 4)
+    w(0x775E + 0x1E, rng.choice([0, 1, 4]))
+    w(0xB0E1, 0x76DE + 0x40 * rng.randint(2, 19), 2)  # a locked missile has a target
+    if rng.random() < 0.3:
         for j in range(3):
             w(0x830F + 2 * j, rng.randrange(4), 2)
 
@@ -494,6 +540,10 @@ FUZZ = {
     "tribbles": [(0, tribble_world)],
     "flight_start": [(0, arrival_world)],
     "arrive": [(0, arrival_world), (0, jump_world)],
+    "key_bar": [(0, bar_world)],
+    "commands": [(0, bar_world), (0, command_world), (0, ship_in_sights)],
+    "countdowns": [(0, jump_world), (0xAE60, [0, 0, 1, 2, 10, 11]), (0xAE61, [1, 1, 2, 10]), (0xAE25, [0, 1, 5]),
+                   (0xB3D5, [0, 0, 1, 2, 7, 15, 0x28]), (0x54C8, [0x100, 0x2FE, 0x2FF, 0x3FF]), (0, ai_world)],
     "frame": [(0, ai_handlers), (0, dust_world), (0, ship_in_sights), (0, tribble_world), (0, dashboard_world),
               (0x54CA, [0, 0, 1, 2]), (0x020D + 0x39, [0, 0, 0x80]), (0x8365, [0, 1, 0xF]), (0x020D + 0x48, [0, 0x80]),
               (0x020D + 0x50, [0, 0x80])],
@@ -589,9 +639,22 @@ def run_original(image, addr, regs, exits=None):
     for stub in UNPORTED_FOR.get(NAME, UNPORTED):
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
-    if NAME == "arrive":  # the frame wait, view clearing and crosshair are the frontend's
+    if NAME in ("arrive", "countdowns", "commands"):  # the frame wait, view clearing, crosshair: frontend's
         for stub in (0x301A, 0x3130, 0x4F34):
             e.hook(stub, lambda e, r: None)
+    if NAME == "key_bar":  # icon redraws
+        def icon(e, r):  # only the bar's own (from 0312); the Esc menu's marks are the frontend's
+            if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
+                sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
+        e.hook(0x37BD, icon)
+    if NAME == "commands":
+        e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
+        for stub in (0x9048, 0x8BEA, 0x5AC0, 0x96DE, 0x8880, 0x5DC2, 0x6189, 0x5D9F, 0x924A, 0x07AA, 0x08AB, 0x0674,
+                     0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5, 0x9781, 0x932F, 0x9563,
+                     0x0425, 0xA23B):  # screens not reconstructed yet
+            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
+                sounds.append(f"event {EV_UNPORTED}:{stub}"), left.append("cmd 2"), mu.emu_stop()),
+                begin=CS * 16 + stub, end=CS * 16 + stub)
     if NAME == "frame":
         for stub in (0x301A, 0x3130):
             e.hook(stub, lambda e, r: None)
@@ -617,9 +680,11 @@ def run_original(image, addr, regs, exits=None):
     except RuntimeError:
         if not left:
             raise
+    if NAME == "commands" and not left:
+        left.append("cmd 0")
     if NAME == "tunnel" and not left:
         left.append("end 0")
-    if NAME in ("buy", "sell", "equip", "dashboard", "arrive"):  # the screens' drawing is the frontend's
+    if NAME in ("buy", "sell", "equip", "dashboard", "arrive", "countdowns"):  # the screens' drawing is the frontend's
         prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds
 

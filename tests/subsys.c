@@ -9,6 +9,7 @@
 #include "ep_travel.h"
 #include "ep_chart.h"
 #include "ep_frame.h"
+#include "ep_commands.h"
 #include "ep_flight.h"
 #include "ep_ships.h"
 #include "ep_trade.h"
@@ -77,6 +78,12 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "dust")) {
             ep_dust_frame(&g);
             print_prims(&g.render);
+        } else if (!strcmp(argv[1], "key_bar")) {
+            ep_key_bar(&g);
+        } else if (!strcmp(argv[1], "commands")) {
+            printf("cmd %d\n", ep_commands(&g));
+        } else if (!strcmp(argv[1], "countdowns")) {
+            ep_countdowns(&g);
         } else if (!strcmp(argv[1], "frame")) {
             ep_frame_before_ai(&g);
             g.f.reg_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */

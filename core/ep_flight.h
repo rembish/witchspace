@@ -29,6 +29,12 @@ int ep_tunnel_tick(ep_game *g);
  * attitude angles), the velocity, and moving everything by it */
 void ep_controls(ep_game *g);
 
+/* a768: the player's velocity from the attitude and speed, when ds:af58 says it changed */
+void ep_player_velocity(ep_game *g);
+
+/* a7b1: everything moves by minus the player's velocity */
+void ep_player_move(ep_game *g);
+
 /* 1221: Tribbles breed, eat the cargo and, once there are enough, crawl over the screen
  * (sprites 5d/5e into g->render) */
 void ep_tribbles_tick(ep_game *g);
