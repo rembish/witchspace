@@ -82,6 +82,10 @@ step() = main generator, returning the old A (hi, lo).
   `666b` new system (`64d0`, then 4 flight-generator steps for the arrival offsets and roll);
   `753c` mission counters (`839e` jumps → missions 1–6 at 20h 38h 50h 6eh 8ch a0h).
   Galactic jump: galaxy + 1 (8 → 0; 7 → 8 only when `4f20() < 12ch`), cursor random.
+- Ported (`core/ep_travel.c`, `core/ep_chart.c`; difftested `arrive`, `rings`, `witchspace`,
+  `jump_missions`, `flight_start`, `new_system`, `select_system`). `ds:108f` is 0 after every
+  planet or sun draw (`468d`, also the divide-error resume), so the rings normally do not step
+  the RNG. Galaxy 8 has its own seed (`1234 5678 9abc`).
 - `64d0` flight start: dust reset (`5374`), slots cleared, sun (3 steps for x, y, z), planet
   at z 6e00h, station (type 0 if tech ≥ 9 else 1, `+1f` = (r>>8&7)+10), `76b6` = government.
 - `6864` tunnel animation (launch, docking): 20 frames; on launch dust, `update_objects` and

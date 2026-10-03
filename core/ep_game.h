@@ -98,6 +98,14 @@ typedef struct {
     uint8_t hyper_countdown;    /* ds:ae60: hyperspace countdown, seconds (0 = none) */
     uint8_t hyper_tick;         /* ds:ae61: frames to the next second */
     uint8_t missile_block;      /* ds:b1f8: 1 = missiles cannot be fired */
+    uint8_t flash;              /* ds:1b3e: flashing colour step 0..5 (3921) */
+    uint16_t circle_mask;       /* ds:108f: circle jitter mask, 0 outside a planet draw */
+    uint8_t rings[30];          /* ds:85dc: hyperspace rings: delay, radius, colour */
+    uint8_t galactic_jump;      /* ds:ae24: 1 = the jump under way is galactic */
+    uint8_t force_misjump;      /* ds:8610: 1 = the next jump lands in witchspace */
+    uint8_t hyper_target[0x19]; /* ds:8611: the target system's record */
+    uint8_t jump_fuel;          /* ds:82d6: fuel the jump costs */
+    uint8_t galaxy_digit;       /* ds:829b: '1' + galaxy, in the galactic jump message */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -124,6 +132,7 @@ typedef struct {
 typedef struct {
     uint8_t key[128];                                    /* ds:020d */
     uint8_t faster, slower, up, down, left, right, fire; /* ds:b251 .. b25d */
+    uint8_t last_key;                                    /* ds:0d2f: key code of the last press, ff none */
     uint8_t control;                                     /* ds:8f2c: 0 keyboard, 1 joystick, 2 mouse */
 } ep_input;
 

@@ -3,7 +3,10 @@
 
 #include <string.h>
 
+#include "ep_chart.h"
 #include "ep_combat.h"
+#include "ep_flight.h"
+#include "ep_tables.h"
 #include "ep_dust.h"
 #include "ep_galaxy.h"
 #include "ep_objects.h"
@@ -59,8 +62,8 @@ void ep_flight_start(ep_game *g)
         f->danger_gov = 0;
         return;
     }
-    if (f->approach || g->cmdr.b[0xde] != g->cmdr.b[EP_CMDR_GALAXY] ||
-        g->cmdr.b[0xdf] != current(g, EP_SYSREC_INDEX)) {
+    if (f->approach || g->cmdr.b[EP_CMDR_DOCKED_AT] != g->cmdr.b[EP_CMDR_GALAXY] ||
+        g->cmdr.b[EP_CMDR_DOCKED_AT + 1] != current(g, EP_SYSREC_INDEX)) {
         ep_object *o = &s->obj[0]; /* the sun: 24-bit position from three steps */
         o->b[EP_OBJ_FLAGS] = 0x3d;
         set_upper(o, 0, (uint16_t)((rng(g) & 0x3ff) - 0x200));
@@ -146,4 +149,139 @@ void ep_new_system(ep_game *g)
     g->space.player_angle[0] = a;
     g->space.player_angle[1] = b;
     g->space.player_angle[2] = rng(g) & 0x7ff;
+}
+
+void ep_rings_start(ep_game *g) { memcpy(g->f.rings, ep_ring_start, sizeof g->f.rings); }
+
+void ep_rings_frame(ep_game *g)
+{
+    for (int k = 0; k < 10; k++) {
+        uint8_t *r = &g->f.rings[3 * k];
+        if (r[0]) {
+            r[0]--;
+            continue;
+        }
+        if (r[1] >= 0x96) continue;
+        uint8_t step = (uint8_t)(r[1] >> 3);
+        r[1] = (uint8_t)(r[1] + (step ? step : 1));
+        if (r[1] < 0x14) continue;
+        /* 2d16, colour r[2]: an outline at the centre of the view */
+        ep_draw_circle(&g->rng, 0x98, 0x3e, r[1], g->f.circle_mask, 1, g->f.video == 2, &g->circles);
+    }
+}
+
+void ep_witchspace(ep_game *g)
+{
+    uint8_t *c = g->cmdr.b;
+    g->f.hyperspace = 0x64;
+    uint8_t x = (uint8_t)(((unsigned)(g->seed.w[1] >> 8) + c[EP_CMDR_CHART_CENTRE]) >> 1); /* 16-bit add */
+    c[EP_CMDR_CHART_CENTRE] = c[EP_CMDR_CURSOR] = c[EP_CMDR_CURSOR + 4] = x;
+    c[EP_CMDR_CURSOR + 2] = 0x50;
+    uint8_t y = (uint8_t)((uint8_t)((uint8_t)(g->seed.w[0] >> 9) + c[EP_CMDR_CHART_CENTRE + 1]) >> 1);
+    c[EP_CMDR_CHART_CENTRE + 1] = c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CURSOR + 5] = y;
+    c[EP_CMDR_CURSOR + 3] = 0x40;
+}
+
+void ep_jump_missions(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b;
+    if (f->hyperspace) return;
+    if (f->mission == 4 && (f->mission_state == 2 || f->mission_state == 1))
+        f->mission_state = f->mission_system == c[EP_CMDR_TARGET] ? 2 : 1;
+    if (f->convoy_countdown && --f->convoy_countdown == 0) c[EP_CMDR_CONVOY_DUE] = 1;
+    if (c[EP_CMDR_GALAXY] == 0 && c[EP_CMDR_JUMPS_COUNTED] != 1) return;
+    if (f->mission) return;
+    if (++f->mission5_count == 0) f->mission5_count = 0xff; /* the jump count */
+    f->mission5_flag = 1;
+    static const uint8_t start[6] = { 0x20, 0x38, 0x50, 0x6e, 0x8c, 0xa0 };
+    for (int k = 0; k < 6; k++)
+        if (f->mission5_count == start[k]) {
+            f->mission = (uint8_t)(k + 1);
+            f->mission_state = 0;
+        }
+}
+
+/* 74e3: 50 frames of rings (the view cleared, the message, the crosshair and the frame wait
+ * are the frontend's) */
+static void ring_frames(ep_game *g)
+{
+    for (int n = 0; n < 50; n++) {
+        if (++g->f.flash == 6) g->f.flash = 0; /* 3921 */
+        ep_message_tick(g);
+        ep_rings_frame(g);
+        g->in.last_key = 0xff; /* 0287 */
+    }
+}
+
+void ep_arrive(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b;
+    if (f->mission == 3 && f->mission_state == 1) {
+        f->mission_state = 0;
+        f->station_angry = 1;
+    }
+    f->message = 0x8269;
+    f->message_time = 0x32;
+    int galactic = f->galactic_jump == 1;
+    if (galactic) { /* 7439 */
+        if (c[EP_CMDR_GALAXY] == 8)
+            c[EP_CMDR_GALAXY] = 0;
+        else if (++c[EP_CMDR_GALAXY] == 8 && rng(g) >= 0x12c)
+            c[EP_CMDR_GALAXY] = 0; /* the ninth galaxy, rarely */
+        f->galaxy_digit = (uint8_t)('1' + c[EP_CMDR_GALAXY]);
+        uint16_t r = rng(g);
+        c[EP_CMDR_CURSOR] = (uint8_t)((r & 0x3f) + 0x60);
+        c[EP_CMDR_CURSOR + 1] = (uint8_t)((r >> 8 & 0x1f) + 0x30);
+        c[EP_CMDR_ZOOM] = 0;
+        ep_find_nearest(g);
+        ep_select_system(g);
+    } else {
+        c[EP_CMDR_FUEL] = (uint8_t)(c[EP_CMDR_FUEL] - f->jump_fuel);
+        c[EP_CMDR_LEGAL] = c[EP_CMDR_LEGAL] >= 5 ? (uint8_t)(c[EP_CMDR_LEGAL] - 5) : 0;
+    }
+    c[EP_CMDR_SELECTED + EP_SYSREC_DIST] = 0;
+    c[EP_CMDR_SELECTED + EP_SYSREC_DIST + 1] = 0;
+    memmove(&c[EP_CMDR_CURRENT], galactic ? &c[EP_CMDR_SELECTED] : f->hyper_target, 0x19); /* ds:82d9 */
+    c[EP_CMDR_MARKET_DRAWN] = 0;
+    uint8_t index = galactic ? c[EP_CMDR_SELECTED + EP_SYSREC_INDEX] : c[EP_CMDR_TARGET];
+    g->seed = ep_system_seed(c[EP_CMDR_GALAXY], index);
+    if ((!galactic && rng(g) < 0x366 && f->mission == 0) || f->force_misjump == 1) {
+        f->force_misjump = 0;
+        ep_witchspace(g);
+    } else {
+        f->hyperspace = 0;
+        uint8_t x = (uint8_t)(g->seed.w[1] >> 8), y = (uint8_t)(g->seed.w[0] >> 9);
+        c[EP_CMDR_CHART_CENTRE] = c[EP_CMDR_CURSOR] = c[EP_CMDR_CURSOR + 4] = x;
+        c[EP_CMDR_CURSOR + 2] = 0x50;
+        c[EP_CMDR_CHART_CENTRE + 1] = c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CURSOR + 5] = y;
+        c[EP_CMDR_CURSOR + 3] = 0x40;
+        if (c[EP_CMDR_ZOOM] == 1) {
+            c[EP_CMDR_CURSOR] = 0x50;
+            c[EP_CMDR_CURSOR + 1] = 0x40;
+        }
+    }
+    ring_frames(g);
+    ep_new_system(g);
+    ep_jump_missions(g);
+    f->approach_size = 0;
+    f->approach = 0;
+    f->siege = 1;
+    uint16_t text = 0x8250;
+    if (f->galactic_jump) {
+        text = c[EP_CMDR_GALAXY] == 8 ? 0x829d : 0x8283;
+        c[EP_CMDR_LEGAL] = 0;
+        c[EP_CMDR_EQUIPMENT + 10] = 0; /* the galactic hyperdrive is used up */
+    }
+    if (f->hyperspace) text = 0x82b8;
+    f->message = text;
+    f->message_time = 0x28;
+    f->galactic_jump = 0;
+    if (f->hyperspace == 1) return;
+    if (f->mission == 1) {
+        if (f->mission5_phase == 0) f->leak_countdown = 0x32;
+    } else if (f->mission == 3 && f->mission5_phase == 1 && f->station_hit != 1) {
+        f->leak_countdown = 0x32;
+    }
 }

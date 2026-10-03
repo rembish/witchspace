@@ -76,6 +76,16 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "dust")) {
             ep_dust_frame(&g);
             print_prims(&g.render);
+        } else if (!strcmp(argv[1], "arrive")) {
+            ep_arrive(&g);
+        } else if (!strcmp(argv[1], "jump_missions")) {
+            ep_jump_missions(&g);
+        } else if (!strcmp(argv[1], "witchspace")) {
+            ep_witchspace(&g);
+        } else if (!strcmp(argv[1], "rings")) {
+            ep_rings_frame(&g);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "select_system")) {
             ep_select_system(&g);
         } else if (!strcmp(argv[1], "flight_start")) {

@@ -58,7 +58,7 @@ static int project(int16_t v, uint16_t z, int16_t *out)
 }
 
 /* 4612: the disc of the sun or a planet, radius `size`, colour from the slot (+0b) */
-static void draw_disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t mask)
+static void disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t mask)
 {
     int16_t y, x;
     if (!project((int16_t)get16(o, EP_OBJ_CAM + 2), get16(o, EP_OBJ_CAM + 4), &y)) return;
@@ -72,6 +72,12 @@ static void draw_disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t ma
     if (y - r < -32768 || y - r > 0x7b) return;
     (void)o->b[0x0b]; /* colour: the frontend takes it from the slot */
     ep_draw_circle(&g->rng, x, y, (int16_t)size, mask, 0, g->f.video == 2, &g->circles);
+}
+
+static void draw_disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t mask)
+{
+    disc(g, o, size, mask);
+    g->f.circle_mask = 0; /* 468d, also where a divide error resumes */
 }
 
 /* 44c7: sun (type 30) or planet (type 31) */

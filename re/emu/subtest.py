@@ -33,8 +33,8 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 # reports sounds as events).
 SCRATCH = [(0x54CC, 0x54E1), (0x6405, 0x6405), (0x45E4, 0x45E5), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0xA500, 0xA7FF), (0x8D00, 0x8D4E), (0x92F9, 0x92F9), (0xA3A0, 0xA4FF), (0xACA8, 0xACB3), (0xAD2B, 0xAD2D),
            (0x031D, 0x031E), (0x03F1, 0x03F2), (0x0980, 0x0990),
-           (0x01F8, 0x01F9), (0x1074, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
-           (0x76D6, 0x76D7), (0x45E6, 0x45FF), (0x4FE0, 0x4FE0)]
+           (0x01F8, 0x01F9), (0x1074, 0x108E), (0x1091, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
+           (0x76D6, 0x76D7), (0x45E6, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
 
 EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
 
@@ -73,6 +73,10 @@ ROUTINES = {
     "jump_drive": (0xA5EE, {}, {}),
     "flight_start": (0x64D0, {}, {}),
     "select_system": (0x5EE8, {}, {}),
+    "arrive": (0x72D8, {}, {}),
+    "jump_missions": (0x753C, {}, {}),
+    "witchspace": (0x7500, {}, {}),
+    "rings": (0x7499, {}, {}),
     "new_system": (0x666B, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
@@ -200,6 +204,45 @@ def near_centre(img, rng):
         img[d + 0x831E] = 1
         img[d + 0x8318] = 0x50 + rng.randint(-60, 60)
         img[d + 0x8319] = 0x40 + rng.randint(-40, 40)
+
+
+def jump_world(img, rng):
+    """A jump under way: galactic or not, its target, missions near their start, rings."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0xAE24, rng.choice([0, 0, 1, 2]))
+    w(0x8315, rng.choice([0, 1, 6, 7, 7, 8]))
+    w(0x83B4, rng.randrange(256))
+    for k in range(0x19):
+        w(0x8611 + k, rng.getrandbits(8))
+    w(0x8610, rng.choice([0, 0, 0, 1]))
+    w(0x82D6, rng.randrange(0x50))
+    w(0x8356, rng.choice([0, 0x10, 0x46]))
+    w(0x836B, rng.choice([0, 3, 5, 0x40]))
+    w(0x83A0, rng.choice([0, 0, 1, 3, 4]))
+    w(0x83A2, rng.choice([0, 1, 2, 3]))
+    w(0x83A3, rng.randrange(256))
+    w(0x83B0, rng.choice([0, 1]))
+    w(0x83AB, rng.choice([0, 1]))
+    w(0x83B3, rng.choice([0, 1, 2]))
+    w(0x83A1, rng.choice([0, 1]))
+    w(0x839E, rng.choice([0x1F, 0x37, 0x4F, 0x6D, 0x8B, 0x9F, 0xFF, 0x10]))
+    w(0x83A4, rng.choice([0, 0, 1, 0x64]))
+    w(0x831E, rng.choice([0, 1]))
+    w(0x108F, rng.choice([0, 0, 1, 3]), 2)
+    w(0x1B3E, rng.randrange(6))
+    w(0x8361, rng.choice([0, 1]))
+    w(0x0D2F, rng.choice([0xFF, 0x20, 0x39]))
+    if rng.random() < 0.6:
+        for k, v in enumerate([1, 0x14, 0x0C, 5, 0x0F, 0x0C, 8, 0x0B, 0x0C, 0x0A, 8, 0x0A, 0x0B, 6, 0x0A, 0x0C, 6, 0x0F,
+                               0x0D, 6, 0x0F, 0x0E, 6, 0x0F, 0x0F, 6, 0x0F, 0x14, 6, 0x0C]):
+            w(0x85DC + k, v)
+    else:
+        for k in range(10):
+            w(0x85DC + 3 * k, rng.choice([0, 0, 1, 5]))
+            w(0x85DD + 3 * k, rng.choice([0, 6, 0x13, 0x14, 0x80, 0x95, 0x96]))
+    if rng.random() < 0.3:  # the flight generator about to misjump
+        for j in range(3):
+            w(0x830F + 2 * j, rng.randrange(4), 2)
 
 
 def arrival_world(img, rng):
@@ -449,6 +492,10 @@ FUZZ = {
     "dust": [(0, dust_world)],
     "tribbles": [(0, tribble_world)],
     "flight_start": [(0, arrival_world)],
+    "arrive": [(0, arrival_world), (0, jump_world)],
+    "jump_missions": [(0, jump_world)],
+    "witchspace": [(0, jump_world), (0x8316, 1), (0x8317, 1)],
+    "rings": [(0, jump_world)],
     "select_system": [(0x8315, [0, 1, 2, 3, 4, 5, 6, 7, 8]), (0x8318, 1), (0x8319, 1), (0x831E, [0, 0, 1, 2]),
                       (0x8316, 1), (0x8317, 1), (0, near_centre), (0x834A, 1), (0x834B, 1), (0x834C, 1)],
     "new_system": [(0, arrival_world)],
@@ -535,6 +582,9 @@ def run_original(image, addr, regs, exits=None):
     for stub in UNPORTED_FOR.get(NAME, UNPORTED):
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
+    if NAME == "arrive":  # the frame wait, view clearing and crosshair are the frontend's
+        for stub in (0x301A, 0x3130, 0x4F34):
+            e.hook(stub, lambda e, r: None)
     if NAME in ("buy", "sell"):
         e.call(0x97D8)
     elif NAME == "equip":
@@ -557,7 +607,7 @@ def run_original(image, addr, regs, exits=None):
             raise
     if NAME == "tunnel" and not left:
         left.append("end 0")
-    if NAME in ("buy", "sell", "equip", "dashboard"):  # the screens' drawing is the frontend's
+    if NAME in ("buy", "sell", "equip", "dashboard", "arrive"):  # the screens' drawing is the frontend's
         prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds
 
