@@ -168,7 +168,9 @@ void ep_rings_frame(ep_game *g)
         r[1] = (uint8_t)(r[1] + (step ? step : 1));
         if (r[1] < 0x14) continue;
         /* 2d16, colour r[2]: an outline at the centre of the view */
+        int n0 = g->circles.n;
         ep_draw_circle(&g->rng, 0x98, 0x3e, r[1], g->f.circle_mask, 1, g->f.video == 2, &g->circles);
+        ep_render_spans(&g->render, r[2], n0, g->circles.n - n0);
     }
 }
 

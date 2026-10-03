@@ -30,6 +30,7 @@ int main(void)
         printf(" |");
         for (int k = 0; k < g.render.nprim; k++) {
             const ep_prim *p = &g.render.prim[k];
+            if (p->kind == EP_PRIM_SPANS) continue;
             int n = p->kind == EP_PRIM_TRI ? 3 : p->kind == EP_PRIM_QUAD ? 4 : 2;
             printf(" %d:%d", p->kind, p->colour);
             for (int j = 0; j < 2 * n; j++) printf(",%d", p->pt[j]);

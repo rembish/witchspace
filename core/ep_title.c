@@ -102,7 +102,9 @@ int ep_title_frame(ep_game *g)
     if (f->leave == 2) return EP_CMD_QUIT;
     if (f->sound_device == 2 && (f->sound_mode & 1)) ep_event_add(g, EP_EV_MUSIC, 2); /* 4d8e */
     /* 9f2a: the red disc, jittered (ds:108f = 1) */
+    int n0 = g->circles.n;
     ep_draw_circle(&g->rng, 0xc8, 0x3c, 0x19, 1, 0, f->video == 2, &g->circles);
+    ep_render_spans(&g->render, 0xb6, n0, g->circles.n - n0);
 
     /* 9f47: the ship's distance */
     ep_object *o = &g->space.obj[EP_TITLE_SLOT];

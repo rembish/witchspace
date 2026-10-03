@@ -35,9 +35,10 @@ enum {
 typedef struct {
     uint8_t kind;
     uint16_t arg; /* sound id (4c98), size (4e1a), or the original's address */
+    uint16_t at;  /* where among the primitives: before g->render.prim[at] */
 } ep_event;
 
-#define EP_MAX_EVENTS 1024
+#define EP_MAX_EVENTS 4096
 
 /* Flight variables (data segment addresses) */
 typedef struct {
@@ -255,5 +256,9 @@ typedef struct {
 } ep_game;
 
 void ep_event_add(ep_game *g, uint8_t kind, uint16_t arg);
+
+/* Empty the output (primitives, their texts, circle spans, events) before a call whose
+ * output is to be shown on its own */
+void ep_output_begin(ep_game *g);
 
 #endif

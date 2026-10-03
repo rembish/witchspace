@@ -19,8 +19,17 @@ void ep_event_add(ep_game *g, uint8_t kind, uint16_t arg)
     if (g->nevents < EP_MAX_EVENTS) {
         g->event[g->nevents].kind = kind;
         g->event[g->nevents].arg = arg;
+        g->event[g->nevents].at = (uint16_t)g->render.nprim;
         g->nevents++;
     }
+}
+
+void ep_output_begin(ep_game *g)
+{
+    g->render.nprim = 0;
+    g->render.ntext = 0;
+    g->circles.n = 0;
+    g->nevents = 0;
 }
 
 /* 6cfa: flying into the sun or the planet */
@@ -163,8 +172,9 @@ static void disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t mask)
     if (x - r < -32768 || x - r > 0x12f) return;
     if (y + r > 32767 || y + r < 0) return;
     if (y - r < -32768 || y - r > 0x7b) return;
-    (void)o->b[0x0b]; /* colour: the frontend takes it from the slot */
+    int n0 = g->circles.n;
     ep_draw_circle(&g->rng, x, y, (int16_t)size, mask, 0, g->f.video == 2, &g->circles);
+    ep_render_spans(&g->render, o->b[0x0b], n0, g->circles.n - n0); /* colour from the slot */
 }
 
 static void draw_disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t mask)

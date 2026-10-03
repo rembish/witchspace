@@ -1373,7 +1373,9 @@ static void chart_local_pass(ep_game *g)
 {
     ep_render_rect(&g->render, 0, 0x20, 9, 0x100, 0x7c);
     uint16_t r = (uint16_t)(((g->cmdr.b[EP_CMDR_FUEL] >> 1) + 1) >> 1);
+    int n0 = g->circles.n;
     ep_draw_circle(&g->rng, 0x68, 0x40, (int16_t)r, g->f.circle_mask, 0, g->f.video == 2, &g->circles);
+    ep_render_spans(&g->render, 4, n0, g->circles.n - n0);
     ep_render_rect(&g->render, 0, 0x70, 0x38, 1, 0x23);
     ep_render_rect(&g->render, 0, 0x5f, 0x49, 0x23, 1);
     chart_symbols(g);
@@ -1392,7 +1394,9 @@ static void chart_galaxy_pass(ep_game *g)
     uint16_t r = (uint16_t)(((g->cmdr.b[EP_CMDR_FUEL] >> 3) + 3) >> 1);
     int16_t cx = (int16_t)(g->cmdr.b[EP_CMDR_CHART_CENTRE] + 0x18),
             cy = (int16_t)(g->cmdr.b[EP_CMDR_CHART_CENTRE + 1] - 2);
+    int n0 = g->circles.n;
     ep_draw_circle(&g->rng, cx, cy, (int16_t)r, g->f.circle_mask, 0, g->f.video == 2, &g->circles);
+    ep_render_spans(&g->render, 4, n0, g->circles.n - n0);
     /* the cross over the present system: its y takes x + 18h's high byte (mov bh,ah) */
     int16_t ly = (int16_t)(cy + (cx & 0xff00));
     line(g, 0, cx, (int16_t)(ly - 0x11), cx, (int16_t)(ly + 0x12));

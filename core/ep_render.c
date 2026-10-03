@@ -158,6 +158,17 @@ void ep_draw_ship(ep_render *r, const ep_ship_view *v)
     ep_draw_model(r, type, pos, &t1);
 }
 
+void ep_render_spans(ep_render *r, uint8_t colour, int first, int count)
+{
+    if (count <= 0 || r->nprim >= EP_MAX_PRIMS) return;
+    ep_prim *p = &r->prim[r->nprim++];
+    memset(p, 0, sizeof *p);
+    p->kind = EP_PRIM_SPANS;
+    p->colour = colour;
+    p->pt[0] = (int16_t)first;
+    p->pt[1] = (int16_t)count;
+}
+
 void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
 {
     if (r->nprim >= EP_MAX_PRIMS) return;

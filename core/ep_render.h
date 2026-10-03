@@ -11,9 +11,9 @@
 
 #include <stdint.h>
 
-#define EP_MAX_VERTS 64 /* the buffer at ds:28e6 has room for more than any model uses */
-#define EP_MAX_PRIMS 8192
-#define EP_TEXT_POOL 16384 /* bytes of the strings of the text primitives */
+#define EP_MAX_VERTS 64    /* the buffer at ds:28e6 has room for more than any model uses */
+#define EP_MAX_PRIMS 32768 /* room for a whole replayed sequence (50 frames of rings) */
+#define EP_TEXT_POOL 32767 /* bytes of the strings of the text primitives */
 
 /* Q15 matrix, row-major, as the original's 9-word matrices */
 typedef struct {
@@ -26,6 +26,8 @@ typedef struct {
     int16_t x, y, z, sx, sy;
 } ep_vertex;
 
+/* Coordinates: TRI, QUAD, LINE, CLIPPED_LINE, PIXEL and SPANS are in the 3D view (304 x 124,
+ * at 8, 9 on the 320 x 200 screen); SPRITE, TEXT and RECT are screen coordinates. */
 enum {
     EP_PRIM_TRI = 0,
     EP_PRIM_QUAD = 2,
@@ -34,7 +36,8 @@ enum {
     EP_PRIM_PIXEL = 8,
     EP_PRIM_SPRITE = 10,
     EP_PRIM_TEXT = 12,
-    EP_PRIM_RECT = 14
+    EP_PRIM_RECT = 14,
+    EP_PRIM_SPANS = 16 /* a filled circle: pt[0] its first span in g->circles, pt[1] how many */
 };
 
 typedef struct {
@@ -74,6 +77,9 @@ void ep_mat_mul(const ep_mat *a, const ep_mat *b, ep_mat *out); /* 4031: out = a
 /* draw_model (3c90): model `type` at camera position pos with orientation m. Appends to
  * r->prim. */
 void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m);
+
+/* A circle's spans (ep_circle.h), where it was drawn among the other primitives */
+void ep_render_spans(ep_render *r, uint8_t colour, int first, int count);
 
 /* A line (as 261b gets it: end point first) */
 void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
