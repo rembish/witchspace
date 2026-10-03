@@ -266,6 +266,78 @@ static void draw_planet_or_sun(ep_game *g, ep_object *o)
     draw_disc(g, o, size, mask);
 }
 
+/* 48b1, 48cf: (|v| << 8) / d, the sign put back; a divide error leaves the dividend's low word */
+static int16_t compass_div(int16_t v, uint16_t d)
+{
+    int neg = v < 0;
+    uint16_t a = neg ? (uint16_t)(0u - (uint16_t)v) : (uint16_t)v;
+    uint16_t hi = (uint16_t)(((int16_t)a < 0 ? 0xff00u : 0) | (a >> 8)), lo = (uint16_t)(a << 8); /* cwd */
+    uint32_t n = (uint32_t)hi << 16 | lo;
+    uint16_t q = n / d > 0xffff ? lo : (uint16_t)(n / d);
+    return (int16_t)(neg ? (uint16_t)(0u - q) : q);
+}
+
+/* 495a, 4969: k v / len, or 7fffh with the dividend's sign when it does not fit */
+static int16_t compass_scale(int16_t k, int16_t v, int16_t len)
+{
+    int32_t n = (int32_t)k * v, q = n / len;
+    if (q > 32767 || q < -32768) return (int16_t)(n < 0 ? -0x7fff : 0x7fff);
+    return (int16_t)q;
+}
+
+/* 487e: the compass, where slot 2 (the planet, or the station) is: a dot on its dial, 34h
+ * ahead and 35h behind */
+static void compass(ep_game *g)
+{
+    if (!g->space.in_flight || g->f.hyperspace) return;
+    const ep_object *o = &g->space.obj[2];
+    uint8_t cl = ep_planet_scale(o); /* 6ee8 */
+    int16_t p[3];
+    for (int k = 0; k < 3; k++) { /* 6eb9 */
+        int32_t v = (int32_t)((uint32_t)o->b[EP_OBJ_POS_HI + k] << 24 | (uint32_t)get16(o, EP_OBJ_POS + 2 * k)
+                                                                            << 8) >>
+                    8;
+        p[k] = (int16_t)(uint16_t)(v >> cl);
+    }
+    ep_rotate_by_player(&g->space, p); /* 6e01 */
+    uint8_t id = 0x34;
+    uint16_t z = (uint16_t)p[2];
+    if (p[2] < 0) {
+        z = (uint16_t)(0u - z);
+        id = 0x35;
+    }
+    if (z <= 0x100) z = 0x100;
+    int16_t x = compass_div(p[0], z), y = compass_div(p[1], z);
+    x = (int16_t)(x >> 6);
+    y = (int16_t)(y >> 6);
+    x = (int16_t)(uint16_t)((uint16_t)x << cl);
+    y = (int16_t)(uint16_t)((uint16_t)y << cl);
+    uint32_t sum = (uint32_t)((int32_t)y * y) + (uint32_t)((int32_t)x * x); /* 4913: x x + y y */
+    uint16_t dx = (uint16_t)(sum >> 16), ax = (uint16_t)sum;
+    int shift = 8;
+    if (!(dx >> 8)) {
+        dx = (uint16_t)(dx << 8 | ax >> 8);
+        ax = (uint16_t)(ax << 8);
+        shift = 4;
+        if (!(dx >> 8)) {
+            dx = (uint16_t)(dx << 8 | ax >> 8);
+            shift = 0;
+        }
+    }
+    uint8_t root = 0; /* 493b: how many odd numbers can be taken away, the square root */
+    for (uint16_t odd = 1; dx >= odd; odd = (uint16_t)(odd + 2)) {
+        dx = (uint16_t)(dx - odd);
+        root++;
+    }
+    int16_t len = (int16_t)(uint16_t)(root << shift);
+    if ((uint16_t)len >= 10) {
+        y = compass_scale(10, y, len);
+        x = compass_scale(5, x, len);
+    }
+    int16_t sx = (int16_t)(((int16_t)(x + 1) >> 1) + 0x133), sy = (int16_t)(((int16_t)(y + 1) >> 1) + 0xa2);
+    ep_render_sprite(&g->render, id, sx, sy);
+}
+
 int ep_world_update(ep_game *g, int drawn[EP_OBJECTS])
 {
     ep_space *s = &g->space;
@@ -324,6 +396,6 @@ int ep_world_update(ep_game *g, int drawn[EP_OBJECTS])
         ep_draw_ship(&g->render, &v);
         drawn[nd++] = pick;
     }
-    /* 487e: the compass (in flight) only draws */
+    compass(g);
     return nd;
 }

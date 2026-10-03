@@ -213,6 +213,8 @@ typedef struct {
     uint8_t snd_marked;         /* ds:4fe0: a sound the laser's must not cut short */
     uint8_t music_on;           /* ds:4802 */
     uint8_t surface_note;       /* ds:4f74: sequence 9's pitch (4e1a puts it there) */
+    uint8_t dash[0x16];         /* ds:54cc: the dashboard as drawn (80h: to be drawn) */
+    uint8_t missile_blink;      /* ds:6405: frames of the armed missile's blinking */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

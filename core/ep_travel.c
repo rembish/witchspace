@@ -207,7 +207,7 @@ void ep_jump_missions(ep_game *g)
         }
 }
 
-/* 74e3: 50 frames of rings (the crosshair, 4f34, is the frontend's) */
+/* 74e3: 50 frames of rings */
 static void ring_frames(ep_game *g)
 {
     for (int n = 0; n < 50; n++) {
@@ -215,6 +215,8 @@ static void ring_frames(ep_game *g)
         ep_view_clear(g);
         ep_message_tick(g);
         ep_rings_frame(g);
+        int laser = ep_view_laser(g); /* 4f34: the crosshair */
+        if (laser >= 0) ep_render_sprite(&g->render, (uint8_t)(laser + 1), 0x98, 0x3f);
         ep_view_flip(g);
         g->in.last_key = 0xff; /* 0287 */
     }

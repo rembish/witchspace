@@ -24,7 +24,11 @@ void ep_frame_before_ai(ep_game *g)
     ep_laser_hits(g);
     ep_fuel_leak(g);
     ep_message_tick(g);
-    if (ep_view_laser(g) >= 0) g->f.reg_dl = 0x10; /* 4f34: the crosshair sprite (3411) */
+    int laser = ep_view_laser(g);
+    if (laser >= 0) { /* 4f34: the crosshair, by laser (3411 leaves DL 10h) */
+        ep_render_sprite(&g->render, (uint8_t)(laser + 1), 0x98, 0x3f);
+        g->f.reg_dl = 0x10;
+    }
     if (g->test_dl_force) g->f.reg_dl = g->test_dl;
 }
 

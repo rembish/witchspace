@@ -288,6 +288,7 @@ void ep_cockpit(ep_game *g)
         for (size_t k = 0; k < sizeof cockpit / sizeof cockpit[0]; k++)
             ep_render_sprite(&g->render, cockpit[k].id, cockpit[k].x, cockpit[k].y);
         f->other_screen = 0;
+        memset(f->dash, 0x80, sizeof f->dash); /* 5490: the dashboard to be drawn again */
         f->message_time = (uint16_t)(f->message_time & 0xff);
         f->message_shown = 0;
     }

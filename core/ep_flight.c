@@ -582,6 +582,84 @@ static void station_zone(ep_game *g)
     g->f.safe_zone = (uint8_t)((uint8_t)(m << 1) | (m < 0x32c8));
 }
 
+/* the dashboard's gauges, redrawn when their value is not the one drawn (ds:54cc..54e1) */
+static uint8_t *drawn(ep_game *g, uint16_t addr) { return &g->f.dash[addr - 0x54cc]; }
+
+/* 567d (and 5685 with the value as it is, 55e7 two high): a bar of value x 12 / 63 in a field of
+ * 48, the rest black */
+static void gauge(ep_game *g, int16_t x, int16_t y, uint8_t colour, uint8_t value, int scale, int16_t h)
+{
+    int16_t w = scale ? (int16_t)(value * 12 / 0x3f) : value;
+    if (w) ep_render_rect(&g->render, colour, x, y, w, h);
+    if (w != 0x30) ep_render_rect(&g->render, 0, (int16_t)(x + w), y, (int16_t)(0x30 - w), h);
+}
+
+/* 561d: the roll or pitch marker, two wide, in a field of 48 */
+static void marker(ep_game *g, int16_t x, int16_t y, uint8_t v)
+{
+    int8_t a = (int8_t)v;
+    if (a < -0x17) a = -0x17;
+    if (a > 0x17) a = 0x17;
+    int16_t pos = (int16_t)(a + 0x17);
+    if (pos) ep_render_rect(&g->render, 0, x, y, pos, 4);
+    ep_render_rect(&g->render, 0x0f, (int16_t)(x + pos), y, 2, 4);
+    if (pos != 0x2e) ep_render_rect(&g->render, 0, (int16_t)(x + pos + 2), y, (int16_t)(0x2e - pos), 4);
+}
+
+/* 56b3: the missiles (54h none, 55h one, 56h armed), the armed one blinking */
+static void missiles(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t n = g->cmdr.b[EP_CMDR_EQUIPMENT];
+    if (*drawn(g, 0x54cc) != n) {
+        *drawn(g, 0x54cc) = n;
+        uint8_t left = n;
+        for (int16_t x = 0x11b; x <= 0x133; x += 8, left--)
+            ep_render_sprite(&g->render, (int8_t)left > 0 ? 0x55 : 0x54, x, 0xb3);
+    }
+    int16_t x = (int16_t)(((uint8_t)(n - 1)) * 8 + 0x11b); /* no missile left: far off to the right */
+    if (*drawn(g, 0x54cd) != f->target_note) {
+        *drawn(g, 0x54cd) = f->target_note;
+        f->missile_blink = 0;
+        if ((int8_t)(n - 1) >= 0) {
+            ep_render_sprite(&g->render, f->target_note ? 0x56 : 0x55, x, 0xb3);
+            return;
+        }
+    }
+    if (f->target_note != 1) return; /* 5716 */
+    uint8_t b = ++f->missile_blink;
+    if (b == 4) {
+        ep_render_sprite(&g->render, 0x54, x, 0xb3);
+    } else if (b == 8) {
+        f->missile_blink = 0;
+        ep_render_sprite(&g->render, 0x56, x, 0xb3);
+    }
+}
+
+/* 5751: the four energy banks, full ones first */
+static void energy_banks(ep_game *g)
+{
+    uint16_t e = g->f.energy;
+    uint8_t hi = (uint8_t)(e >> 8), lo = (uint8_t)e;
+    uint16_t at = 0x54d5;
+    int left = 4;
+    while (left && hi) {
+        *drawn(g, at--) = 0xff;
+        hi--;
+        left--;
+    }
+    if (left && !hi) {
+        *drawn(g, at--) = lo;
+        while (--left) *drawn(g, at--) = 0;
+    }
+    for (int k = 0; k < 4; k++) {
+        uint8_t *was = drawn(g, (uint16_t)(0x54d1 - k)), want = *drawn(g, (uint16_t)(0x54d5 - k));
+        if (want == *was) continue;
+        *was = want;
+        gauge(g, 0xe4, (int16_t)(0xc4 - 5 * k), 0x0a, want, 1, 2);
+    }
+}
+
 void ep_dashboard_tick(ep_game *g)
 {
     ep_flight *f = &g->f;
@@ -598,6 +676,12 @@ void ep_dashboard_tick(ep_game *g)
         }
     }
     f->status = st;
+    /* 582a: its light (none: blinking with the clock) */
+    uint8_t light = st ? st : (uint8_t)(((uint8_t)g->clock >> 3) & 2);
+    if (*drawn(g, 0x54e0) != light) {
+        *drawn(g, 0x54e0) = light;
+        ep_render_sprite(&g->render, (uint8_t)(5 + light), 0x9c, 0x96);
+    }
     /* 579d: cooling, recharging, losing equipment on low energy */
     if (!f->scoop_lock && !f->no_crash) {
         f->laser_temp = f->laser_temp >= 2 ? (uint8_t)(f->laser_temp - 2) : 0;
@@ -620,7 +704,48 @@ void ep_dashboard_tick(ep_game *g)
         }
     }
     station_zone(g);
-    if (f->ecm_shown == 1) f->ecm_shown = 0;
+    uint8_t s = (f->safe_zone & 1) ? 9 : 0x0b; /* 6a3f: the safe zone's light */
+    if (*drawn(g, 0x54dc) != s) {
+        *drawn(g, 0x54dc) = s;
+        ep_render_sprite(&g->render, s, 0x12d, 0xbf);
+    }
+    s = 0x0b; /* the ECM's, once */
+    if (f->ecm_shown == 1) {
+        f->ecm_shown = 0;
+        s = 0x0a;
+    }
+    if (*drawn(g, 0x54db) != s) {
+        *drawn(g, 0x54db) = s;
+        ep_render_sprite(&g->render, s, 0x125, 0xbf);
+    }
+    energy_banks(g);
+    missiles(g);
+    uint8_t pitch = (uint8_t)(f->steer >> 8), roll = (uint8_t)f->steer;
+    if (*drawn(g, 0x54d7) != pitch) {
+        *drawn(g, 0x54d7) = pitch;
+        marker(g, 0xe4, 0xad, pitch);
+    }
+    if (*drawn(g, 0x54d6) != roll) {
+        *drawn(g, 0x54d6) = roll;
+        marker(g, 0xe4, 0xa6, roll);
+    }
+    static const struct {
+        uint16_t was;
+        int16_t y;
+        uint8_t colour;
+    } bars[] = { { 0x54dd, 0xbb, 0x0c }, { 0x54d8, 0xc2, 0x0f }, { 0x54d9, 0xb4, 0x0e },
+                 { 0x54da, 0xad, 0x0a }, { 0x54de, 0x9f, 0x0d }, { 0x54df, 0xa6, 0x0d } };
+    const uint8_t value[6] = { f->laser_temp,           f->altitude,    f->sun_size,
+                               g->cmdr.b[EP_CMDR_FUEL], f->fore_shield, f->aft_shield };
+    for (int k = 0; k < 6; k++) {
+        if (*drawn(g, bars[k].was) == value[k]) continue;
+        *drawn(g, bars[k].was) = value[k];
+        gauge(g, 0x2c, bars[k].y, bars[k].colour, value[k], 1, 3);
+    }
+    uint8_t speed = (uint8_t)f->speed; /* 5685 */
+    if (*drawn(g, 0x54e1) == speed) return;
+    *drawn(g, 0x54e1) = speed;
+    gauge(g, 0xe4, 0x9f, 0x0c, speed, 0, 3);
 }
 
 static uint16_t main_hi(ep_game *g) { return (uint16_t)(ep_rng_step(&g->rng) >> 16); }
