@@ -21,7 +21,7 @@ void ep_event_add(ep_game *g, uint8_t kind, uint16_t arg)
     }
 }
 
-/* 6cfa: flying into the planet or the sun */
+/* 6cfa: flying into the sun or the planet */
 static void crash(ep_game *g)
 {
     if (g->f.no_crash) return;
@@ -57,7 +57,7 @@ static int project(int16_t v, uint16_t z, int16_t *out)
     return 1;
 }
 
-/* 4612: the disc of a planet or the sun, radius `size`, colour from the slot (+0b) */
+/* 4612: the disc of the sun or a planet, radius `size`, colour from the slot (+0b) */
 static void draw_disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t mask)
 {
     int16_t y, x;
@@ -74,25 +74,26 @@ static void draw_disc(ep_game *g, const ep_object *o, uint16_t size, uint16_t ma
     ep_draw_circle(&g->rng, x, y, (int16_t)size, mask, 0, g->f.video == 2, &g->circles);
 }
 
-/* 44c7: planet (type 30) or sun (type 31) */
+/* 44c7: sun (type 30) or planet (type 31) */
 static void draw_planet_or_sun(ep_game *g, ep_object *o)
 {
     ep_flight *f = &g->f;
     if (f->hyperspace) return;
     uint16_t size;
-    if ((o->b[EP_OBJ_FLAGS] & 0x3e) == 0x3e) { /* 45e1: the sun */
+    if ((o->b[EP_OBJ_FLAGS] & 0x3e) == 0x3e) { /* 45e1: the planet */
         size = ep_apparent_size(o, 50);
         uint8_t h = (uint8_t)~size;
         if (h >= 0x80) h = 0x7f;
-        f->sun_heat = (uint8_t)(h << 1);
+        f->altitude = (uint8_t)(h << 1);
         if (o->b[EP_OBJ_CAM + 5] & 0x80) return;
         if (size >= 0xfd) crash(g);
         draw_disc(g, o, size, 0);
         return;
     }
-    if (f->approach && --f->approach == 0) { /* falling towards the planet */
+    /* the sun */
+    if (f->approach && --f->approach == 0) { /* falling into it */
         f->approach = 1;
-        if (!f->approach_size) f->approach_size = f->planet_size;
+        if (!f->approach_size) f->approach_size = f->sun_size;
         unsigned grow = (unsigned)(f->approach_size >> 2);
         if (!grow) grow = 1;
         unsigned next = f->approach_size + grow;
@@ -105,8 +106,8 @@ static void draw_planet_or_sun(ep_game *g, ep_object *o)
     } else {
         size = ep_apparent_size(o, 100);
     }
-    f->planet_size = (uint8_t)size;
-    if (f->surface) { /* 4527: random surface sounds */
+    f->sun_size = (uint8_t)size;
+    if (f->surface) { /* 4527: solar activity, random sounds */
         uint32_t old = ep_rng_step(&g->rng);
         if ((old >> 16) <= 0x1388) ep_event_add(g, EP_EV_SURFACE_SOUND, size);
     }

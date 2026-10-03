@@ -44,8 +44,8 @@ static const field fields[] = {
     F(0x83a4, f.hyperspace, 0),
     F(0x83ae, f.approach, 0),
     F(0x83ad, f.approach_size, 0),
-    F(0x54c1, f.planet_size, 0),
-    F(0x54c3, f.sun_heat, 0),
+    F(0x54c1, f.sun_size, 0),
+    F(0x54c3, f.altitude, 0),
     F(0x0aa4, f.surface, 0),
     F(0x0aa6, f.surface_count, 0),
     F(0x83b5, f.atmosphere, 0),
@@ -55,7 +55,54 @@ static const field fields[] = {
     F(0xae23, f.no_crash, 0),
     F(0xb126, f.scoop_lock, 0),
     F(0x10bc, f.video, 0),
+    F(0x8056, f.message_shown, 0),
+    F(0x83a5, f.leak_countdown, 0),
+    F(0x83a6, f.leak, 0),
+    F(0x54c8, f.energy, 0),
+    F(0xb139, f.energy_drain, 0),
+    F(0x54c2, f.laser_temp, 0),
+    F(0xb3d3, f.laser_hold, 0),
+    F(0xb125, f.pulse_phase, 0),
+    F(0xb0e3, f.laser_fired, 0),
+    F(0xb0e4, f.firing, 0),
+    F(0x81f4, f.warn_time, 0),
+    F(0x81f5, f.warn_index, 0),
+    F(0x81f2, f.warn_message, 0),
+    F(0x8892, f.missile_alert, 0),
+    F(0xaf56, f.speed, 0),
+    F(0xaf58, f.moved, 0),
+    F(0xaf14, f.autopilot, 0),
+    F(0xaf15, f.autopilot_in, 0),
+    F(0x09d1, f.roll, 0),
+    F(0x09d2, f.pitch, 0),
+    F(0x09d3, f.last_x, 0),
+    F(0x09d4, f.last_y, 0),
+    F(0x09d5, f.accel_x, 0),
+    F(0x09d6, f.accel_y, 0),
+    F(0x09d7, f.steer, 0),
+    F(0xb134, f.opt_reverse_stop, 0),
+    F(0xb135, f.opt_self_centre, 0),
+    F(0xb136, f.opt_invert_pitch, 0),
+    F(0xb137, f.opt_invert_both, 0),
+    F(0xaf4c, f.pitch_angle[0], 0),
+    F(0xaf4e, f.pitch_angle[1], 0),
+    F(0xaf50, f.velocity[0], 0),
+    F(0xaf52, f.velocity[1], 0),
+    F(0xaf54, f.velocity[2], 0),
+    F(0xb0dd, f.jump_speed, 0),
+    F(0x020d, in.key, 1),
+    F(0x8f2c, in.control, 0),
 };
+
+/* key bindings: pointers into the key table in the original, scancodes in the core */
+static const uint16_t bindings[7] = { 0xb251, 0xb253, 0xb255, 0xb257, 0xb259, 0xb25b, 0xb25d };
+
+static uint8_t *binding(ep_game *g, int k)
+{
+    uint8_t *b[7] = { &g->in.faster, &g->in.slower, &g->in.up,  &g->in.down,
+                      &g->in.left,   &g->in.right,  &g->in.fire };
+    return b[k];
+}
 
 void state_load(ep_game *g, const uint8_t ds[DS_SIZE])
 {
@@ -71,10 +118,17 @@ void state_load(ep_game *g, const uint8_t ds[DS_SIZE])
             memcpy(p, &v, f->size); /* little-endian hosts only, as the tests are */
         }
     }
+    for (int k = 0; k < 7; k++)
+        *binding(g, k) = (uint8_t)((ds[bindings[k]] | ds[bindings[k] + 1] << 8) - 0x20d);
 }
 
 void state_store(const ep_game *g, uint8_t ds[DS_SIZE])
 {
+    for (int k = 0; k < 7; k++) {
+        uint16_t p = (uint16_t)(0x20d + *binding((ep_game *)g, k));
+        ds[bindings[k]] = (uint8_t)p;
+        ds[bindings[k] + 1] = (uint8_t)(p >> 8);
+    }
     for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++) {
         const field *f = &fields[i];
         const uint8_t *p = (const uint8_t *)g + f->off;
@@ -93,4 +147,5 @@ void state_mask(uint8_t mask[DS_SIZE])
     memset(mask, 0, DS_SIZE);
     for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++)
         memset(mask + fields[i].ds, 1, fields[i].size);
+    for (int k = 0; k < 7; k++) memset(mask + bindings[k], 1, 2);
 }

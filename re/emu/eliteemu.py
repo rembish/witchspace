@@ -29,6 +29,8 @@ STACK_TOP = 0x4000
 # Return address pushed for every call; CS:fff0 is data (ds:4ff0), never executed.
 SENTINEL = 0xFFF0
 
+_DIVS = None  # div/idiv sites of segment 0000, found once per process
+
 REGS = {"ax": UC_X86_REG_AX, "bx": UC_X86_REG_BX, "cx": UC_X86_REG_CX, "dx": UC_X86_REG_DX,
         "si": UC_X86_REG_SI, "di": UC_X86_REG_DI, "bp": UC_X86_REG_BP, "flags": UC_X86_REG_FLAGS}
 
@@ -61,11 +63,17 @@ class Elite:
         ds:01f8 before the division, registers and stack unchanged. Unicorn's exception
         delivery does not cope with that, so every div/idiv of segment 0000 is checked before
         it runs and skipped to that address when it would fault."""
-        from capstone import CS_ARCH_X86, CS_MODE_16, Cs
+        global _DIVS
+        if _DIVS is None:
+            _DIVS = self._find_divisions(img)
+        self._divs = _DIVS
+        for off in _DIVS:
+            self.mu.hook_add(UC_HOOK_CODE, self._div, begin=CS * 16 + off, end=CS * 16 + off)
+
+    @staticmethod
+    def _find_divisions(img):
         from capstone.x86 import X86_OP_MEM, X86_OP_REG
-        md = Cs(CS_ARCH_X86, CS_MODE_16)
-        md.detail = True
-        self._divs = {}
+        divs = {}
         sys.path.insert(0, os.path.join(HERE, "..", "tools"))
         import explore
         ex = explore.Explorer(img)
@@ -88,8 +96,8 @@ class Elite:
                     src = ("mem", i.reg_name(m.base) if m.base else None,
                            i.reg_name(m.index) if m.index else None, m.disp,
                            i.reg_name(m.segment) if m.segment else None, op.size)
-                self._divs[off] = (i.mnemonic == "idiv", src)
-                self.mu.hook_add(UC_HOOK_CODE, self._div, begin=CS * 16 + off, end=CS * 16 + off)
+                divs[off] = (i.mnemonic == "idiv", src)
+        return divs
 
     def _reg(self, name):
         mu = self.mu

@@ -364,3 +364,41 @@ the mode 13h screen with the DAC.
 - Explosion end (`7e82`): active bit cleared. Sounds go through `4c98` (id in al); the core
   logs them as events. The compass (`487e`) only draws.
 - Checked: `re/emu/subtest.py update_objects` on flight states from `corpus.py`.
+
+## Flight loop subsystems
+
+Flight loop (`a027`, top `a040`): `0299` key map, `3921` flash, `a3f4`, `3130` clear view,
+`549f`, `4fa3`, `update_objects`, `ae50`, `ac52`, `fuel_leak` (`75d5`), `message`
+(`702a`), `4f34` crosshair, `77e0`, `controls` (`a63d`), `66d6`, `1221`, frame wait, then
+`a183` laser, `03c0` commands, `a5ee`, `a0ed`, `tunnel` (`a0cc`), `energy_drain` (`a52f`);
+`ds:76bd` (dead) ends the loop.
+
+- Messages (`702a`): `ds:8058` text, `805a` countdown, `805b` shown flag (high byte of the
+  same word), `8056` last drawn; when the countdown is over, the view's name by `ds:b0de`
+  (0 Front, 400h Rear, 200h Left, else Right). Warnings first (`7129`, not while
+  `ds:b126`): while `81f4` counts, it re-posts `81f2`; else the four checks in turn from
+  `81f5 + 1`: INCOMING MISSILE (`8892` = 1, cleared), ALTITUDE LOW (`54c3` < 32h),
+  TEMPERATURE HIGH (`54c1` ≥ e1h), ENERGY LOW (`54c8` < 100h); 20 frames, sound 0bh except
+  for the missile.
+- Correction: type 30 is the **sun** (`54c1` its size → temperature; scooping, flares
+  `aa4`, falling in `83ae/83ad`), type 31 the **planet** (`54c3` = altitude).
+- Fuel leak (`75d5`): `83a5` counts down, then 51 frames of −5 fuel with FUEL LEAK!.
+- Energy (`54c8`, start 3ffh): −2 a frame while `b139` = 1 (`a52f`); damage `a544`.
+- Laser (`a183`, not while `b126` or the launch tunnel): fire key, a laser in this view
+  (`4f4b`: mount bit `(b0de >> 9) & 3` → shift {1,4,2,3} into `8365`, type = 2 bits of
+  `8366`), temperature `54c2` < f0h, `b3d3` clear: temperature +5; pulse lasers (type 0)
+  fire every other frame (`b125`); fired type → `b0e3`, `b0e4` = 1.
+- Launch tunnel (`a0cc`): `ae23` counts down (no crashing meanwhile); at 0 back to the
+  docked screens (`a012`), `83b5` set to 1 if nonzero.
+- Controls (`a63d`): speed `af56` ±4 by the faster/slower keys (4..48), `af58` = changed;
+  steering (`0f27` keyboard: `10ea` arrows build up to ±23 while held (`09d3–09d6`); per
+  axis accumulators `09d1/09d2` clamp ±23, options `b135` self-centre by 3 a frame, `b134`
+  reversing stops; `af49` invert options `b136/b137`). Roll: `76dc += 2·clamp(−roll)`.
+  Pitch: slots 3 = −2·pitch, 2..0 = −angles; rotate (0,0,10000) back (`6dd9`), angles from
+  `atan2` (`6e1c`: octant by signs, ratio `a·32768/b` searched in the tangent table
+  `ds:7410`, 45° on overflow) into `af4c/af4e`, and from (0,−10000,0) the new third angle.
+  Then (unless the docking computer `af14` flies) velocity `af50–af54` = (0, speed[·32 if
+  `b0dd`]) rotated by slots 3 (`76da + 400h`) and 4 (`−(76d8 + 400h)`), and every slot's
+  position −= velocity (`a7b1`).
+- Checked: `re/emu/subtest.py NAME --fuzz N` for update_objects, message, fuel_leak,
+  energy_drain, laser, tunnel, controls (corpus states plus fuzzed fields).

@@ -4,6 +4,7 @@
  *                              primitives drawn go to stdout, one per line */
 #include "statemap.h"
 
+#include "ep_flight.h"
 #include "ep_world.h"
 
 #include <stdio.h>
@@ -41,11 +42,24 @@ int main(int argc, char **argv)
             print_prims(&g.render);
             for (int k = 0; k < g.circles.n; k++)
                 printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
-            for (int k = 0; k < g.nevents; k++) printf("event %d:%d\n", g.event[k].kind, g.event[k].arg);
+
+        } else if (!strcmp(argv[1], "message")) {
+            ep_message_tick(&g);
+        } else if (!strcmp(argv[1], "fuel_leak")) {
+            ep_fuel_leak(&g);
+        } else if (!strcmp(argv[1], "energy_drain")) {
+            ep_energy_drain(&g);
+        } else if (!strcmp(argv[1], "laser")) {
+            ep_laser_fire(&g);
+        } else if (!strcmp(argv[1], "controls")) {
+            ep_controls(&g);
+        } else if (!strcmp(argv[1], "tunnel")) {
+            printf("end %d\n", ep_tunnel_tick(&g));
         } else {
             fprintf(stderr, "unknown subsystem %s\n", argv[1]);
             return 2;
         }
+        for (int k = 0; k < g.nevents; k++) printf("event %d:%d\n", g.event[k].kind, g.event[k].arg);
         state_store(&g, ds);
     } else {
         fprintf(stderr, "usage: subsys mask OUT | subsys NAME IN OUT\n");

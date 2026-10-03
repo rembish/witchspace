@@ -122,6 +122,50 @@ void ep_object_rotate(ep_space *s, ep_object *o, int16_t p[3])
     }
 }
 
+/* 6e6c: angle of a ratio a/b <= 1 (a, b unsigned) by binary search in the tangent table;
+ * 100h (45 degrees) when the ratio rounds to 1 or the division fails */
+static uint16_t atan_ratio(uint16_t a, uint16_t b)
+{
+    uint32_t num = (uint32_t)a << 15;
+    if (!b || num / b > 0xffff || num / b >= 0x7fff) return 0x100;
+    uint16_t ratio = (uint16_t)(num / b);
+    uint16_t lo = 0, hi = 0x1fe, mid = 0;
+    for (int n = 9; n > 0; n--) {
+        mid = (uint16_t)(((uint16_t)(lo + hi) >> 1) & 0xfffe);
+        uint16_t t = ep_tan256[mid >> 1];
+        if (t == ratio) break;
+        if (t < ratio)
+            lo = mid;
+        else
+            hi = mid;
+    }
+    return (uint16_t)(mid >> 1);
+}
+
+/* 6e5c */
+static uint16_t atan_octant(uint16_t a, uint16_t b)
+{
+    if (b >= a) return (uint16_t)(0x200 - atan_ratio(a, b));
+    return atan_ratio(b, a);
+}
+
+uint16_t ep_atan2(int16_t x, int16_t y)
+{
+    uint16_t ax = (uint16_t)x, bx = (uint16_t)y, r;
+    if (y >= 0) {
+        if (x >= 0) {
+            r = (uint16_t)(0x200 - atan_octant(ax, bx));
+        } else {
+            r = (uint16_t)(atan_octant((uint16_t)(0u - ax), bx) - 0x200);
+        }
+    } else if (x >= 0) {
+        r = (uint16_t)(atan_octant(ax, (uint16_t)(0u - bx)) + 0x200);
+    } else {
+        r = (uint16_t)(-0x200 - atan_octant((uint16_t)(0u - ax), (uint16_t)(0u - bx)));
+    }
+    return r & 0x7ff;
+}
+
 /* |coordinate k| as 24 bits */
 static uint32_t abs24(const ep_object *o, int k)
 {

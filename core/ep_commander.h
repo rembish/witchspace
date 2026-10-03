@@ -26,6 +26,8 @@ enum {
     EP_CMDR_SELECTED = 0x5d,     /* ds:8338: selected system record (25 bytes) */
     EP_CMDR_FUEL = 0x7b,         /* ds:8356 */
     EP_CMDR_EQUIPMENT = 0x7c,    /* ds:8357..: counts per equipment record 1..13 */
+    EP_CMDR_LASERS = 0x8a,       /* ds:8365: laser mounts fitted, a bit per view */
+    EP_CMDR_LASER_TYPES = 0x8b,  /* ds:8366: two bits of laser type per view */
     EP_CMDR_CASH = 0x8c,         /* ds:8367: 32 bits, tenths of a credit */
     EP_CMDR_LEGAL = 0x90,        /* ds:836b */
     EP_CMDR_NAME = 0x95,         /* ds:8370 */
