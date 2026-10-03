@@ -8,6 +8,7 @@
 #include "ep_dust.h"
 #include "ep_travel.h"
 #include "ep_chart.h"
+#include "ep_frame.h"
 #include "ep_flight.h"
 #include "ep_ships.h"
 #include "ep_trade.h"
@@ -76,6 +77,13 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "dust")) {
             ep_dust_frame(&g);
             print_prims(&g.render);
+        } else if (!strcmp(argv[1], "frame")) {
+            ep_frame_before_ai(&g);
+            g.f.reg_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
+            ep_frame_from_ai(&g);
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "arrive")) {
             ep_arrive(&g);
         } else if (!strcmp(argv[1], "jump_missions")) {

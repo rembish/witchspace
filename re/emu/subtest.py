@@ -17,7 +17,7 @@ import sys
 import tempfile
 
 from corpus import load
-from eliteemu import CS, DS, Elite
+from eliteemu import CS, DS, REGS, Elite
 from unicorn import UC_HOOK_CODE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -74,6 +74,7 @@ ROUTINES = {
     "flight_start": (0x64D0, {}, {}),
     "select_system": (0x5EE8, {}, {}),
     "arrive": (0x72D8, {}, {}),
+    "frame": (0xA040, {}, {0xA073: "end"}),
     "jump_missions": (0x753C, {}, {}),
     "witchspace": (0x7500, {}, {}),
     "rings": (0x7499, {}, {}),
@@ -493,6 +494,9 @@ FUZZ = {
     "tribbles": [(0, tribble_world)],
     "flight_start": [(0, arrival_world)],
     "arrive": [(0, arrival_world), (0, jump_world)],
+    "frame": [(0, ai_handlers), (0, dust_world), (0, ship_in_sights), (0, tribble_world), (0, dashboard_world),
+              (0x54CA, [0, 0, 1, 2]), (0x020D + 0x39, [0, 0, 0x80]), (0x8365, [0, 1, 0xF]), (0x020D + 0x48, [0, 0x80]),
+              (0x020D + 0x50, [0, 0x80])],
     "jump_missions": [(0, jump_world)],
     "witchspace": [(0, jump_world), (0x8316, 1), (0x8317, 1)],
     "rings": [(0, jump_world)],
@@ -549,6 +553,9 @@ def s16(v):
     return v - 65536 if v >= 32768 else v
 
 
+FRAME_DL = [0]
+
+
 def run_original(image, addr, regs, exits=None):
     e = Elite()
     exits = exits or {}
@@ -585,6 +592,11 @@ def run_original(image, addr, regs, exits=None):
     if NAME == "arrive":  # the frame wait, view clearing and crosshair are the frontend's
         for stub in (0x301A, 0x3130, 0x4F34):
             e.hook(stub, lambda e, r: None)
+    if NAME == "frame":
+        for stub in (0x301A, 0x3130):
+            e.hook(stub, lambda e, r: None)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
+                      begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
     if NAME in ("buy", "sell"):
         e.call(0x97D8)
     elif NAME == "equip":
@@ -628,10 +640,17 @@ def main():
             image = fuzz(image, rng)
         before = image[DS * 16:DS * 16 + 0x10000]
         want, want_prims = run_original(image, addr, regs, exits)
+        if NAME == "frame":  # the C side gets the original's DL at the AI
+            before = before[:0xFF00] + bytes([FRAME_DL[0]]) + before[0xFF01:]
+            want = want[:0xFF00] + bytes([FRAME_DL[0]]) + want[0xFF01:]
+            want_prims = [l for l in want_prims if l != "end"]
         inf, outf = os.path.join(tmp, "in"), os.path.join(tmp, "out")
         open(inf, "wb").write(before)
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
         got, got_prims = open(outf, "rb").read(), out.splitlines()
+        if NAME == "frame":  # drawing is checked per subsystem; here the state and the events
+            want_prims = [l for l in want_prims if l.startswith("event")]
+            got_prims = [l for l in got_prims if l.startswith("event")]
         diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]]
         for i in range(0x10000):
             if not mask[i] and want[i] != before[i] and not any(a <= i <= b for a, b in SCRATCH):
