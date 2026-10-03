@@ -92,6 +92,13 @@ int ep_view_laser(const ep_game *g)
     return (ep_commander_b(&g->cmdr, EP_CMDR_LASER_TYPES) >> ((cl - 1) * 2)) & 3;
 }
 
+/* the byte a binding points at (ds:020d + binding: the key table; none points at ds:ffff) */
+static uint8_t bound_key(const ep_game *g, uint16_t binding)
+{
+    uint16_t a = (uint16_t)(0x20d + binding);
+    return a >= 0x20d && a < 0x28d ? g->in.key[a - 0x20d] : ep_ds_byte(g, a);
+}
+
 /* 0edf: the fire control (keyboard only so far) */
 static int fire_pressed(ep_game *g)
 {
@@ -99,7 +106,7 @@ static int fire_pressed(ep_game *g)
         ep_event_add(g, EP_EV_UNPORTED, 0x0ef0); /* joystick, mouse */
         return 0;
     }
-    return !(g->in.key[g->in.fire & 0x7f] & 0x80);
+    return !(bound_key(g, g->in.fire) & 0x80);
 }
 
 void ep_laser_fire(ep_game *g)
@@ -126,7 +133,7 @@ int ep_tunnel_tick(ep_game *g)
     return 1;
 }
 
-static int key_down(const ep_game *g, uint8_t scancode) { return g->in.key[scancode & 0x7f] == 0; }
+static int key_down(const ep_game *g, uint16_t binding) { return bound_key(g, binding) == 0; }
 
 /* 10ea: arrow keys; a key held from the last frame builds up to +-23 */
 static void arrows(ep_game *g, int8_t *x, int8_t *y)

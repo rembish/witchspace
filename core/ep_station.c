@@ -238,7 +238,11 @@ enum {
     ST_LOAD_GONE,  /* 0a29: it could not be opened (space) */
     ST_LOAD_BAD,   /* 0a0f: a bad file (space), then the title */
     ST_LOAD_GOOD,  /* 0a35: loaded (space), then the station */
-    ST_PROTECTION  /* 1472: the word from the novella */
+    ST_PROTECTION, /* 1472: the word from the novella */
+    ST_DEFINE_ASK, /* 0694: redefine? (Y/N) */
+    ST_DEFINE_KEY, /* 05e5, 05f9: a key to define */
+    ST_JOY_CENTRE, /* 0745: space, the joystick centred */
+    ST_JOY_ERROR   /* 075e: space after the error */
 };
 
 static int wait(ep_game *g, uint8_t step, int kind)
@@ -449,6 +453,7 @@ int ep_status_screen(ep_game *g)
 
 static int find_key(ep_game *g, uint8_t key);
 static int protection_key(ep_game *g, uint8_t key);
+static int controls_key(ep_game *g, uint8_t key);
 static int save_key(ep_game *g, uint8_t key);
 static int load_key(ep_game *g, uint8_t key);
 static int mount_key(ep_game *g, uint8_t key);
@@ -523,6 +528,10 @@ int ep_station_key(ep_game *g, uint8_t key)
     case ST_FIND_TEXT: return find_key(g, key);
     case EP_STEP_TITLE: return ep_title_key(g, key);
     case ST_PROTECTION: return protection_key(g, key);
+    case ST_DEFINE_ASK:
+    case ST_DEFINE_KEY:
+    case ST_JOY_CENTRE:
+    case ST_JOY_ERROR: return controls_key(g, key);
     case ST_SAVE_NAME:
     case ST_SAVE_ASK:
     case ST_SAVE_DONE: return save_key(g, key);
@@ -2066,6 +2075,131 @@ static int protection_key(ep_game *g, uint8_t key)
     uint16_t h = r < 0 ? 0 : ep_protection_hash(entry_b(g, 0x9a4));
     g->f.protection_failed = h != g->f.prot_hash;
     g->f.station_step = ST_NONE;
+    return EP_WAIT_NONE;
+}
+
+/* ---- the controls: keys, joystick, mouse (0674, 0736, 0779) ---- */
+
+#define KEY_NONE ((uint16_t)(0xffff - 0x20d)) /* a binding to nothing (ds:ffff) */
+
+static uint16_t *binding(ep_game *g, uint16_t addr)
+{
+    uint16_t *b[7] = { &g->in.faster, &g->in.slower, &g->in.up,  &g->in.down,
+                       &g->in.left,   &g->in.right,  &g->in.fire };
+    return b[(addr - 0xb251) / 2];
+}
+
+/* the prompts and what they bind: all seven (0674), the speed's two (0709) */
+static const struct {
+    uint16_t text, bind;
+} define_all[7] = { { 0x06b5, 0xb255 }, { 0x06e6, 0xb257 }, { 0x06fd, 0xb259 }, { 0x0721, 0xb25b },
+                    { 0x0741, 0xb25d }, { 0x075d, 0xb251 }, { 0x077d, 0xb253 } },
+  define_two[2] = { { 0x079d, 0xb251 }, { 0x077d, 0xb253 } };
+
+/* 05db: the prompt; the keys must all be up before one is taken */
+static int define_prompt(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    text_header(g, f->define_set == 1 ? define_all[f->define_k].text : define_two[f->define_k].text);
+    f->define_armed = 0;
+    return wait(g, ST_DEFINE_KEY, EP_WAIT_SCAN);
+}
+
+/* 06ac, 0709: no key bound, then each in turn */
+static int define_start(ep_game *g, uint8_t set)
+{
+    for (uint16_t a = 0xb251; a <= 0xb25d; a = (uint16_t)(a + 2)) *binding(g, a) = KEY_NONE;
+    g->f.define_set = set;
+    g->f.define_k = 0;
+    return define_prompt(g);
+}
+
+int ep_define_keys(ep_game *g)
+{
+    ep_box_open(g, 0x0411);
+    g->in.control = 0;
+    g->f.screen_shown = 0xff;
+    if (g->in.up != KEY_NONE) { /* 068b: they are defined already */
+        text_header(g, 0x0692);
+        return wait(g, ST_DEFINE_ASK, EP_WAIT_YN);
+    }
+    return define_start(g, 1);
+}
+
+int ep_joystick(ep_game *g)
+{
+    ep_box_open(g, 0x0422);
+    text_header(g, 0x07b2);
+    return wait(g, ST_JOY_CENTRE, EP_WAIT_KEY);
+}
+
+int ep_mouse(ep_game *g)
+{
+    ep_box_open(g, 0x0437);
+    if (!g->in.mouse_present) { /* 079f: the error, and the box at once put back */
+        text_header(g, 0x08cd);
+        g->in.last_key = 0xff;
+        g->f.station_step = ST_NONE;
+        ep_box_close(g);
+        return EP_WAIT_NONE;
+    }
+    g->in.control = 2;
+    g->f.screen_shown = 0xff;
+    text_header(g, 0x088b);
+    return define_start(g, 2);
+}
+
+static int controls_key(ep_game *g, uint8_t key)
+{
+    ep_flight *f = &g->f;
+    ep_input *in = &g->in;
+    switch (f->station_step) {
+    case ST_DEFINE_ASK: {
+        int yes = key == 'Y' || key == 'y', no = key == 'N' || key == 'n';
+        if (!yes && !no) return EP_WAIT_YN;
+        if (yes) return define_start(g, 1);
+        f->station_step = ST_NONE;
+        ep_box_close(g);
+        return EP_WAIT_NONE;
+    }
+    case ST_JOY_CENTRE:
+        if (key != ' ') return EP_WAIT_KEY;
+        in->joy_centre_x = in->joy_present ? in->joy_x : 0; /* 0ffb */
+        in->joy_centre_y = in->joy_present ? in->joy_y : 0;
+        if (!in->joy_present) {
+            text_header(g, 0x07f2);
+            return wait(g, ST_JOY_ERROR, EP_WAIT_KEY);
+        }
+        in->control = 1;
+        f->screen_shown = 0xff;
+        text_header(g, 0x0866);
+        return define_start(g, 2);
+    case ST_JOY_ERROR:
+        if (key != ' ') return EP_WAIT_KEY;
+        f->station_step = ST_NONE;
+        ep_box_close(g);
+        return EP_WAIT_NONE;
+    default: break;
+    }
+    /* ST_DEFINE_KEY */
+    if (!f->define_armed) { /* 05e5: until no key is down */
+        for (int k = 0; k < 0x80; k++)
+            if (!in->key[k]) return EP_WAIT_SCAN;
+        in->last_scan = 0xffff;
+        f->define_armed = 1;
+        return EP_WAIT_SCAN;
+    }
+    uint16_t p = in->last_scan; /* 05f9: a key pressed, one not bound yet */
+    if (p == 0xffff) return EP_WAIT_SCAN;
+    for (uint16_t a = 0xb251; a <= 0xb25d; a = (uint16_t)(a + 2))
+        if ((uint16_t)(0x20d + *binding(g, a)) == p) return EP_WAIT_SCAN;
+    *binding(g, f->define_set == 1 ? define_all[f->define_k].bind : define_two[f->define_k].bind) =
+        (uint16_t)(p - 0x20d);
+    if (++f->define_k < (f->define_set == 1 ? 7 : 2)) return define_prompt(g);
+    in->last_key = 0xff; /* 0287 */
+    f->station_step = ST_NONE;
+    f->define_set = 0;
+    ep_box_close(g);
     return EP_WAIT_NONE;
 }
 

@@ -183,68 +183,76 @@ typedef struct {
     uint8_t resume;             /* what the pause interrupted (EP_RESUME_*) */
     uint8_t
         leave; /* 1 back to the title (abandon), 2 to DOS (exit), 3 a commander loaded: the station (9e80, a012) */
-    uint8_t bar_quiet;          /* ds:b3d4: the bar's marks are not drawn */
-    uint8_t menu_kept[0x11];    /* ds:0991: the list as it was while files are listed */
-    uint8_t files[0x16d];       /* ds:0088: the commander files' names */
-    uint8_t file_count;         /* ds:01f5 */
-    uint8_t file_top;           /* ds:01f6: the first one shown */
-    uint8_t title_ship;         /* ds:b1bb: the type on the title */
-    uint16_t title_hold;        /* ds:b25f: frames at the closest point */
-    uint16_t title_list;        /* ds:b261: where in the title list (ds:b263, ffh at the end) */
-    uint8_t title_step;         /* the title coming up: 1 the intro picture, 2 the credits */
-    uint32_t intro_until;       /* 3ae5: the intro picture's time (in registers) */
-    uint8_t protection_failed;  /* the copy protection was asked and answered wrong (off: never) */
-    uint8_t prot_page[2];       /* ds:0a83: the protection's page (a number, then two digits) */
-    uint8_t prot_paragraph;     /* ds:0a91 */
-    uint8_t prot_line;          /* ds:0a99 */
-    uint8_t prot_word;          /* ds:0aa1 */
-    uint16_t prot_hash;         /* ds:09d9: the word's, 9 bits */
-    uint8_t scoop_text[13];     /* ds:2c51: the scooped canister's goods, as a message */
-    uint16_t snd_noise;         /* ds:45dc: the speaker's noise generator */
-    uint16_t snd_ticks;         /* ds:45de: timer ticks, paused or not */
-    uint16_t snd_seq;           /* ds:45eb: the speaker's sequence, where it has got to */
-    uint16_t snd_pattern;       /* ds:45ed: the note's pattern, where it has got to */
-    uint8_t snd_note;           /* ds:45ef: the pitch (an index into ds:4601) */
-    uint8_t snd_length;         /* ds:45f0: ticks left of the note */
-    uint8_t snd_rest;           /* ds:45f1: ticks left of a rest */
-    uint16_t snd_loop_sp;       /* ds:45f2 */
-    uint8_t snd_loops[12];      /* ds:45f4: the pattern's loops (where, how many) */
-    uint8_t snd_wait;           /* ds:4600: ticks the pattern waits */
-    uint8_t snd_marked;         /* ds:4fe0: a sound the laser's must not cut short */
-    uint8_t music_on;           /* ds:4802 */
-    uint8_t surface_note;       /* ds:4f74: sequence 9's pitch (4e1a puts it there) */
-    uint8_t dash[0x16];         /* ds:54cc: the dashboard as drawn (80h: to be drawn) */
-    uint8_t missile_blink;      /* ds:6405: frames of the armed missile's blinking */
-    uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
-    uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
-    uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
-    uint8_t danger_gov;         /* ds:76b6: the government for spawning (0 in witchspace) */
-    uint16_t spawn_gov8;        /* ds:8897: government x 8 */
-    uint16_t spawn_row;         /* ds:888f: danger government x 4 */
-    uint16_t convoy_leader;     /* ds:8893: data address of its slot */
-    uint8_t exploding_station;  /* ds:8896 */
-    uint8_t convoy_left;        /* ds:83a9 */
-    uint8_t convoy_leader_dead; /* ds:83a7 */
-    uint8_t convoy_countdown;   /* ds:83b3 */
-    uint8_t siege;              /* ds:83b1 */
-    uint8_t mission_system;     /* ds:83a3 */
-    uint8_t mission5_phase;     /* ds:83b0 */
-    uint8_t mission5_count;     /* ds:839e */
-    uint8_t mission5_flag;      /* ds:839f */
-    uint8_t aft_shield;         /* ds:54c5 */
-    uint8_t scoop_lock;         /* ds:b126: frames left of the death sequence (nothing works) */
-    uint8_t video;              /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
+    uint8_t bar_quiet;              /* ds:b3d4: the bar's marks are not drawn */
+    uint8_t menu_kept[0x11];        /* ds:0991: the list as it was while files are listed */
+    uint8_t files[0x16d];           /* ds:0088: the commander files' names */
+    uint8_t file_count;             /* ds:01f5 */
+    uint8_t file_top;               /* ds:01f6: the first one shown */
+    uint8_t title_ship;             /* ds:b1bb: the type on the title */
+    uint16_t title_hold;            /* ds:b25f: frames at the closest point */
+    uint16_t title_list;            /* ds:b261: where in the title list (ds:b263, ffh at the end) */
+    uint8_t title_step;             /* the title coming up: 1 the intro picture, 2 the credits */
+    uint32_t intro_until;           /* 3ae5: the intro picture's time (in registers) */
+    uint8_t protection_failed;      /* the copy protection was asked and answered wrong (off: never) */
+    uint8_t prot_page[2];           /* ds:0a83: the protection's page (a number, then two digits) */
+    uint8_t prot_paragraph;         /* ds:0a91 */
+    uint8_t prot_line;              /* ds:0a99 */
+    uint8_t prot_word;              /* ds:0aa1 */
+    uint16_t prot_hash;             /* ds:09d9: the word's, 9 bits */
+    uint8_t scoop_text[13];         /* ds:2c51: the scooped canister's goods, as a message */
+    uint16_t snd_noise;             /* ds:45dc: the speaker's noise generator */
+    uint16_t snd_ticks;             /* ds:45de: timer ticks, paused or not */
+    uint16_t snd_seq;               /* ds:45eb: the speaker's sequence, where it has got to */
+    uint16_t snd_pattern;           /* ds:45ed: the note's pattern, where it has got to */
+    uint8_t snd_note;               /* ds:45ef: the pitch (an index into ds:4601) */
+    uint8_t snd_length;             /* ds:45f0: ticks left of the note */
+    uint8_t snd_rest;               /* ds:45f1: ticks left of a rest */
+    uint16_t snd_loop_sp;           /* ds:45f2 */
+    uint8_t snd_loops[12];          /* ds:45f4: the pattern's loops (where, how many) */
+    uint8_t snd_wait;               /* ds:4600: ticks the pattern waits */
+    uint8_t snd_marked;             /* ds:4fe0: a sound the laser's must not cut short */
+    uint8_t music_on;               /* ds:4802 */
+    uint8_t surface_note;           /* ds:4f74: sequence 9's pitch (4e1a puts it there) */
+    uint8_t dash[0x16];             /* ds:54cc: the dashboard as drawn (80h: to be drawn) */
+    uint8_t missile_blink;          /* ds:6405: frames of the armed missile's blinking */
+    uint8_t define_set;             /* defining keys: 1 all seven (0674), 2 the speed's two (0709) */
+    uint8_t define_k, define_armed; /* which, and the keys released (05db) */
+    uint8_t station_ecm;            /* ds:8891: the station's ECM runs this many frames (0 = watching) */
+    uint8_t reg_dl;                 /* DL as the last routine left it: some AI handlers read it stale */
+    uint8_t ai_hold;                /* ds:b138: ships may not fire this frame */
+    uint8_t danger_gov;             /* ds:76b6: the government for spawning (0 in witchspace) */
+    uint16_t spawn_gov8;            /* ds:8897: government x 8 */
+    uint16_t spawn_row;             /* ds:888f: danger government x 4 */
+    uint16_t convoy_leader;         /* ds:8893: data address of its slot */
+    uint8_t exploding_station;      /* ds:8896 */
+    uint8_t convoy_left;            /* ds:83a9 */
+    uint8_t convoy_leader_dead;     /* ds:83a7 */
+    uint8_t convoy_countdown;       /* ds:83b3 */
+    uint8_t siege;                  /* ds:83b1 */
+    uint8_t mission_system;         /* ds:83a3 */
+    uint8_t mission5_phase;         /* ds:83b0 */
+    uint8_t mission5_count;         /* ds:839e */
+    uint8_t mission5_flag;          /* ds:839f */
+    uint8_t aft_shield;             /* ds:54c5 */
+    uint8_t scoop_lock;             /* ds:b126: frames left of the death sequence (nothing works) */
+    uint8_t video;                  /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
 } ep_flight;
 
 /* Input as the keyboard handler keeps it (ds:020d: per scancode 0 down, 80h up) and the
  * flight key bindings (ds:b251.., pointers into that table in the original; scancodes here) */
 typedef struct {
-    uint8_t key[128];                                    /* ds:020d */
-    uint8_t faster, slower, up, down, left, right, fire; /* ds:b251 .. b25d */
-    uint8_t last_key;                                    /* ds:0d2f: key code of the last press, ff none */
-    uint8_t control;                                     /* ds:8f2c: 0 keyboard, 1 joystick, 2 mouse */
-    uint16_t last_scan;                                  /* ds:0d2d: ds:020d + the last key pressed */
-    uint8_t e0, num_lock;                                /* ds:0d30, 0d31: toggled by E0h, 45h */
+    uint8_t key[128]; /* ds:020d */
+    uint16_t faster, slower, up, down, left, right,
+        fire;                            /* ds:b251 .. b25d: key table offsets (none: ffffh - 20dh) */
+    uint8_t last_key;                    /* ds:0d2f: key code of the last press, ff none */
+    uint8_t control;                     /* ds:8f2c: 0 keyboard, 1 joystick, 2 mouse */
+    uint16_t last_scan;                  /* ds:0d2d: ds:020d + the last key pressed */
+    uint8_t e0, num_lock;                /* ds:0d30, 0d31: toggled by E0h, 45h */
+    uint16_t joy_centre_x, joy_centre_y; /* ds:09cd, 09cf: the joystick as centred */
+    /* the devices as the frontend has them (the original reads the hardware) */
+    uint8_t joy_present;   /* a joystick at port 201h */
+    uint16_t joy_x, joy_y; /* its position as 0ffb counts it (the centre about 1000) */
+    uint8_t mouse_present; /* a mouse driver (int 33h) */
 } ep_input;
 
 /* Commander files, the frontend's (DOS 8.3 names in capitals: "JAMESON.CDR") */

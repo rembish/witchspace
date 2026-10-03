@@ -216,6 +216,8 @@ static const field fields[] = {
     F(0x0d2d, in.last_scan, 0),
     F(0x0d30, in.e0, 0),
     F(0x0d31, in.num_lock, 0),
+    F(0x09cd, in.joy_centre_x, 0),
+    F(0x09cf, in.joy_centre_y, 0),
     F(0x8081, f.lock_text, 1),
     F(0x4801, f.sound_device, 0),
     F(0x76b6, f.danger_gov, 0),
@@ -261,13 +263,14 @@ void ep_ds_load(ep_game *g, const uint8_t ds[EP_DS_SIZE])
         }
     }
     for (int k = 0; k < 7; k++)
-        *((uint8_t *)g + binding_off[k]) = (uint8_t)((ds[bindings[k]] | ds[bindings[k] + 1] << 8) - 0x20d);
+        *(uint16_t *)((uint8_t *)g + binding_off[k]) =
+            (uint16_t)((ds[bindings[k]] | ds[bindings[k] + 1] << 8) - 0x20d);
 }
 
 void ep_ds_store(const ep_game *g, uint8_t ds[EP_DS_SIZE])
 {
     for (int k = 0; k < 7; k++) {
-        uint16_t p = (uint16_t)(0x20d + *((const uint8_t *)g + binding_off[k]));
+        uint16_t p = (uint16_t)(0x20d + *(const uint16_t *)((const uint8_t *)g + binding_off[k]));
         ds[bindings[k]] = (uint8_t)p;
         ds[bindings[k] + 1] = (uint8_t)(p >> 8);
     }
@@ -306,7 +309,7 @@ uint8_t ep_ds_byte(const ep_game *g, uint16_t addr)
     }
     for (int k = 0; k < 7; k++)
         if (addr == bindings[k] || addr == bindings[k] + 1) {
-            uint16_t v = (uint16_t)(0x20d + *((const uint8_t *)g + binding_off[k]));
+            uint16_t v = (uint16_t)(0x20d + *(const uint16_t *)((const uint8_t *)g + binding_off[k]));
             return addr == bindings[k] ? (uint8_t)v : (uint8_t)(v >> 8);
         }
     return ep_ds_static(addr);

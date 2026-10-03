@@ -17,6 +17,7 @@ enum {
     EP_WAIT_YN,       /* Y/y or N/n (other keys are ignored) */
     EP_WAIT_LIST,     /* a list: arrows move, Enter (0dh) picks */
     EP_WAIT_TIME,     /* a key, or until a time (ffh: no key, the clock looked at) */
+    EP_WAIT_SCAN,     /* a key to define: ffh each pass; the core watches the key table */
     EP_WAIT_TEXT      /* a text: '-', digits, capitals; backspace, Enter, Esc (ffh: no key, the
                          cursor blinks with the clock) */
 };
@@ -114,6 +115,12 @@ int ep_save_screen(ep_game *g);
 /* 08ab: LOAD COMMANDER: a list of the files; a good one takes the player to the station
  * (f.leave 3), a bad one to the title (f.leave 1) */
 int ep_load_screen(ep_game *g);
+
+/* 0674, 0736, 0779: the controls: the keys for flight defined anew; the joystick centred (the
+ * frontend's in.joy_*), the speed's keys defined; the mouse, the same (EP_WAIT_*) */
+int ep_define_keys(ep_game *g);
+int ep_joystick(ep_game *g);
+int ep_mouse(ep_game *g);
 
 /* where the screens idle */
 enum {
