@@ -6,6 +6,7 @@ build/
 build-web/
 build-local/
 build-ubsan/
+build2/
 
 # Ghidra project and generated output (regenerate with re/ghidra/run.sh)
 re/ghidra/proj/
