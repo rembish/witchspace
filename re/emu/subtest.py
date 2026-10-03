@@ -851,7 +851,7 @@ def run_original(image, addr, regs, exits=None):
         if NAME == "commands":
             e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
         done = "cmd 2" if NAME == "commands" else "frame 2"
-        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA):  # reconstructed screens: up to their idle loop
+        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0x0DF6):  # reconstructed screens: up to their idle loop
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
                           begin=CS * 16 + at, end=CS * 16 + at)
         for stub in (0x07AA, 0x08AB, 0x0674,

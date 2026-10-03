@@ -543,7 +543,7 @@ static int run(ep_game *g, uint8_t id)
     case 0x04: return ep_chart_screen(g);
     case 0x0d: ep_data_screen(g); return EP_CMD_SCREEN;
     case 0x10: ep_chart_find(g); return EP_CMD_STAY;
-    case 0x11: ep_chart_find_name(g); return EP_CMD_STAY;
+    case 0x11: ep_chart_find_name(g); return EP_CMD_SCREEN; /* a name to type: the caller routes keys */
     case 0x12: ep_chart_home(g); return EP_CMD_STAY;
     case 0x0c: ep_market_buy(g); return EP_CMD_STAY;
     case 0x13: ep_equipment_screen(g); return EP_CMD_SCREEN;
