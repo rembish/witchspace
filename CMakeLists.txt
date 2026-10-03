@@ -46,7 +46,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -DIN=${FONT_SRC} -DOUT=${FONT_C} -DNAME=font_ttf -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
   DEPENDS ${FONT_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake)
 find_package(SDL2 REQUIRED)
-add_executable(eliteplus src/main.c src/gfx.c src/font.c third_party/stb_truetype_impl.c ${FONT_C})
+add_executable(eliteplus src/main.c src/screen.c src/grf.c src/audio.c src/files.c)
 target_link_libraries(eliteplus PRIVATE epcore SDL2::SDL2)
 if(TARGET SDL2::SDL2main)
   target_link_libraries(eliteplus PRIVATE SDL2::SDL2main)

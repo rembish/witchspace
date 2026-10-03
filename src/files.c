@@ -1,0 +1,71 @@
+/* Commander files (see files.h). */
+#include "files.h"
+
+#include <ctype.h>
+#include <dirent.h>
+#include <stdio.h>
+#include <string.h>
+
+static char base[1024] = ".";
+
+void files_init(const char *dir) { snprintf(base, sizeof base, "%s", dir); }
+
+static void path(char *out, size_t n, const char *name) { snprintf(out, n, "%s/%s", base, name); }
+
+static int exists(void *ctx, const char *name)
+{
+    (void)ctx;
+    char p[1100];
+    path(p, sizeof p, name);
+    FILE *f = fopen(p, "rb"); /* 3d00: it opens for reading */
+    if (!f) return 0;
+    fclose(f);
+    return 1;
+}
+
+static int read_file(void *ctx, const char *name, uint8_t *data, int max)
+{
+    (void)ctx;
+    char p[1100];
+    path(p, sizeof p, name);
+    FILE *f = fopen(p, "rb");
+    if (!f) return -1;
+    int n = (int)fread(data, 1, (size_t)max, f);
+    fclose(f);
+    return n;
+}
+
+static int write_file(void *ctx, const char *name, const uint8_t *data, int len)
+{
+    (void)ctx;
+    char p[1100];
+    path(p, sizeof p, name);
+    FILE *f = fopen(p, "wb");
+    if (!f) return -1;
+    int n = (int)fwrite(data, 1, (size_t)len, f);
+    fclose(f);
+    return n;
+}
+
+/* *.CDR, as DOS matches it: names in capitals, 8.3 */
+static int list(void *ctx, char names[][13], int max)
+{
+    (void)ctx;
+    DIR *d = opendir(base);
+    if (!d) return 0;
+    int n = 0;
+    struct dirent *e;
+    while (n < max && (e = readdir(d))) {
+        size_t len = strlen(e->d_name);
+        if (len < 5 || len > 12) continue;
+        char up[13];
+        for (size_t k = 0; k <= len; k++) up[k] = (char)toupper((unsigned char)e->d_name[k]);
+        if (strcmp(up + len - 4, ".CDR") || len - 4 > 8) continue;
+        if (strcmp(up, e->d_name)) continue; /* the game writes capitals; others it would not find */
+        memcpy(names[n++], up, len + 1);
+    }
+    closedir(d);
+    return n;
+}
+
+const ep_io files_io = { NULL, exists, read_file, write_file, list };

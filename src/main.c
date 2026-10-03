@@ -1,133 +1,457 @@
-/* Elite Plus port: SDL2 frontend. So far it shows the title screen from the core: the ship
- * cycle and the disc at the original's timing, drawn at the window's resolution in the
- * original's MCGA colours. Escape quits. */
-#include "font.h"
-#include "gfx.h"
+/* Elite Plus port: SDL2 frontend. The core plays the game; this keeps its clock (the timer the
+ * original programs, 1193182 / 5555h Hz), feeds it the keyboard as PC scancodes, shows what it
+ * draws on a 320 x 200 MCGA screen, sounds the PC speaker, and goes from one of the core's
+ * loops to the next as their results say (title, station screens, flight, pause, dialogues).
+ *
+ * usage: eliteplus [--data DIR] [--saves DIR] [--protection]
+ *   --data DIR     where ELITE.GRF is (your own copy; default original/)
+ *   --saves DIR    where commanders are saved (default .)
+ *   --protection   ask the copy protection's question (off by default) */
+#include "audio.h"
+#include "files.h"
+#include "grf.h"
+#include "screen.h"
 
-#include "ep_tables.h"
+#include "ep_boot.h"
+#include "ep_commands.h"
+#include "ep_frame.h"
+#include "ep_sound.h"
+#include "ep_station.h"
 #include "ep_title.h"
+#include "ep_travel.h"
 
 #include <SDL.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
-extern const unsigned char font_ttf[];
-extern const int font_ttf_len;
+#define TICK_S (0x5555 / 1193182.0) /* a timer tick */
 
-#define TICK_HZ (1193182.0 / 0x5555) /* the timer rate the original programs */
-#define VIEW_X  8                    /* the 3D view on the 320 x 200 screen */
-#define VIEW_Y  9
+static ep_game g;
+static SDL_Window *win;
+static SDL_Renderer *ren;
+static SDL_Texture *tex;
+static uint32_t rgba[SCREEN_W * SCREEN_H];
+static int running = 1;
+static Uint64 t0, ticks_done;
 
-static rgba game_colour(uint8_t c)
+enum { M_TITLE_OPENING, M_TITLE, M_DIALOG, M_IDLE, M_FLIGHT, M_PAUSE };
+static int mode, after_dialog, waiting; /* waiting: the dialogue's EP_WAIT_* */
+static int paused_from;                 /* the mode the pause menu came over */
+
+/* ---- the keyboard: SDL keys as the PC's set-1 scancodes (E0h: the extended keys) ---- */
+
+static const struct {
+    SDL_Scancode sdl;
+    uint8_t pc, e0;
+} keys[] = {
+    { SDL_SCANCODE_ESCAPE, 0x01, 0 },
+    { SDL_SCANCODE_1, 0x02, 0 },
+    { SDL_SCANCODE_2, 0x03, 0 },
+    { SDL_SCANCODE_3, 0x04, 0 },
+    { SDL_SCANCODE_4, 0x05, 0 },
+    { SDL_SCANCODE_5, 0x06, 0 },
+    { SDL_SCANCODE_6, 0x07, 0 },
+    { SDL_SCANCODE_7, 0x08, 0 },
+    { SDL_SCANCODE_8, 0x09, 0 },
+    { SDL_SCANCODE_9, 0x0a, 0 },
+    { SDL_SCANCODE_0, 0x0b, 0 },
+    { SDL_SCANCODE_MINUS, 0x0c, 0 },
+    { SDL_SCANCODE_EQUALS, 0x0d, 0 },
+    { SDL_SCANCODE_BACKSPACE, 0x0e, 0 },
+    { SDL_SCANCODE_TAB, 0x0f, 0 },
+    { SDL_SCANCODE_Q, 0x10, 0 },
+    { SDL_SCANCODE_W, 0x11, 0 },
+    { SDL_SCANCODE_E, 0x12, 0 },
+    { SDL_SCANCODE_R, 0x13, 0 },
+    { SDL_SCANCODE_T, 0x14, 0 },
+    { SDL_SCANCODE_Y, 0x15, 0 },
+    { SDL_SCANCODE_U, 0x16, 0 },
+    { SDL_SCANCODE_I, 0x17, 0 },
+    { SDL_SCANCODE_O, 0x18, 0 },
+    { SDL_SCANCODE_P, 0x19, 0 },
+    { SDL_SCANCODE_LEFTBRACKET, 0x1a, 0 },
+    { SDL_SCANCODE_RIGHTBRACKET, 0x1b, 0 },
+    { SDL_SCANCODE_RETURN, 0x1c, 0 },
+    { SDL_SCANCODE_LCTRL, 0x1d, 0 },
+    { SDL_SCANCODE_A, 0x1e, 0 },
+    { SDL_SCANCODE_S, 0x1f, 0 },
+    { SDL_SCANCODE_D, 0x20, 0 },
+    { SDL_SCANCODE_F, 0x21, 0 },
+    { SDL_SCANCODE_G, 0x22, 0 },
+    { SDL_SCANCODE_H, 0x23, 0 },
+    { SDL_SCANCODE_J, 0x24, 0 },
+    { SDL_SCANCODE_K, 0x25, 0 },
+    { SDL_SCANCODE_L, 0x26, 0 },
+    { SDL_SCANCODE_SEMICOLON, 0x27, 0 },
+    { SDL_SCANCODE_APOSTROPHE, 0x28, 0 },
+    { SDL_SCANCODE_GRAVE, 0x29, 0 },
+    { SDL_SCANCODE_LSHIFT, 0x2a, 0 },
+    { SDL_SCANCODE_BACKSLASH, 0x2b, 0 },
+    { SDL_SCANCODE_Z, 0x2c, 0 },
+    { SDL_SCANCODE_X, 0x2d, 0 },
+    { SDL_SCANCODE_C, 0x2e, 0 },
+    { SDL_SCANCODE_V, 0x2f, 0 },
+    { SDL_SCANCODE_B, 0x30, 0 },
+    { SDL_SCANCODE_N, 0x31, 0 },
+    { SDL_SCANCODE_M, 0x32, 0 },
+    { SDL_SCANCODE_COMMA, 0x33, 0 },
+    { SDL_SCANCODE_PERIOD, 0x34, 0 },
+    { SDL_SCANCODE_SLASH, 0x35, 0 },
+    { SDL_SCANCODE_RSHIFT, 0x36, 0 },
+    { SDL_SCANCODE_KP_MULTIPLY, 0x37, 0 },
+    { SDL_SCANCODE_LALT, 0x38, 0 },
+    { SDL_SCANCODE_SPACE, 0x39, 0 },
+    { SDL_SCANCODE_CAPSLOCK, 0x3a, 0 },
+    { SDL_SCANCODE_F1, 0x3b, 0 },
+    { SDL_SCANCODE_F2, 0x3c, 0 },
+    { SDL_SCANCODE_F3, 0x3d, 0 },
+    { SDL_SCANCODE_F4, 0x3e, 0 },
+    { SDL_SCANCODE_F5, 0x3f, 0 },
+    { SDL_SCANCODE_F6, 0x40, 0 },
+    { SDL_SCANCODE_F7, 0x41, 0 },
+    { SDL_SCANCODE_F8, 0x42, 0 },
+    { SDL_SCANCODE_F9, 0x43, 0 },
+    { SDL_SCANCODE_F10, 0x44, 0 },
+    { SDL_SCANCODE_NUMLOCKCLEAR, 0x45, 0 },
+    { SDL_SCANCODE_SCROLLLOCK, 0x46, 0 },
+    { SDL_SCANCODE_KP_7, 0x47, 0 },
+    { SDL_SCANCODE_KP_8, 0x48, 0 },
+    { SDL_SCANCODE_KP_9, 0x49, 0 },
+    { SDL_SCANCODE_KP_MINUS, 0x4a, 0 },
+    { SDL_SCANCODE_KP_4, 0x4b, 0 },
+    { SDL_SCANCODE_KP_5, 0x4c, 0 },
+    { SDL_SCANCODE_KP_6, 0x4d, 0 },
+    { SDL_SCANCODE_KP_PLUS, 0x4e, 0 },
+    { SDL_SCANCODE_KP_1, 0x4f, 0 },
+    { SDL_SCANCODE_KP_2, 0x50, 0 },
+    { SDL_SCANCODE_KP_3, 0x51, 0 },
+    { SDL_SCANCODE_KP_0, 0x52, 0 },
+    { SDL_SCANCODE_KP_PERIOD, 0x53, 0 },
+    { SDL_SCANCODE_F11, 0x57, 0 },
+    { SDL_SCANCODE_F12, 0x58, 0 },
+    { SDL_SCANCODE_UP, 0x48, 1 },
+    { SDL_SCANCODE_DOWN, 0x50, 1 },
+    { SDL_SCANCODE_LEFT, 0x4b, 1 },
+    { SDL_SCANCODE_RIGHT, 0x4d, 1 },
+    { SDL_SCANCODE_INSERT, 0x52, 1 },
+    { SDL_SCANCODE_DELETE, 0x53, 1 },
+    { SDL_SCANCODE_HOME, 0x47, 1 },
+    { SDL_SCANCODE_END, 0x4f, 1 },
+    { SDL_SCANCODE_PAGEUP, 0x49, 1 },
+    { SDL_SCANCODE_PAGEDOWN, 0x51, 1 },
+    { SDL_SCANCODE_KP_ENTER, 0x1c, 1 },
+    { SDL_SCANCODE_RCTRL, 0x1d, 1 },
+    { SDL_SCANCODE_RALT, 0x38, 1 },
+};
+
+static void key(SDL_Scancode s, int up)
 {
-    const uint8_t *d = &ep_dac[3 * ep_mcga_colour[c]];
-    return (rgba){ d[0] / 63.f, d[1] / 63.f, d[2] / 63.f, 1.f };
+    for (size_t k = 0; k < sizeof keys / sizeof keys[0]; k++)
+        if (keys[k].sdl == s) {
+            if (keys[k].e0) ep_key_event(&g, 0xe0);
+            ep_key_event(&g, (uint8_t)(keys[k].pc | (up ? 0x80 : 0)));
+            return;
+        }
 }
 
-typedef struct {
-    float s, ox, oy; /* screen pixel -> window: x * s + ox */
-} view;
-
-static float vx(const view *v, float x) { return (VIEW_X + x) * v->s + v->ox; }
-static float vy(const view *v, float y) { return (VIEW_Y + y) * v->s + v->oy; }
-
-static void draw_title(const ep_game *g, const view *v)
+static void pump(void)
 {
-    /* the 3D view */
-    gfx_rect(vx(v, 0), vy(v, 0), 304 * v->s, 124 * v->s, rgb_hex(0x000000, 1));
-    rgba disc = game_colour(0xb6);
-    for (int k = 0; k < g->circles.n; k++) {
-        const ep_span *sp = &g->circles.span[k];
-        gfx_rect(vx(v, sp->x), vy(v, sp->row), sp->w * v->s, v->s, disc);
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev)) {
+        if (ev.type == SDL_QUIT) running = 0;
+        if (ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) key(ev.key.keysym.scancode, ev.type == SDL_KEYUP);
     }
-    for (int k = 0; k < g->render.nprim; k++) {
-        const ep_prim *p = &g->render.prim[k];
-        if (p->kind != EP_PRIM_TRI && p->kind != EP_PRIM_QUAD && p->kind != EP_PRIM_LINE) continue;
-        rgba c = game_colour(p->colour);
-        float q[8];
-        for (int j = 0; j < 4; j++) {
-            q[2 * j] = vx(v, p->pt[2 * j] + 0.5f);
-            q[2 * j + 1] = vy(v, p->pt[2 * j + 1] + 0.5f);
+}
+
+/* ---- time: the timer interrupt as often as the original's ---- */
+
+static void advance(void)
+{
+    Uint64 due =
+        (Uint64)((double)(SDL_GetPerformanceCounter() - t0) / (double)SDL_GetPerformanceFrequency() / TICK_S);
+    if (due > ticks_done + 30) ticks_done = due - 30; /* far behind (the window held): let it go */
+    while (ticks_done < due) {
+        ep_timer_tick(&g);
+        audio_speaker(g.speaker, g.speaker_on);
+        ticks_done++;
+    }
+}
+
+/* ---- the screen ---- */
+
+static const char *shots; /* --shots DIR: the picture now and then, for checking */
+static int presents;
+
+static void shot(void)
+{
+    char p[1100];
+    snprintf(p, sizeof p, "%s/%06d.ppm", shots, presents);
+    FILE *f = fopen(p, "wb");
+    if (!f) return;
+    fprintf(f, "P6\n%d %d\n255\n", SCREEN_W, SCREEN_H);
+    for (int k = 0; k < SCREEN_W * SCREEN_H; k++) {
+        uint8_t px[3] = { (uint8_t)(rgba[k] >> 16), (uint8_t)(rgba[k] >> 8), (uint8_t)rgba[k] };
+        fwrite(px, 1, 3, f);
+    }
+    fclose(f);
+}
+
+static void present(void)
+{
+    screen_draw(&g);
+    ep_output_begin(&g);
+    screen_rgba(rgba);
+    if (shots && presents++ % 25 == 0) shot();
+    SDL_UpdateTexture(tex, NULL, rgba, SCREEN_W * 4);
+    int w, h;
+    SDL_GetRendererOutputSize(ren, &w, &h);
+    SDL_Rect dst; /* 320 x 200 shown 4:3, as on the monitors of the time */
+    if (w * 3 > h * 4) {
+        dst.h = h;
+        dst.w = h * 4 / 3;
+    } else {
+        dst.w = w;
+        dst.h = w * 3 / 4;
+    }
+    dst.x = (w - dst.w) / 2;
+    dst.y = (h - dst.h) / 2;
+    SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
+    SDL_RenderClear(ren);
+    SDL_RenderCopy(ren, tex, NULL, &dst);
+    SDL_RenderPresent(ren);
+}
+
+/* the core waits on the timer here (the frame flip, a sound playing out) */
+static void wait_for(ep_game *gg, uint32_t until, int show)
+{
+    if (show) present();
+    while (running && gg->clock < until && until - gg->clock < 100000 && !gg->f.paused) {
+        pump();
+        advance();
+        if (gg->clock < until) SDL_Delay(1);
+    }
+}
+
+/* a screen's pass: as often as a frame (two ticks), the original runs them as fast as it can */
+static void pace(void)
+{
+    Uint32 until = SDL_GetTicks() + 36;
+    while (running && !SDL_TICKS_PASSED(SDL_GetTicks(), until)) {
+        pump();
+        advance();
+        SDL_Delay(1);
+    }
+}
+
+/* ---- the game's loops ---- */
+
+static void time_of_day(uint8_t t[4])
+{
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    t[0] = (uint8_t)tm->tm_hour;
+    t[1] = (uint8_t)tm->tm_min;
+    t[2] = (uint8_t)tm->tm_sec;
+    t[3] = (uint8_t)(SDL_GetTicks() / 10 % 100);
+}
+
+static void dialog(int w, int after)
+{
+    if (w == EP_WAIT_NONE) {
+        mode = after;
+        return;
+    }
+    waiting = w;
+    after_dialog = after;
+    mode = M_DIALOG;
+}
+
+static void title(void)
+{
+    g.f.leave = 0;
+    waiting = ep_title_open(&g);
+    mode = M_TITLE_OPENING;
+}
+
+static void station(void)
+{
+    ep_enter_station(&g);
+    dialog(ep_status_screen(&g), M_IDLE);
+}
+
+/* the station's screens, in flight too (EP_CMD_*) */
+static void after_idle(int r)
+{
+    switch (r) {
+    case EP_CMD_SCREEN: dialog(g.f.station_step ? EP_WAIT_KEY : EP_WAIT_NONE, M_IDLE); break;
+    case EP_CMD_RESTART: mode = M_FLIGHT; break;
+    case EP_CMD_PAUSE:
+        paused_from = M_IDLE;
+        mode = M_PAUSE;
+        break;
+    case EP_CMD_TITLE: title(); break;
+    case EP_CMD_QUIT: running = 0; break;
+    default: break;
+    }
+}
+
+static void after_frame(int r)
+{
+    switch (r) {
+    case EP_FRAME_DOCKED: station(); break;
+    case EP_FRAME_SCREEN: dialog(g.f.station_step ? EP_WAIT_KEY : EP_WAIT_NONE, M_IDLE); break;
+    case EP_FRAME_OVER: title(); break;
+    case EP_FRAME_PAUSED:
+        paused_from = M_FLIGHT;
+        mode = M_PAUSE;
+        break;
+    default: break;
+    }
+}
+
+/* a dialogue is over: where its answers lead (f.leave) */
+static void dialog_over(void)
+{
+    switch (g.f.leave) {
+    case 1: title(); return;
+    case 2: running = 0; return;
+    case 3:
+        g.f.leave = 0;
+        station();
+        return;
+    default: mode = after_dialog;
+    }
+}
+
+static void step(void)
+{
+    switch (mode) {
+    case M_TITLE_OPENING:
+    case M_DIALOG: {
+        uint8_t k = g.in.last_key;
+        if (k == 0xff && waiting != EP_WAIT_TEXT && waiting != EP_WAIT_TIME && waiting != EP_WAIT_LIST) {
+            pace();
+            break;
         }
-        if (p->kind == EP_PRIM_TRI)
-            gfx_tri(q[0], q[1], q[2], q[3], q[4], q[5], c);
-        else if (p->kind == EP_PRIM_QUAD)
-            gfx_quad(q, c);
-        else
-            gfx_line(q[0], q[1], q[2], q[3], v->s, c);
+        g.in.last_key = 0xff; /* 0276 takes it */
+        waiting = ep_station_key(&g, k);
+        if (waiting == EP_WAIT_NONE) {
+            if (mode == M_TITLE_OPENING)
+                mode = M_TITLE;
+            else
+                dialog_over();
+        }
+        pace();
+        break;
     }
-    gfx_flush();
-    float size = 9 * v->s;
-    font_draw(160 * v->s + v->ox, 12 * v->s + v->oy, size, game_colour(0x11), ALIGN_CENTER,
-              ep_ship_names[g->f.title_ship % 30]);
-    font_draw(160 * v->s + v->ox, 120 * v->s + v->oy, size, game_colour(0x0a), ALIGN_CENTER,
-              "Press spacebar to start game");
+    case M_TITLE: {
+        int r = ep_title_frame(&g);
+        if (g.f.leave == 2) {
+            running = 0;
+            break;
+        }
+        if (r == EP_CMD_START) {
+            uint8_t t[4];
+            time_of_day(t);
+            dialog(ep_start_game(&g, t[0], t[1], t[2], t[3]), M_IDLE);
+        } else if (r == EP_CMD_SCREEN) {
+            dialog(g.f.station_step ? EP_WAIT_KEY : EP_WAIT_NONE, g.f.station_step ? M_TITLE : M_IDLE);
+        } else if (r == EP_CMD_PAUSE) {
+            paused_from = M_TITLE;
+            mode = M_PAUSE;
+        } else {
+            after_idle(r);
+        }
+        break;
+    }
+    case M_IDLE:
+        after_idle(ep_station_idle(&g));
+        pace();
+        break;
+    case M_FLIGHT: after_frame(ep_flight_frame(&g)); break;
+    case M_PAUSE: {
+        int r = ep_pause_idle(&g);
+        pace();
+        if (g.f.station_step) {
+            dialog(EP_WAIT_YN, M_PAUSE);
+        } else if (r == EP_CMD_RESUME) {
+            if (g.f.resume == EP_RESUME_FLIGHT) {
+                mode = M_FLIGHT;
+                after_frame(ep_flight_resume(&g));
+            } else if (g.f.resume == EP_RESUME_IDLE) {
+                mode = M_IDLE;
+                after_idle(ep_station_resume(&g));
+            } else {
+                mode = paused_from;
+            }
+        }
+        break;
+    }
+    default: break;
+    }
 }
 
 int main(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+    const char *data = "original", *saves = ".";
+    int protection = 0;
+    for (int k = 1; k < argc; k++) {
+        if (!strcmp(argv[k], "--data") && k + 1 < argc)
+            data = argv[++k];
+        else if (!strcmp(argv[k], "--saves") && k + 1 < argc)
+            saves = argv[++k];
+        else if (!strcmp(argv[k], "--protection"))
+            protection = 1;
+        else if (!strcmp(argv[k], "--shots") && k + 1 < argc)
+            shots = argv[++k];
+    }
+    char path[1100];
+    snprintf(path, sizeof path, "%s/ELITE.GRF", data);
+    if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
+    files_init(saves);
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
-    SDL_Window *win = SDL_CreateWindow("Elite Plus", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 600,
-                                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!win || !ren) {
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+    win = SDL_CreateWindow("Elite Plus", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
+                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
+    tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_W,
+                                  SCREEN_H)
+              : NULL;
+    if (!tex) {
         fprintf(stderr, "SDL: %s\n", SDL_GetError());
         return 1;
     }
-    gfx_init(ren);
-    if (!font_init(ren, font_ttf, font_ttf_len)) {
-        fprintf(stderr, "font_init failed\n");
-        return 1;
-    }
+    audio_init();
+    screen_init();
 
-    static ep_game g; /* the title as it is when its loop starts (9f21) */
-    g.space.count = 3;
-    g.in.last_key = 0xff;
-    g.f.video = 2;
-    g.f.title_list = 0xb263;
-    g.f.title_ship = ep_title_ships[0];
-    g.space.obj[EP_TITLE_SLOT].b[EP_OBJ_POS + 4] = 5000 & 0xff;
-    g.space.obj[EP_TITLE_SLOT].b[EP_OBJ_POS + 5] = 5000 >> 8;
-    g.rng = ep_rng_init();
-    ep_rng_seed(&g.rng, (uint8_t)time(NULL));
-
-    Uint64 t0 = SDL_GetPerformanceCounter(), freq = SDL_GetPerformanceFrequency();
-    int running = 1;
+    uint8_t t[4];
+    time_of_day(t);
+    ep_boot(&g, 2, 2, t[1], t[2], t[3]); /* MCGA, the PC speaker */
+    g.io = &files_io;
+    g.wait = wait_for;
+    g.protection = (uint8_t)protection;
+    t0 = SDL_GetPerformanceCounter();
+    if (protection)
+        dialog(ep_protection_ask(&g), M_TITLE_OPENING);
+    else
+        title();
+    int asked = protection;
     while (running) {
-        SDL_Event ev;
-        while (SDL_PollEvent(&ev)) {
-            if (ev.type == SDL_QUIT) running = 0;
-            if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) running = 0;
+        pump();
+        advance();
+        if (asked && mode == M_TITLE_OPENING) { /* the question answered: the title */
+            asked = 0;
+            title();
         }
-        /* the original's clock: run title frames until the tick count catches up */
-        uint32_t ticks = (uint32_t)((double)(SDL_GetPerformanceCounter() - t0) / (double)freq * TICK_HZ);
-        int guard = 0; /* a frame ends two ticks after the last one, as the frame wait does */
-        while (g.flip + 2 <= ticks && guard++ < 8) {
-            g.render.nprim = g.render.ntext = 0;
-            g.circles.n = 0;
-            g.nevents = 0;
-            if (g.clock < g.flip + 2) g.clock = g.flip + 2;
-            ep_title_frame(&g);
-        }
-        if (g.flip + 2 <= ticks) g.flip = g.clock = ticks; /* far behind (window dragged): skip */
-
-        int w, h;
-        SDL_GetRendererOutputSize(ren, &w, &h);
-        view v;
-        v.s = (float)w / 320.f < (float)h / 200.f ? (float)w / 320.f : (float)h / 200.f;
-        v.ox = (w - 320 * v.s) / 2;
-        v.oy = (h - 200 * v.s) / 2;
-        SDL_SetRenderDrawColor(ren, 16, 16, 20, 255);
-        SDL_RenderClear(ren);
-        draw_title(&g, &v);
-        SDL_RenderPresent(ren);
+        step();
+        present();
     }
+    audio_quit();
     SDL_Quit();
     return 0;
 }
