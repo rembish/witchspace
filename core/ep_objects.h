@@ -56,6 +56,17 @@ void ep_rotate_pair(const ep_rot *r, int16_t *a, int16_t *b);
 /* 6e01: rotate a point by the player's slots 0..2 */
 void ep_rotate_by_player(const ep_space *s, int16_t p[3]);
 
+/* 6ee8: right shifts that bring the largest |coordinate| (24-bit) below 9400 */
+uint8_t ep_planet_scale(const ep_object *o);
+
+/* 433c: planet or sun into camera space: position scaled down by ep_planet_scale (kept in
+ * +0a), rotated like any object, flags |= c0 (no range or view test). */
+void ep_planet_to_camera(ep_space *s, ep_object *o);
+
+/* 4694: apparent size of an object of the given size (100 planet, 50 sun) from its camera
+ * position and scale, 0..255 */
+uint16_t ep_apparent_size(const ep_object *o, uint16_t size);
+
 /* update_objects (4154), for ship types (0..29); planets, the sun, the scanner, scooping and
  * explosions are not reconstructed yet. Ships drawn are appended to r. Returns the number of
  * ships drawn, their slot numbers in order in drawn[]. */

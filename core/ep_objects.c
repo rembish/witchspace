@@ -75,11 +75,9 @@ static int in_range(ep_object *o)
     return 1;
 }
 
-/* 42c8 / 4317: camera-space position and the in-view test */
-static void to_camera(ep_space *s, ep_object *o)
+/* 4317: rotate into camera space; +3c = high byte of z before the extra rotation */
+static void rotate_to_camera(ep_space *s, ep_object *o, int16_t p[3])
 {
-    int16_t p[3];
-    for (int k = 0; k < 3; k++) p[k] = (int16_t)get16(o, EP_OBJ_POS + 2 * k);
     ep_rotate_by_player(s, p);
     o->b[EP_OBJ_ZHI] = (uint8_t)((uint16_t)p[2] >> 8);
     /* 4359: scanner blip, only in flight (not reconstructed yet) */
@@ -87,6 +85,14 @@ static void to_camera(ep_space *s, ep_object *o)
         s->rot[5] = ep_rot_from_angle((uint16_t)(0u - s->extra_angle));
         ep_rotate_pair(&s->rot[5], &p[0], &p[2]);
     }
+}
+
+/* 42c8: camera-space position and the in-view test */
+static void to_camera(ep_space *s, ep_object *o)
+{
+    int16_t p[3];
+    for (int k = 0; k < 3; k++) p[k] = (int16_t)get16(o, EP_OBJ_POS + 2 * k);
+    rotate_to_camera(s, o, p);
     /* 42d5: scooping (fuel scoops fitted) is not reconstructed yet */
     if (p[2] < 100) return;
     for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);
@@ -94,6 +100,71 @@ static void to_camera(ep_space *s, ep_object *o)
     if (z < (uint16_t)(abs16((uint16_t)p[0]) << 1)) return;
     if (z < (uint16_t)(abs16((uint16_t)p[1]) << 1)) return;
     o->b[EP_OBJ_FLAGS] |= 0x80;
+}
+
+/* |coordinate k| as 24 bits */
+static uint32_t abs24(const ep_object *o, int k)
+{
+    uint32_t v = (uint32_t)o->b[EP_OBJ_POS_HI + k] << 16 | get16(o, EP_OBJ_POS + 2 * k);
+    if (v & 0x800000) v = (0u - v) & 0xffffff;
+    return v;
+}
+
+uint8_t ep_planet_scale(const ep_object *o)
+{
+    uint32_t m = abs24(o, 0);
+    for (int k = 1; k < 3; k++)
+        if (abs24(o, k) > m) m = abs24(o, k);
+    uint8_t cl = 0;
+    while (m >> 16) {
+        cl++;
+        m >>= 1;
+    }
+    while (m >= 0x24b8) {
+        cl++;
+        m >>= 1;
+    }
+    return cl;
+}
+
+void ep_planet_to_camera(ep_space *s, ep_object *o)
+{
+    uint8_t cl = ep_planet_scale(o);
+    o->b[EP_OBJ_ANGLE] = cl;
+    int16_t p[3];
+    for (int k = 0; k < 3; k++) { /* 6eb9: 24-bit arithmetic shift, low word kept */
+        int32_t v = (int32_t)((uint32_t)o->b[EP_OBJ_POS_HI + k] << 24 | (uint32_t)get16(o, EP_OBJ_POS + 2 * k)
+                                                                            << 8) >>
+                    8;
+        p[k] = (int16_t)(uint16_t)(v >> cl);
+    }
+    rotate_to_camera(s, o, p);
+    for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);
+    o->b[EP_OBJ_FLAGS] |= 0xc0;
+}
+
+uint16_t ep_apparent_size(const ep_object *o, uint16_t size)
+{
+    uint32_t sum = 0;
+    for (int k = 0; k < 3; k++) {
+        int16_t c = (int16_t)get16(o, EP_OBJ_CAM + 2 * k);
+        sum += (uint32_t)((int32_t)c * c);
+    }
+    /* integer square root of the high word, counted in an 8-bit register */
+    uint16_t hi = (uint16_t)(sum >> 16), odd = 0xffff;
+    uint8_t n = 0;
+    for (;;) {
+        odd = (uint16_t)(odd + 2);
+        n++;
+        if (hi < odd) break;
+        hi = (uint16_t)(hi - odd);
+    }
+    int32_t num = (int32_t)((uint32_t)size << 16);
+    num >>= (o->b[EP_OBJ_ANGLE] & 0xff) < 32 ? o->b[EP_OBJ_ANGLE] : 31;
+    uint16_t d = (uint16_t)(n << 8);
+    if (!d || (uint32_t)num / d > 0xffff) return 0xff; /* divide error -> 46dd */
+    uint32_t q = (uint32_t)num / d;
+    return q < 0x100 ? (uint16_t)q : 0xff;
 }
 
 static ep_ship_view ship_view(const ep_space *s, const ep_object *o)

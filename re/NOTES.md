@@ -298,3 +298,10 @@ the mode 13h screen with the DAC.
   1322 1341 139a` (not yet identified), `14b0` (EGA span jitter), `1675` (MCGA span jitter),
   `32b8` (protection question), `4527` (planet random event), `99e7 9a36 9a80` (not yet
   identified). Any of these in a frame path must be ported before frame tests.
+- Planet and sun (`433c`): `6ee8` = shifts until the largest |coordinate| (24-bit) fits
+  16 bits and is below 9400 (`24b8h`), kept in `+0a`; `6eb9` shifts all three 24-bit
+  coordinates (arithmetic) by it; then the normal rotation (`4317`), camera position stored,
+  flags `|= c0` (no range or view test). `apparent_size` (`4694`, dx = 100 planet, 50
+  sun): `(size << 16 >> scale) / (√hi16(x² + y² + z²) · 256)`, the root counted by
+  subtracting odd numbers in an 8-bit register (its wrap is unreachable: the sum stays
+  below 2³²), divide error or ≥ 256 → 255. Checked by `re/emu/planettest.py`.
