@@ -14,7 +14,7 @@
 
 #include <stdint.h>
 
-#define EP_OBJECTS 40 /* slots up to the original's table end; the count is ds:76b5 */
+#define EP_OBJECTS 36 /* ds:76de..7fdd; the count in use is ds:76b5 (36 in flight, 3 on the title) */
 
 enum {
     EP_OBJ_FLAGS = 0x00,   /* bit 0 active, 1..5 type, 6 in range, 7 in view */
