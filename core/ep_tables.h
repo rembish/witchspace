@@ -22,4 +22,15 @@ extern const uint16_t ep_goods_base_price[EP_GOODS];
 extern const int8_t ep_goods_tech_adj[EP_GOODS][3];
 extern const uint16_t ep_market_rng0[3];
 
+#define EP_EQUIPMENT 14
+
+typedef struct {
+    uint8_t min_tech;
+    const char *name;
+    int8_t gov_factor, eco_factor;
+    uint16_t base_price;
+} ep_equipment_record;
+
+extern const ep_equipment_record ep_equipment[EP_EQUIPMENT];
+
 #endif

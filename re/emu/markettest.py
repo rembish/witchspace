@@ -5,7 +5,8 @@ usage: markettest.py [arrivals] [path/to/ep_marketdump]
 Prices: market_prices (97d8) for every government, economy and tech level (ds:832c..832e),
 buying and selling price per commodity (ds:8d0a, 4 bytes each). Quantities: the market
 table (8ea2) with the "market drawn" flag ds:839d clear, repeatedly from the start-up
-generator state; quantities are the second byte of each cargo pair at ds:8379. Selling price
+generator state; quantities are the second byte of each cargo pair at ds:8379. Equipment
+(9161) with a pattern of owned items (ds:8356): count ds:acb0, prices at ds:8d0a. Selling price
 (8e6b) for every possible buying price.
 """
 import os
@@ -34,6 +35,16 @@ def original():
         e.w8(0x839D, 0)
         e.call(0x8EA2)
         lines.append("q " + " ".join(str(e.r8(0x837A + 2 * k)) for k in range(17)))
+    for gov in range(8):
+        for eco in range(8):
+            for tech in range(256):
+                e.wb(0x832C, bytes([gov, eco, tech]))
+                e.wb(0x8356, bytes(int((gov + eco + tech + k) % 3 == 0) for k in range(14)))
+                e.wb(0x8D0A, bytes(4 * 14))
+                e.call(0x9161)
+                n = e.r8(0xACB0)
+                row = "".join(f" {e.r16(0x8D0A + 4 * k)}/{e.r16(0x8D0C + 4 * k)}" for k in range(n))
+                lines.append(f"e {gov} {eco} {tech} {n}{row}")
     for v in range(0, 0x10000, 16):
         row = []
         for k in range(v, v + 16):

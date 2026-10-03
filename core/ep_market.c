@@ -50,3 +50,17 @@ uint8_t ep_goods_quantity(ep_market_rng *r)
     if (lo < 7) return 0;
     return (uint8_t)((lo - 7) ^ hi);
 }
+
+int ep_equipment_prices(uint8_t government, uint8_t economy, uint8_t tech, const uint8_t owned[EP_EQUIPMENT],
+                        uint16_t price[EP_EQUIPMENT], uint16_t sell[EP_EQUIPMENT])
+{
+    uint8_t level = (uint8_t)(tech + 1);
+    int n = 0;
+    for (; n < EP_EQUIPMENT && level >= ep_equipment[n].min_tech; n++) {
+        const ep_equipment_record *r = &ep_equipment[n];
+        int adj = r->gov_factor * (int8_t)government + r->eco_factor * (int8_t)economy;
+        price[n] = (uint16_t)(r->base_price + adj);
+        sell[n] = n > 0 && owned[n] ? ep_sell_price(price[n]) : 0;
+    }
+    return n;
+}

@@ -171,11 +171,12 @@ quantities are random.
   `w0 + w1`), `q = (r & 1f) − 7`, 0 if negative, else `q ^ ((r >> 8) & 3)`. Stored as the
   second byte of the cargo pairs at `ds:8379` (commander block, name at `ds:8370`). The
   generator starts at `007b 01c8 0315` and is never reseeded **[verify]** (save files?).
-- Equipment (`9161`): records at `ds:8bef` {min tech, name, i8 gov factor, i8 eco factor,
-  word base}; listed while `tech + 1 ≥ min tech`, up to 14; price `base + gf·gov + ef·eco`.
-  Not ported yet.
-- Checked: `re/emu/markettest.py`: every government × economy × tech byte, 200 arrivals,
-  and the selling price of all 65536 buying prices.
+- Equipment (`9161`): 14 records at `ds:8bef` {min tech, name, i8 gov factor, i8 eco
+  factor, word base}; listed while `(u8)(tech + 1) ≥ min tech`, up to 14 (count `ds:acb0`);
+  price `base + gf·gov + ef·eco` (signed byte multiplies). Selling price only for items with
+  a nonzero count at `ds:8356 + k` (k ≥ 1; `8357` missiles, …), else 0.
+- Checked: `re/emu/markettest.py`: commodity and equipment prices for every government ×
+  economy × tech byte, 200 arrivals, and the selling price of all 65536 buying prices.
 
 ## ELITE.GRF (bitmaps) and palettes
 

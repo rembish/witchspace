@@ -28,4 +28,11 @@ ep_market_rng ep_market_rng_init(void);
 /* Quantity of one commodity on offer, drawn on arrival (8f5a). */
 uint8_t ep_goods_quantity(ep_market_rng *r);
 
+/* Equipment offered at a station (9161): the first records whose minimum tech level is at
+ * most tech + 1, up to EP_EQUIPMENT. Fills prices (tenths of a credit) and what the station
+ * pays back for items with a nonzero count in owned[] (fuel is never bought back); returns
+ * the number of items listed. */
+int ep_equipment_prices(uint8_t government, uint8_t economy, uint8_t tech, const uint8_t owned[EP_EQUIPMENT],
+                        uint16_t price[EP_EQUIPMENT], uint16_t sell[EP_EQUIPMENT]);
+
 #endif
