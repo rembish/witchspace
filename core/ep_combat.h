@@ -19,6 +19,9 @@ void ep_laser_hits(ep_game *g);
 /* ad4f: what killing this ship earns (or costs) */
 void ep_kill_reward(ep_game *g, ep_object *o);
 
+/* a3f4: an armed missile (target_note 1) locks onto the ship in the crosshair */
+void ep_missile_lock(ep_game *g);
+
 void ep_damage(ep_game *g, uint16_t amount);
 
 /* 66d6: collisions with the player: ramming, crashing into the station, docking */

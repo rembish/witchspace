@@ -69,6 +69,7 @@ ROUTINES = {
     "dust": (0x4FA3, {}, {}),
     "dust_reset": (0x5374, {}, {}),
     "tribbles": (0x1221, {}, {}),
+    "missile_lock": (0xA3F4, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
@@ -161,6 +162,16 @@ def dust_world(img, rng):
             w(p + 4, rng.choice([1, 2, rng.getrandbits(8)]))
         if rng.random() < 0.2:
             w(p + 5, rng.choice([0, 1]))
+
+
+def lock_roles(img, rng):
+    """Every type and class in the slots, some of them mission ships."""
+    for i in range(2, 20):
+        b = DS * 16 + 0x76DE + 0x40 * i
+        if img[b] & 1 and rng.random() < 0.7:
+            img[b] = (img[b] & 0xC1) | rng.randrange(32) << 1
+            img[b + 0x33] = rng.choice([0, 1, 2, 3, 3, 4, 4, 5, 6, 7])
+            img[b + 0x1E] = rng.choice([0, 2, 0x20, 0x60, 0x40])
 
 
 def tribble_world(img, rng):
@@ -393,6 +404,8 @@ FUZZ = {
     "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
     "dust": [(0, dust_world)],
     "tribbles": [(0, tribble_world)],
+    "missile_lock": [(0, ship_in_sights), (0, ship_in_sights), (0x54CA, [1, 1, 1, 0, 2]), (0x4801, [0, 2]),
+                     (0, lock_roles)],
     "dust_reset": [(0x805A, [0, 0x100, 0x128, 0x28])],
     "dashboard": [(0x54C8, [0, 0xFF, 0x100, 0x1FF, 0x200, 0x2FF, 0x300, 0x3FE, 0x3FF]), (0x54C1, [0, 0x7F, 0x80, 0xBF, 0xC0, 0xDF, 0xE0]),
                   (0x54C3, [0x1F, 0x20, 0x27, 0x28, 0x7F, 0x80, 0xFF]), (0x54C4, [0, 1, 0x7F, 0x80, 0xFF]),

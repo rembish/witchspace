@@ -74,6 +74,8 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "dust")) {
             ep_dust_frame(&g);
             print_prims(&g.render);
+        } else if (!strcmp(argv[1], "missile_lock")) {
+            ep_missile_lock(&g);
         } else if (!strcmp(argv[1], "tribbles")) {
             ep_tribbles_tick(&g);
             print_prims(&g.render);

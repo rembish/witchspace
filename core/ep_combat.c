@@ -489,3 +489,58 @@ void ep_enemy_fire(ep_game *g)
     f->energy = (uint16_t)(f->energy - rest);
     ep_event_add(g, EP_EV_SOUND, 1); /* 4ea2 */
 }
+
+/* 7110: copy the n-th NUL-terminated name from the text at off; returns the end (the NUL) */
+static int copy_name(uint8_t *dst, int at, int max, unsigned off, uint8_t n)
+{
+    while (n && off < sizeof ep_ship_text) {
+        if (!ep_ship_text[off++]) n--;
+    }
+    for (;;) {
+        uint8_t c = off < sizeof ep_ship_text ? ep_ship_text[off++] : 0;
+        if (at < max) dst[at] = c;
+        at++;
+        if (!c) return at - 1;
+    }
+}
+
+static int is_rock(const ep_object *o)
+{
+    int t = type_of(o);
+    return t == 12 || t == 6 || t == 5 || t == 11;
+}
+
+/* 70b9: "Missile locked onto <type> (<role>)" */
+static void lock_message(ep_game *g, const ep_object *o)
+{
+    ep_flight *f = &g->f;
+    uint8_t type = (uint8_t)type_of(o), role = o->b[0x33];
+    if (role == 3 && !is_rock(o)) role = 8;
+    if (role == 4 && type == 5) role = 9;
+    if (type == 0x1c && role != 5) role = 10;
+    int max = (int)sizeof f->lock_text;
+    int at = copy_name(f->lock_text, 0, max, EP_SHIP_TEXT_TYPES, type);
+    if (role && role != 8) {
+        if (at < max) f->lock_text[at] = ' ';
+        if (at + 1 < max) f->lock_text[at + 1] = '(';
+        at = copy_name(f->lock_text, at + 2, max, 0, role);
+        if (at < max) f->lock_text[at] = ')';
+        if (at + 1 < max) f->lock_text[at + 1] = 0;
+    }
+    f->message = 0x806d;
+    f->message_time = 0x28;
+}
+
+void ep_missile_lock(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    if (f->target_note != 1) return;
+    int i = laser_target(g);
+    if (i < 0) return;
+    const ep_object *o = &g->space.obj[i];
+    if (o->b[EP_OBJ_FLAGS1E] & 0x20) return; /* not the mission ships */
+    f->target_slot = (uint16_t)(0x76de + 0x40 * i);
+    f->target_note = 2;
+    lock_message(g, o);
+    ep_event_add(g, EP_EV_SOUND, f->sound_device == 2 ? 0x88 : 4); /* 4e09 */
+}
