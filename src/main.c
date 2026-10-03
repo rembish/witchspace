@@ -159,6 +159,7 @@ static void key(SDL_Scancode s, int up)
  * 201h: counts about 1000 at the centre, buttons A and B) ---- */
 
 static SDL_GameController *pad;
+static int fullscreen;
 
 static void devices(void)
 {
@@ -186,6 +187,12 @@ static void pump(void)
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (ev.type == SDL_QUIT) running = 0;
+        if (ev.type == SDL_KEYDOWN && ev.key.keysym.scancode == SDL_SCANCODE_RETURN &&
+            (ev.key.keysym.mod & KMOD_ALT)) {
+            fullscreen = !fullscreen; /* Alt+Enter: the frontend's own */
+            SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+            continue;
+        }
         if (ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) key(ev.key.keysym.scancode, ev.type == SDL_KEYUP);
         if (ev.type == SDL_MOUSEMOTION) {
             g.in.mouse_dx = (int16_t)(g.in.mouse_dx + ev.motion.xrel);
