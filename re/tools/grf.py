@@ -3,6 +3,8 @@
 
 usage: grf.py dump [OUTDIR]     write every image as PNG (default assets-local/grf): the 16-colour
                                 set with the EGA and the VGA palette, the 256-colour set
+       grf.py sheet [OUTDIR]    overview sheets of both sets with image numbers, and the MCGA
+                                title picture with its own palette
        grf.py list              print the image sizes
 
 Header: 4 entries of 8 bytes, indexed by video class (ds:10bc >> 1: 0 EGA/VGA 16 colours,
@@ -41,6 +43,8 @@ def palettes():
 
     ega = [ega6(v) for v in ds(0x1122, 16)]
     vga16 = [vga[v] for v in ds(0x1133, 16)]
+    title = ds(0x1744, 768)  # MCGA palette of the title picture (loaded at 3b7f)
+    palettes.title = [tuple(c * 255 // 63 for c in title[3 * i:3 * i + 3]) for i in range(256)]
     return ega, vga16, vga
 
 
@@ -122,12 +126,45 @@ def main():
         for cls in (0, 1):
             for i, img in enumerate(images(data, cls)):
                 print(f"{cls} {i:3d} {img[0]} {img[1]}x{img[2]} extra={img[3]:#x}")
+    elif cmd == "sheet":
+        from PIL import Image, ImageDraw
+        out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "assets-local", "grf")
+        os.makedirs(out, exist_ok=True)
+        ega, vga16, vga = palettes()
+        for cls, name, pal in ((0, "vga", vga16), (1, "mcga", vga)):
+            imgs = images(data, cls)
+            cells = []
+            for i, img in enumerate(imgs):
+                if not (img[1] and img[2]) or img[1] * img[2] > 64000 - 1:
+                    continue
+                w, h, rgb = to_rgb(img, pal)
+                cells.append((i, Image.frombytes("RGB", (w, h), rgb).resize((w * 2, h * 2), Image.NEAREST)))
+            sheet_w, x, y, row_h, placed = 1400, 0, 0, 0, []
+            for i, im in cells:
+                if x + im.width + 8 > sheet_w:
+                    x, y, row_h = 0, y + row_h + 22, 0
+                placed.append((i, im, x, y))
+                x += im.width + 12
+                row_h = max(row_h, im.height)
+            sheet = Image.new("RGB", (sheet_w, y + row_h + 24), (40, 40, 48))
+            d = ImageDraw.Draw(sheet)
+            for i, im, px, py in placed:
+                sheet.paste(im, (px, py + 14))
+                d.text((px, py), str(i), fill=(255, 255, 120))
+            sheet.save(os.path.join(out, f"sheet-{name}.png"))
+        title = images(data, 1)[138]
+        w, h, rgb = to_rgb(title, palettes.title)
+        Image.frombytes("RGB", (w, h), rgb).resize((w * 3, h * 3), Image.NEAREST).save(
+            os.path.join(out, "title-mcga.png"))
+        print(f"wrote {out}/sheet-vga.png, sheet-mcga.png, title-mcga.png")
     elif cmd == "dump":
         out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "assets-local", "grf")
         os.makedirs(out, exist_ok=True)
         ega, vga16, vga = palettes()
         for cls, name, pal in ((0, "ega", ega), (0, "vga", vga16), (1, "mcga", vga)):
             for i, img in enumerate(images(data, cls)):
+                if i == 138 and cls == 1:
+                    pal = palettes.title
                 if img[1] and img[2]:
                     png(os.path.join(out, f"{name}-{i:03d}.png"), *to_rgb(img, pal))
         print(f"wrote {out}")

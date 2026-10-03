@@ -278,6 +278,10 @@ class Machine(Elite):
             self.pending.append(("kbd", self.down))
             mu.emu_stop()
 
+    def scancode_event(self, code):
+        """Deliver one raw scancode (make, break or E0) through INT 9 at the next resume."""
+        self.pending.append(("kbd", code))
+
     def press(self, *scancodes):
         """Queue key presses (each a press and a release through the game's keyboard
         handler, INT 9), delivered when the game next polls with no key waiting."""
@@ -294,10 +298,11 @@ class Machine(Elite):
         self.setreg(UC_X86_REG_SP, hdr_sp)
         self.setreg(UC_X86_REG_FLAGS, IF | 0x0002)
 
-    def run(self, max_insns=50_000_000, stop=None):
+    def run(self, max_insns=50_000_000, stop=None, idle_ticks=False):
         """Run until the program exits or stop(machine) returns True. stop is checked whenever
         emulation pauses: at frame waits that need a tick, at key polls with keys queued and
-        every million instructions."""
+        every million instructions. idle_ticks: also inject a tick after every 200000
+        instructions that end in no known wait (for interactive use, not for tests)."""
         mu = self.mu
         done = 0
         while self.exit_code is None:
@@ -311,7 +316,12 @@ class Machine(Elite):
                     self.scancode = ev[1]
                     self.inject(9)
             start = self.lin(self.reg(UC_X86_REG_CS), self.reg(UC_X86_REG_IP))
-            mu.emu_start(start, 0xFFFFF, count=1_000_000)
+            mu.emu_start(start, 0xFFFFF, count=200_000 if idle_ticks else 1_000_000)
+            if idle_ticks and not self.pending and self.exit_code is None:
+                # Ran a whole slice without reaching a known wait: some wait loop the harness
+                # does not know yet. Let time pass anyway (interactive use only).
+                self.pending.append(8)
+                self.ticks += 1
             done += 1
             if done > max_insns // 1_000_000 + 100_000:
                 raise RuntimeError("no end")
