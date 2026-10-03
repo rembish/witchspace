@@ -44,4 +44,7 @@ extern const uint8_t ep_title_ships[EP_TITLE_SHIPS];
 extern const uint16_t ep_title_min_dist[32];
 extern const char *const ep_ship_names[30];
 
+extern const uint8_t ep_mcga_colour[256];
+extern const uint8_t ep_dac[768];
+
 #endif

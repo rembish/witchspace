@@ -7,14 +7,17 @@ Welltris ports: a deterministic C core reconstructed from the machine code and c
 against the original running in an emulator, with a fresh frontend on top. No original game
 files are included.
 
-**Status:** early reverse engineering. Done so far: unpacking, control-flow recovery,
-an emulator harness, and the galaxy generator (all 8 × 256 systems match the original).
+**Status:** reverse engineering in progress. Reconstructed and checked against the original:
+galaxy and system generation, descriptions, market and equipment prices, ship models and
+rendering, object update, planet circles and the title screen (frame by frame). The port
+(`eliteplus`) shows the title screen so far.
 
 ## Layout
 
 | Path        | Contents |
 |-------------|----------|
 | `core/`     | Game logic reconstructed from `ELITE.EXE`: plain C99, no I/O, deterministic |
+| `src/`      | SDL2 frontend (so far the title screen) |
 | `tests/`    | Tools the differential tests drive (`galdump`) |
 | `re/`       | Notes, unpacker, explorer, Ghidra scripts, emulator harness, DOSBox-X runner |
 
@@ -29,10 +32,13 @@ restores a plain executable and `re/tools/explore.py` recovers its control flow.
 ## Building and testing
 
 ```sh
-cmake -S . -B build && cmake --build build -j
+cmake -S . -B build && cmake --build build -j       # needs SDL2 (apt install libsdl2-dev)
+./build/eliteplus
 python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip install unicorn capstone
 ~/tools/venv/bin/python re/tools/gen_tables.py      # regenerate core/ep_tables.c from original/
 ~/tools/venv/bin/python re/emu/galaxytest.py        # core vs the original's code, all systems
+~/tools/venv/bin/python re/emu/titletest.py 6000    # whole original booted headless vs core
+~/tools/venv/bin/python re/emu/play.py              # the original in the harness, in a window
 re/ghidra/run.sh                                     # Ghidra project, decompiled C and listing
 ```
 
@@ -49,4 +55,5 @@ re/ghidra/run.sh                                     # Ghidra project, decompile
 
 Elite © 1984 David Braben and Ian Bell. Elite Plus © 1991 Chris Sawyer, Realtime Software,
 and Bell & Braben. This is an unofficial fan reimplementation for preservation; no original
-game files are distributed.
+game files are distributed. Font: Exo 2 (SIL OFL). Text rendering: stb_truetype (public
+domain).

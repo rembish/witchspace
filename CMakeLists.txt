@@ -34,3 +34,21 @@ add_executable(ep_planetdump tests/planetdump.c)
 target_link_libraries(ep_planetdump PRIVATE epcore)
 add_executable(ep_titledump tests/titledump.c)
 target_link_libraries(ep_titledump PRIVATE epcore)
+
+# The port: SDL2 frontend over the core. The font is embedded, so the binary has no runtime
+# asset paths.
+set(FONT_SRC ${CMAKE_CURRENT_SOURCE_DIR}/assets/Exo2.ttf)
+set(FONT_C ${CMAKE_CURRENT_BINARY_DIR}/font_data.c)
+add_custom_command(
+  OUTPUT ${FONT_C}
+  COMMAND ${CMAKE_COMMAND} -DIN=${FONT_SRC} -DOUT=${FONT_C} -DNAME=font_ttf -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
+  DEPENDS ${FONT_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake)
+find_package(SDL2 REQUIRED)
+add_executable(eliteplus src/main.c src/gfx.c src/font.c third_party/stb_truetype_impl.c ${FONT_C})
+target_link_libraries(eliteplus PRIVATE epcore SDL2::SDL2)
+if(TARGET SDL2::SDL2main)
+  target_link_libraries(eliteplus PRIVATE SDL2::SDL2main)
+endif()
+if(NOT WIN32)
+  target_link_libraries(eliteplus PRIVATE m)
+endif()
