@@ -5,6 +5,7 @@
 #include "statemap.h"
 
 #include "ep_combat.h"
+#include "ep_dust.h"
 #include "ep_flight.h"
 #include "ep_ships.h"
 #include "ep_trade.h"
@@ -19,7 +20,7 @@ static void print_prims(const ep_render *r)
 {
     for (int k = 0; k < r->nprim; k++) {
         const ep_prim *p = &r->prim[k];
-        int n = p->kind == EP_PRIM_TRI ? 3 : p->kind == EP_PRIM_QUAD ? 4 : 2;
+        int n = p->kind == EP_PRIM_TRI ? 3 : p->kind == EP_PRIM_QUAD ? 4 : p->kind == EP_PRIM_PIXEL ? 1 : 2;
         printf("%d:%d", p->kind, p->colour);
         for (int j = 0; j < 2 * n; j++) printf(",%d", p->pt[j]);
         printf("\n");
@@ -67,6 +68,11 @@ int main(int argc, char **argv)
                 printf("choose mount\n");
             else if (r > EP_TRADE_CHOOSE_MOUNT)
                 printf("result %u\n", r);
+        } else if (!strcmp(argv[1], "dust")) {
+            ep_dust_frame(&g);
+            print_prims(&g.render);
+        } else if (!strcmp(argv[1], "dust_reset")) {
+            ep_dust_reset(&g);
         } else if (!strcmp(argv[1], "dashboard")) {
             ep_dashboard_tick(&g);
         } else if (!strcmp(argv[1], "ai")) {

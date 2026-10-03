@@ -84,6 +84,9 @@ typedef struct {
     uint16_t attacker;          /* ds:7610: data address of its slot */
     uint8_t hit_from_behind;    /* ds:7681: bit 7, the aft shield takes it */
     uint8_t fore_shield;        /* ds:54c4 */
+    uint8_t dust[210];          /* ds:5314: 30 particles of 7 bytes (see ep_dust.h) */
+    uint8_t dust_old[210];      /* ds:53e6: their shadow */
+    uint8_t dust_shift;         /* ds:54b8 */
     uint8_t status;             /* ds:54cb: condition 0 red, 1 green, 2 yellow, 3 (between) */
     uint8_t ecm_shown;          /* ds:54c0: the ECM was just used (icon) */
     uint8_t class_count[9];     /* ds:8730: objects but debris, then per AI class 0..7 */

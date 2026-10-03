@@ -31,6 +31,11 @@ draws streaks from the shadow. `5374` reset: for each particle x, y = r sar 1 re
 hi in ±23h (wider than visible: such particles stay frozen until a rotation), life, colour.
 Pixel `2973`: x = dl + dl/4 − 8; MCGA colours `ds:2656[c & 7]`.
 
+Ported as `core/ep_dust.c` (difftested: `dust`, `dust_reset`). Quirks kept: a particle
+re-entering at the top or bottom (`528e`) takes its colour from the high byte of its
+out-of-range y, not from the generator; the rear view decrements the life of a freshly
+respawned particle too; `5374` clears the message timer when its low byte is 0.
+
 ## Dashboard `549f`
 
 Cached gauges (`54cc..54e1`, reset to 80h by `5490`). State it writes: status `54cb`

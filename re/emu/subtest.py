@@ -67,6 +67,8 @@ ROUTINES = {
     "enemy_fire": (0xAE50, {}, {}),
     "ai": (0x77E0, {}, {}),
     "dashboard": (0x549F, {}, {}),
+    "dust": (0x4FA3, {}, {}),
+    "dust_reset": (0x5374, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
@@ -139,6 +141,26 @@ def dashboard_world(img, rng):
                         rng.randint(-0x7FFF, 0x7FFF)]) if k == rng.randrange(3) else rng.randint(-0x1000, 0x1000)
         img[base + 4 + 2 * k:base + 6 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
         img[base + 1 + k] = rng.getrandbits(8) if big else (0xFF if v < 0 else 0)
+
+
+def dust_world(img, rng):
+    """Any view, speed, steering, invert options and jump mode, particles near the edges."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0xB0DE, rng.choice([0, 0x200, 0x400, 0x600, 0]), 2)
+    w(0xAF56, rng.choice([0, 4, rng.randint(0, 0x34), 0x30, 0x34]), 2)
+    s = rng.choice([0, rng.getrandbits(16), rng.getrandbits(8), rng.getrandbits(8) << 8, 0x8080])
+    w(0x09D7, s, 2)
+    w(0xB136, rng.choice([0, 0, 1, 2]))
+    w(0xB137, rng.choice([0, 0, 1]))
+    w(0xB0DD, rng.choice([0, 0, 0, 1, 0x20]))
+    for i in range(30):
+        p = 0x5314 + 7 * i
+        if rng.random() < 0.3:
+            w(p, rng.choice([rng.randint(-0x2400, 0x23FF), rng.choice([0x1F80, -0x2000, 0x0500, -0x0600])]), 2)
+            w(p + 2, rng.choice([rng.randint(-0x1200, 0x11FF), rng.choice([0x0F80, -0x1000, 0x0300, -0x0300])]), 2)
+            w(p + 4, rng.choice([1, 2, rng.getrandbits(8)]))
+        if rng.random() < 0.2:
+            w(p + 5, rng.choice([0, 1]))
 
 
 def docking_approach(img, rng):
@@ -250,6 +272,8 @@ FUZZ = {
                    (0x7680, [0, 1]), (0x83A4, [0, 0, 1, 5, 6, 0x23, 0x24, 0x40]), (0x805A, [0, 0, 3]),
                    (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
     "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
+    "dust": [(0, dust_world)],
+    "dust_reset": [(0x805A, [0, 0x100, 0x128, 0x28])],
     "dashboard": [(0x54C8, [0, 0xFF, 0x100, 0x1FF, 0x200, 0x2FF, 0x300, 0x3FE, 0x3FF]), (0x54C1, [0, 0x7F, 0x80, 0xBF, 0xC0, 0xDF, 0xE0]),
                   (0x54C3, [0x1F, 0x20, 0x27, 0x28, 0x7F, 0x80, 0xFF]), (0x54C4, [0, 1, 0x7F, 0x80, 0xFF]),
                   (0x54C5, [0, 1, 0x7F, 0x80, 0xFF]), (0x54C2, [0, 1, 2, 0x80]), (0x835F, [0, 1]), (0xB126, [0, 0, 1]),
@@ -333,6 +357,11 @@ def run_original(image, addr, regs, exits=None):
     elif NAME == "equip":
         e.call(0x9161)
     e.hook(0x2FC0, lambda e, r: left.append(f"result {r['si']}"))
+    def pixel(e, r):
+        x = (r["ax"] + (r["ax"] >> 2) - 8) & 0xFFFF
+        if x < 0x130 and r["bx"] < 0x7C:
+            prims.append(f"8:{e.r8(r['si'] + 6) & 0xF},{x},{r['bx']}")
+    e.hook(0x2973, pixel)
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
         if NAME == "explode":
