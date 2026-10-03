@@ -84,6 +84,12 @@ int main(int argc, char **argv)
             printf("cmd %d\n", ep_commands(&g));
         } else if (!strcmp(argv[1], "countdowns")) {
             ep_countdowns(&g);
+        } else if (!strcmp(argv[1], "launch")) {
+            ep_launch(&g);
+            printf("end\n");
+        } else if (!strcmp(argv[1], "dock")) { /* 6864 alone: the tunnel, docking or not */
+            ep_tunnel_start(&g);
+            for (int k = 0; k < 20; k++) ep_tunnel_frame(&g, k);
         } else if (!strcmp(argv[1], "loop")) {
             g.test_dl_force = 1;
             g.test_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */

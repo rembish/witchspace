@@ -31,4 +31,19 @@ void ep_jump_missions(ep_game *g);
  * system, maybe a misjump, 50 frames of rings, the new system, missions, the arrival message */
 void ep_arrive(ep_game *g);
 
+/* 6864, one of its 20 frames (k = 0..19): the tunnel of a launch, or of docking when
+ * ds:7613 is set; on a launch the dust and objects move on. The message and dashboard tick
+ * come before frame 0 (ep_tunnel_start). */
+void ep_tunnel_start(ep_game *g);
+void ep_tunnel_frame(ep_game *g, int k);
+
+/* a027..a03d: launch from the station: flight start and the tunnel */
+void ep_launch(ep_game *g);
+
+/* a012: at the station: its first screen comes up */
+void ep_enter_station(ep_game *g);
+
+/* 6864 then a012: docked: the tunnel, then the station */
+void ep_dock(ep_game *g);
+
 #endif

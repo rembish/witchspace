@@ -5,6 +5,8 @@
 
 #include "ep_chart.h"
 #include "ep_combat.h"
+#include "ep_commands.h"
+#include "ep_world.h"
 #include "ep_flight.h"
 #include "ep_tables.h"
 #include "ep_dust.h"
@@ -284,4 +286,61 @@ void ep_arrive(ep_game *g)
     } else if (f->mission == 3 && f->mission5_phase == 1 && f->station_hit != 1) {
         f->leak_countdown = 0x32;
     }
+}
+
+void ep_tunnel_start(ep_game *g)
+{
+    g->f.message = g->f.docked ? 0x7698 : 0x7682;
+    g->f.message_time = 1;
+    ep_message_tick(g);
+    ep_dashboard_tick(g);
+}
+
+void ep_tunnel_frame(ep_game *g, int k)
+{
+    ep_flight *f = &g->f;
+    if (++f->flash == 6) f->flash = 0; /* 3921 */
+    if (!f->docked) {
+        int drawn[EP_OBJECTS];
+        ep_dust_frame(g);
+        ep_world_update(g, drawn);
+        ep_player_move(g);
+    }
+    /* 6988, 6941: the walls (the frontend's), 301a: the frame wait */
+    g->in.last_key = 0xff;                                               /* 0287 */
+    if (k == 0 && !f->docked && f->sound_device != 2 && !f->sound_off) { /* 4e5a: the launch */
+        ep_event_add(g, EP_EV_SOUND, 0x11);
+        ep_event_add(g, EP_EV_WAIT, f->sound_device ? 0x78 : 0x23a);
+    }
+}
+
+void ep_launch(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    if (f->other_screen) { /* 763e */
+        f->other_screen = 0;
+        f->message_time = (uint16_t)(f->message_time & 0xff);
+        f->message_shown = 0;
+    }
+    f->screen = 0;
+    ep_key_bar(g);
+    /* 028d: the mouse driver is reset */
+    ep_flight_start(g);
+    f->launching = 1;
+    ep_tunnel_start(g);
+    for (int k = 0; k < 20; k++) ep_tunnel_frame(g, k);
+}
+
+void ep_enter_station(ep_game *g)
+{
+    g->f.screen_shown = 0xff;
+    g->f.screen = 1;
+    g->f.launching = 0;
+}
+
+void ep_dock(ep_game *g)
+{
+    ep_tunnel_start(g);
+    for (int k = 0; k < 20; k++) ep_tunnel_frame(g, k);
+    ep_enter_station(g);
 }

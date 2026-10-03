@@ -35,7 +35,7 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 SCRATCH = [(0x54CC, 0x54E1), (0x6405, 0x6405), (0x45E4, 0x45E5), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0xA500, 0xA7FF), (0x8D00, 0x8D4E), (0x92F9, 0x92F9), (0xA3A0, 0xA4FF), (0xACA8, 0xACB3), (0xAD2B, 0xAD2D),
            (0x031D, 0x031E), (0x03F1, 0x03F2), (0x0980, 0x0990),
            (0x01F8, 0x01F9), (0x1074, 0x108E), (0x1091, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
-           (0x76D6, 0x76D7), (0x45E6, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
+           (0x76D6, 0x76D7), (0x45E6, 0x45E6), (0x45E8, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
 
 EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
 
@@ -76,7 +76,9 @@ ROUTINES = {
     "select_system": (0x5EE8, {}, {}),
     "arrive": (0x72D8, {}, {}),
     "frame": (0xA040, {}, {0xA073: "end"}),
-    "loop": (0xA040, {"di": 0x7BDE}, {0xA012: "frame 1", 0x9E80: "frame 3"}),
+    "launch": (0xA027, {}, {0xA040: "end"}),
+    "dock": (0x6864, {}, {}),
+    "loop": (0xA040, {"di": 0x7BDE}, {0xA021: "frame 1", 0x9E80: "frame 3"}),
     "key_bar": (0x0299, {}, {}),
     "commands": (0x03C0, {"di": 0x7BDE}, {0xA040: "cmd 1"}),  # DI as the frame leaves it
     "countdowns": (0xA0ED, {}, {}),
@@ -584,6 +586,8 @@ FUZZ = {
     "commands": [(0, bar_world), (0, command_world), (0, ship_in_sights)],
     "countdowns": [(0, jump_world), (0xAE60, [0, 0, 1, 2, 10, 11]), (0xAE61, [1, 1, 2, 10]), (0xAE25, [0, 1, 5]),
                    (0xB3D5, [0, 0, 1, 2, 7, 15, 0x28]), (0x54C8, [0x100, 0x2FE, 0x2FF, 0x3FF]), (0, ai_world)],
+    "launch": [(0, arrival_world), (0x8711, [0, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world)],
+    "dock": [(0x7613, [0, 1, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world), (0, ai_world)],
     "loop": [(0, ai_handlers), (0, autopilot_world), (0, dust_world), (0, ship_in_sights), (0, bar_world), (0, command_world),
              (0x76BD, [0, 0, 0, 1]), (0xB126, [0, 0, 1, 2, 0x3C]), (0x839C, [0, 3]), (0x7613, [0, 0, 0, 1]),
              (0xAE23, [0, 0, 1, 2])],
@@ -705,14 +709,21 @@ def run_original(image, addr, regs, exits=None):
         done = "cmd 2" if NAME == "commands" else "frame 2"
         for stub in (0x9048, 0x8BEA, 0x5AC0, 0x96DE, 0x8880, 0x5DC2, 0x6189, 0x5D9F, 0x924A, 0x07AA, 0x08AB, 0x0674,
                      0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5, 0x9781, 0x932F, 0x9563,
-                     0x0425, 0xA23B) + ((0x6864,) if NAME == "loop" else ()):  # not reconstructed yet
+                     0x0425, 0xA23B):  # screens not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
                 sounds.append(f"event {EV_UNPORTED}:{stub}"),
                 left.append("frame 1" if stub == 0x6864 else done), mu.emu_stop()),
                 begin=CS * 16 + stub, end=CS * 16 + stub)
-    if NAME in ("frame", "loop"):
+    if NAME in ("frame", "loop", "launch", "dock"):
         for stub in (0x301A, 0x3130):
             e.hook(stub, lambda e, r: None)
+    if NAME in ("launch", "dock", "loop"):  # the launch sound and its wait
+        def launch_sound(e, r):
+            if e.r8(0x4801) != 2 and e.r8(0x45E7) == 0:
+                sounds.append(f"event {EV_SOUND}:17")
+                sounds.append(f"event 5:{0x78 if e.r8(0x4801) else 0x23A}")
+        e.hook(0x4E5A, launch_sound)
+        e.hook(0x028D, lambda e, r: None)  # the mouse driver
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
                       begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
     if NAME in ("buy", "sell"):
@@ -739,7 +750,7 @@ def run_original(image, addr, regs, exits=None):
         left.append("cmd 0")
     if NAME == "tunnel" and not left:
         left.append("end 0")
-    if NAME in ("buy", "sell", "equip", "dashboard", "arrive", "countdowns"):  # the screens' drawing is the frontend's
+    if NAME in ("buy", "sell", "equip", "dashboard", "arrive", "countdowns", "launch", "dock"):  # the screens' drawing is the frontend's
         prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds
 

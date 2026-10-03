@@ -5,6 +5,7 @@
 
 #include "ep_combat.h"
 #include "ep_commands.h"
+#include "ep_travel.h"
 #include "ep_dust.h"
 #include "ep_flight.h"
 #include "ep_ships.h"
@@ -138,7 +139,7 @@ int ep_flight_frame(ep_game *g)
     ep_frame_before_ai(g);
     ep_frame_from_ai(g);
     if (f->docked == 1) {
-        ep_event_add(g, EP_EV_UNPORTED, 0x6864); /* the docking tunnel, then the station */
+        ep_dock(g);
         return EP_FRAME_DOCKED;
     }
     ep_laser_fire(g);
@@ -149,7 +150,10 @@ int ep_flight_frame(ep_game *g)
     }
     ep_jump_drive(g);
     ep_countdowns(g);
-    if (ep_tunnel_tick(g)) return EP_FRAME_DOCKED; /* the escape capsule reached the station */
+    if (ep_tunnel_tick(g)) { /* the escape capsule reached the station */
+        ep_enter_station(g);
+        return EP_FRAME_DOCKED;
+    }
     ep_energy_drain(g);
     if (f->dead != 1) return EP_FRAME_NEXT;
     f->hyper_countdown = 0;

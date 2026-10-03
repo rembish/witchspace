@@ -16,7 +16,8 @@
 /* Things the original does that the core reports instead of doing: sounds, and code paths
  * not reconstructed yet (so tests notice when a state reaches them). */
 /* EP_EV_ICON: function-key bar slot (high byte) gets icon sprite (low byte) */
-enum { EP_EV_SOUND = 1, EP_EV_SURFACE_SOUND, EP_EV_UNPORTED, EP_EV_ICON };
+/* EP_EV_WAIT: the original stops for this many timer ticks (a sound playing out) */
+enum { EP_EV_SOUND = 1, EP_EV_SURFACE_SOUND, EP_EV_UNPORTED, EP_EV_ICON, EP_EV_WAIT };
 
 typedef struct {
     uint8_t kind;
@@ -125,6 +126,8 @@ typedef struct {
     int16_t death_vel[3];       /* ds:76b7: the way the ship was flying when it blew up, x 40 */
     uint16_t ap_roll;           /* ds:af59: the roll the docking computer turns to */
     uint8_t ap_passes;          /* ds:af5b: lining-up passes done (two each) */
+    uint8_t sound_off;          /* ds:45e7 */
+    uint8_t launching;          /* ds:ae21: 1 from the launch on, 0 at the station */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
