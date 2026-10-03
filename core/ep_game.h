@@ -6,6 +6,7 @@
 
 #include "ep_circle.h"
 #include "ep_commander.h"
+#include "ep_galaxy.h"
 #include "ep_objects.h"
 #include "ep_render.h"
 #include "ep_rng.h"
@@ -94,6 +95,9 @@ typedef struct {
     uint8_t class_count[9];     /* ds:8730: objects but debris, then per AI class 0..7 */
     uint8_t lock_text[0x28];    /* ds:8081: "<type> (<role>)" after "Missile locked onto " */
     uint8_t sound_device;       /* ds:4801: 2 picks other sound numbers */
+    uint8_t hyper_countdown;    /* ds:ae60: hyperspace countdown, seconds (0 = none) */
+    uint8_t hyper_tick;         /* ds:ae61: frames to the next second */
+    uint8_t missile_block;      /* ds:b1f8: 1 = missiles cannot be fired */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -127,6 +131,7 @@ typedef struct {
     ep_commander cmdr; /* ds:82db */
     ep_space space;    /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */
     ep_rng rng;        /* ds:0205 */
+    ep_seed seed;      /* ds:5503: the current system's seed (galaxy generator) */
     uint32_t clock;    /* ds:45e0: timer ticks */
     uint32_t flip;     /* ds:267c: tick count at the last frame flip */
     ep_render render;  /* its vertex buffer (ds:28e6) carries over between ships */

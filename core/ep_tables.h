@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-extern const uint16_t ep_galaxy_seeds[8][3];
+extern const uint16_t ep_galaxy_seeds[9][3];
 extern const char ep_digrams[65];
 
 #define EP_DESC_TOKENS 39

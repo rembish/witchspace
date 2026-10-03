@@ -71,6 +71,8 @@ ROUTINES = {
     "tribbles": (0x1221, {}, {}),
     "missile_lock": (0xA3F4, {}, {}),
     "jump_drive": (0xA5EE, {}, {}),
+    "flight_start": (0x64D0, {}, {}),
+    "new_system": (0x666B, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
@@ -188,6 +190,22 @@ def far_masses(img, rng):
         if rng.random() < 0.1:
             img[b] = (rng.choice([5, 17, 6, 11, 9]) << 1) | 1
             img[b + 0x1E] |= 2
+
+
+def arrival_world(img, rng):
+    """Any galaxy (the hidden 8 too), system, tech, government; witchspace; docked here before."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    galaxy = rng.choice([0, 1, 7, 8, rng.randrange(8)])
+    system = rng.randrange(256)
+    w(0x8315, galaxy)
+    w(0x8329, system)
+    w(0x832E, rng.choice([0, 8, 9, 12]))
+    w(0x832C, rng.randrange(8))
+    w(0x83A4, rng.choice([0, 0, 0, 1, 0x64]))
+    w(0x83AE, rng.choice([0, 0, 1]), 2)
+    w(0x83B9, rng.choice([galaxy, galaxy, 3]))
+    w(0x83BA, rng.choice([system, system, 5]))
+    w(0x83AA, rng.choice([0, 1]))
 
 
 def tribble_world(img, rng):
@@ -420,6 +438,8 @@ FUZZ = {
     "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
     "dust": [(0, dust_world)],
     "tribbles": [(0, tribble_world)],
+    "flight_start": [(0, arrival_world)],
+    "new_system": [(0, arrival_world)],
     "jump_drive": [(0xB0DD, [0, 1, 1, 1]), (0xAF14, [0, 0, 1]), (0xAF56, [0x30, 0x30, 0x2F, 4]), (0xAE20, [0, 1]),
                    (0x7680, [0, 0, 1]), (0, far_masses), (0x76B5, [36, 36, 36, 2, 3, 4])],
     "missile_lock": [(0, ship_in_sights), (0, ship_in_sights), (0x54CA, [1, 1, 1, 0, 2]), (0x4801, [0, 2]),

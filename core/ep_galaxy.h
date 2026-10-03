@@ -34,7 +34,7 @@ typedef struct {
 /* Advance a seed by one twist (5e0f). Four twists step to the next system. */
 void ep_twist(ep_seed *s);
 
-/* Seed of system 0 of a galaxy (5e25). */
+/* Seed of system 0 of a galaxy (5e25); 8 is the hidden ninth. */
 ep_seed ep_galaxy_seed(int galaxy);
 
 /* Seed of system n of a galaxy (610e). */

@@ -16,7 +16,7 @@ void ep_twist(ep_seed *s)
 ep_seed ep_galaxy_seed(int galaxy)
 {
     ep_seed s;
-    memcpy(s.w, ep_galaxy_seeds[galaxy & 7], sizeof s.w);
+    memcpy(s.w, ep_galaxy_seeds[(unsigned)galaxy < 9 ? galaxy : galaxy & 7], sizeof s.w);
     return s;
 }
 

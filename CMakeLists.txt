@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_library(epcore STATIC core/ep_galaxy.c core/ep_desc.c core/ep_market.c core/ep_render.c core/ep_objects.c core/ep_world.c core/ep_flight.c core/ep_dust.c core/ep_combat.c core/ep_trade.c core/ep_ships.c core/ep_rng.c core/ep_circle.c core/ep_title.c core/ep_commander.c core/ep_tables.c)
+add_library(epcore STATIC core/ep_galaxy.c core/ep_desc.c core/ep_market.c core/ep_render.c core/ep_objects.c core/ep_world.c core/ep_flight.c core/ep_dust.c core/ep_combat.c core/ep_trade.c core/ep_ships.c core/ep_travel.c core/ep_rng.c core/ep_circle.c core/ep_title.c core/ep_commander.c core/ep_tables.c)
 target_include_directories(epcore PUBLIC core)
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
