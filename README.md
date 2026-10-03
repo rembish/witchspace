@@ -8,9 +8,12 @@ against the original running in an emulator, with a fresh frontend on top. No or
 files are included.
 
 **Status:** reverse engineering in progress. Reconstructed and checked against the original:
-galaxy and system generation, descriptions, market and equipment prices, ship models and
-rendering, object update, planet circles and the title screen (frame by frame). The port
-(`eliteplus`) shows the title screen so far.
+galaxy and system generation, descriptions, market and equipment prices, the commander
+block (save files), ship models and rendering, the title screen (frame by frame), and in
+flight: the object update with sun, planet and scanner, the player's controls and movement,
+the laser, messages and warnings, fuel leak and energy. Flight subsystems are checked on
+game states taken from the running original (`re/emu/corpus.py`, `re/emu/subtest.py`). The
+port (`eliteplus`) shows the title screen so far.
 
 ## Layout
 
@@ -39,6 +42,8 @@ python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip inst
 ~/tools/venv/bin/python re/emu/galaxytest.py        # core vs the original's code, all systems
 ~/tools/venv/bin/python re/emu/titletest.py 6000    # whole original booted headless vs core
 ~/tools/venv/bin/python re/emu/play.py              # the original in the harness, in a window
+~/tools/venv/bin/python re/emu/corpus.py            # flight states from the original (git-ignored)
+~/tools/venv/bin/python re/emu/subtest.py controls --fuzz 10   # one flight subsystem vs the core
 re/ghidra/run.sh                                     # Ghidra project, decompiled C and listing
 ```
 
