@@ -73,9 +73,7 @@ static void print_code(desc_state *d, uint8_t code)
         print(d, tmp);
         break;
     }
-    case 4: /* 6488: back one character */
-        d->di--;
-        break;
+    case 4: /* 6488: back one character */ d->di--; break;
     case 5: d->caps = 1; break;
     case 6: d->caps = 0; break;
     default: break;

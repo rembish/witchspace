@@ -41,6 +41,20 @@ static const field fields[] = {
     F(0x45e0, clock, 0),
     F(0x267c, flip, 0),
     F(0x28e6, render.vtx, 1),
+    F(0x83a4, f.hyperspace, 0),
+    F(0x83ae, f.approach, 0),
+    F(0x83ad, f.approach_size, 0),
+    F(0x54c1, f.planet_size, 0),
+    F(0x54c3, f.sun_heat, 0),
+    F(0x0aa4, f.surface, 0),
+    F(0x0aa6, f.surface_count, 0),
+    F(0x83b5, f.atmosphere, 0),
+    F(0x8058, f.message, 0),
+    F(0x805a, f.message_time, 0),
+    F(0x76bd, f.dead, 0),
+    F(0xae23, f.no_crash, 0),
+    F(0xb126, f.scoop_lock, 0),
+    F(0x10bc, f.video, 0),
 };
 
 void state_load(ep_game *g, const uint8_t ds[DS_SIZE])

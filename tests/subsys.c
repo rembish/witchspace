@@ -4,7 +4,7 @@
  *                              primitives drawn go to stdout, one per line */
 #include "statemap.h"
 
-#include "ep_render.h"
+#include "ep_world.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -33,10 +33,15 @@ int main(int argc, char **argv)
         static ep_game g;
         state_load(&g, ds);
         g.render.nprim = 0;
+        g.circles.n = 0;
+        g.nevents = 0;
         if (!strcmp(argv[1], "update_objects")) {
             int drawn[EP_OBJECTS];
-            ep_update_objects(&g.space, &g.render, drawn);
+            ep_world_update(&g, drawn);
             print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
+            for (int k = 0; k < g.nevents; k++) printf("event %d:%d\n", g.event[k].kind, g.event[k].arg);
         } else {
             fprintf(stderr, "unknown subsystem %s\n", argv[1]);
             return 2;

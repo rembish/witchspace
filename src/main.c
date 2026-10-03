@@ -40,8 +40,8 @@ static void draw_title(const ep_title *t, const view *v)
         const ep_span *sp = &t->disc.span[k];
         gfx_rect(vx(v, sp->x), vy(v, sp->row), sp->w * v->s, v->s, disc);
     }
-    for (int k = 0; k < t->render.nprim; k++) {
-        const ep_prim *p = &t->render.prim[k];
+    for (int k = 0; k < t->g.render.nprim; k++) {
+        const ep_prim *p = &t->g.render.prim[k];
         rgba c = game_colour(p->colour);
         float q[8];
         for (int j = 0; j < 4; j++) {
@@ -87,9 +87,9 @@ int main(int argc, char **argv)
 
     static ep_title t;
     ep_title_init(&t);
-    t.mcga = 1;
-    t.rng = ep_rng_init();
-    ep_rng_seed(&t.rng, (uint8_t)time(NULL));
+    t.g.f.video = 2;
+    t.g.rng = ep_rng_init();
+    ep_rng_seed(&t.g.rng, (uint8_t)time(NULL));
 
     Uint64 t0 = SDL_GetPerformanceCounter(), freq = SDL_GetPerformanceFrequency();
     int running = 1;
@@ -102,8 +102,8 @@ int main(int argc, char **argv)
         /* the original's clock: run title frames until the tick count catches up */
         uint32_t ticks = (uint32_t)((double)(SDL_GetPerformanceCounter() - t0) / (double)freq * TICK_HZ);
         int guard = 0; /* a frame ends two ticks after the last one, as the frame wait does */
-        while (t.flip + 2 <= ticks && guard++ < 8) ep_title_frame(&t, 0);
-        if (t.flip + 2 <= ticks) t.flip = t.clock = ticks; /* far behind (window dragged): skip */
+        while (t.g.flip + 2 <= ticks && guard++ < 8) ep_title_frame(&t, 0);
+        if (t.g.flip + 2 <= ticks) t.g.flip = t.g.clock = ticks; /* far behind (window dragged): skip */
 
         int w, h;
         SDL_GetRendererOutputSize(ren, &w, &h);

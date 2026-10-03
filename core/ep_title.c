@@ -2,6 +2,7 @@
 #include "ep_title.h"
 
 #include "ep_tables.h"
+#include "ep_world.h"
 
 #include <string.h>
 
@@ -15,7 +16,7 @@ static uint16_t get16(const ep_object *o, int off) { return (uint16_t)(o->b[off]
 
 void ep_title_init(ep_title *t)
 {
-    ep_space *s = &t->space;
+    ep_space *s = &t->g.space;
     memset(s->player_angle, 0, sizeof s->player_angle);
     s->extra_angle = 0;
     s->in_flight = 0;
@@ -37,10 +38,10 @@ int ep_title_frame(ep_title *t, int space)
 {
     /* 9f2a: the red disc, jittered (ds:108f = 1) */
     t->disc.n = 0;
-    ep_draw_circle(&t->rng, 0xc8, 0x3c, 0x19, 1, 0, t->mcga, &t->disc);
+    ep_draw_circle(&t->g.rng, 0xc8, 0x3c, 0x19, 1, 0, t->g.f.video == 2, &t->disc);
 
     /* 9f47: the ship's distance */
-    ep_object *o = &t->space.obj[EP_TITLE_SLOT];
+    ep_object *o = &t->g.space.obj[EP_TITLE_SLOT];
     uint16_t z = get16(o, EP_OBJ_POS + 4);
     if (t->hold == 0 && (uint16_t)(z - 0x50) >= ep_title_min_dist[t->ship_type & 31]) {
         set16(o, EP_OBJ_POS + 4, (uint16_t)(z - 0x50));
@@ -65,11 +66,12 @@ int ep_title_frame(ep_title *t, int space)
     if (++t->flash == 6) t->flash = 0;
     /* 4154 */
     int drawn[EP_OBJECTS];
-    t->render.nprim = 0;
-    ep_update_objects(&t->space, &t->render, drawn);
+    t->g.render.nprim = 0;
+    t->g.circles.n = 0;
+    ep_world_update(&t->g, drawn);
     /* 301a: wait until two ticks after the last flip */
-    if (t->clock < t->flip + 2) t->clock = t->flip + 2;
-    t->flip = t->clock;
+    if (t->g.clock < t->g.flip + 2) t->g.clock = t->g.flip + 2;
+    t->g.flip = t->g.clock;
     /* 03c0: space starts the game */
     return space;
 }

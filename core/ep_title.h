@@ -9,26 +9,19 @@
 #define EP_TITLE_H
 
 #include "ep_circle.h"
-#include "ep_objects.h"
-#include "ep_render.h"
-#include "ep_rng.h"
+#include "ep_game.h"
 
 #include <stdint.h>
 
 #define EP_TITLE_SLOT 2
 
 typedef struct {
-    ep_rng rng;
-    ep_space space;
+    ep_game g;         /* rng, space, clock, flip; g.render has the ship */
     uint8_t ship_type; /* ds:b1bb */
     uint16_t hold;     /* ds:b25f: frames at the closest point */
     uint8_t list_pos;  /* ds:b261 - b263 */
     uint8_t flash;     /* ds:1b3e: flashing colour step, 0..5 */
-    uint32_t clock;    /* ds:45e0: timer ticks */
-    uint32_t flip;     /* ds:267c: tick count at the last frame flip */
-    int mcga;
     /* output of the last frame */
-    ep_render render;
     ep_circle_buf disc;
 } ep_title;
 

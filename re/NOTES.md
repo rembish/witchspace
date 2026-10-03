@@ -342,3 +342,25 @@ the mode 13h screen with the DAC.
   kills **[verify]**); `8370` name; `8379` cargo 17 × (held, on offer); `839c–83b9` flight
   and mission state (many fields, see the reference counts); `83bb` checksum.
 - Checked: `re/emu/cmdrtest.py` (checksums of 6000 blocks; default block).
+
+## Objects in flight (`update_objects` complete except scooping)
+
+- Planet/sun pass (`41aa`): slots of type ≥ 30 with flag bit 6, largest `+3c` first (a
+  value of 0 is never drawn), `44c7` each. Planet: falling (`ds:83ae` counts down; at 0 the
+  size `ds:83ad` grows by a quarter, ≥ 256 crashes), else `apparent_size(100)` →
+  `ds:54c1`; surface activity `ds:0aa4` steps the RNG and plays a sound when old A_hi ≤
+  1388h (`4e1a`); size ≥ d2h wears down `ds:83b5` by 10h (to 0: surface off) and `ds:0aa6`;
+  mask 1/3/7 at sizes < 28h / < b4h / else; size ≥ c3h with fuel scoops adds 6 to fuel (on
+  carry: full, message `ds:2bf6` for 5, sound 2); size ≥ fdh crashes (`6cfa`: `ds:76bd` = 1
+  unless `ds:ae23`); disc at `(x·256/z + 98h, y·256/z + 3eh)` (unsigned divide of the
+  absolute value, divide error = not drawn), skipped when it overflows or is off the view,
+  colour from slot byte `+0b`. Sun: `apparent_size(50)`, heat `ds:54c3 = 2·min(~size, 7fh)`,
+  crash at ≥ fdh, plain disc (mask 0).
+- Scanner (`4359`, in flight, slots 0–19, not planet/sun): blinking when `+1e` bit 5 (bit 6
+  hidden, `+34` counts 20 hidden / 25 shown frames; hidden objects also get bit 1); blip
+  (`2995`) from the camera position: x high byte + a0h in 60h..deh, `b0h − hi(z/4 + z/16)` in
+  a0h..c0h, plus `hi(y/4 − y/16)` in a0h..c0h → `+1e |= 2` (on the scanner: explosions do
+  not count down while on it). Colour by type from `ds:265e`.
+- Explosion end (`7e82`): active bit cleared. Sounds go through `4c98` (id in al); the core
+  logs them as events. The compass (`487e`) only draws.
+- Checked: `re/emu/subtest.py update_objects` on flight states from `corpus.py`.

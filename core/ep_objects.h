@@ -67,9 +67,17 @@ void ep_planet_to_camera(ep_space *s, ep_object *o);
  * position and scale, 0..255 */
 uint16_t ep_apparent_size(const ep_object *o, uint16_t size);
 
-/* update_objects (4154), for ship types (0..29); planets, the sun, the scanner, scooping and
- * explosions are not reconstructed yet. Ships drawn are appended to r. Returns the number of
- * ships drawn, their slot numbers in order in drawn[]. */
-int ep_update_objects(ep_space *s, ep_render *r, int drawn[EP_OBJECTS]);
+/* 4264: in range (24-bit position fits 16 bits, each |coordinate| < 12000, squared distance
+ * below 0895h << 16); sets +3e and flag bit 6 */
+int ep_object_in_range(ep_object *o);
+
+/* 4317: rotate a position into camera space (+3c = high byte of z), the scanner (in flight),
+ * then the extra rotation by -ds:b0de */
+void ep_object_rotate(ep_space *s, ep_object *o, int16_t p[3]);
+
+/* The renderer's view of a ship slot */
+ep_ship_view ep_ship_view_of(const ep_space *s, const ep_object *o);
+
+uint16_t ep_abs16(uint16_t v);
 
 #endif

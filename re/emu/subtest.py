@@ -24,7 +24,10 @@ TOOL = sys.argv[3] if len(sys.argv) > 3 else os.path.join(HERE, "..", "..", "bui
 
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary.
-SCRATCH = [(0x01F8, 0x01F9), (0x1074, 0x10B5), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x76D6, 0x76D7)]
+SCRATCH = [(0x01F8, 0x01F9), (0x1074, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
+           (0x76D6, 0x76D7)]
+
+EV_SOUND, EV_SURFACE = 1, 2
 
 # name -> (address, registers)
 ROUTINES = {
@@ -48,7 +51,20 @@ def run_original(image, addr, regs):
     e.hook(0x1A7A, lambda e, r: prim(2, [r["ax"], r["bx"], r["cx"], r["dx"], e.r16(0x10B0),
                                          e.r16(0x10B4), r["si"], r["bp"]]))
     e.hook(0x261B, lambda e, r: prim(4, [r["cx"], r["dx"], r["ax"], r["bx"]]))
+
+    spans = []
+
+    def span(e, r):
+        if s16(r["cx"]) >= 0:
+            spans.append(f"span {s16(r['bx'])},{s16(r['cx']) or 1},{(s16(r['di']) - 0x168) // 0x28}")
+    e.hook(0x16DA, span)
+    e.hook(0x1514, span)
+    sounds = []
+    e.hook(0x4E1A, lambda e, r: sounds.append(f"event {EV_SURFACE}:{r['ax']}"))
+    e.hook(0x4C98, lambda e, r: sounds.append(f"event {EV_SOUND}:{r['ax'] & 0xFF}"))
+    e.hook(0x487E, lambda e, r: None)  # compass: drawing only
     e.call(addr, **regs)
+    return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + sounds
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims
 
 
@@ -67,7 +83,7 @@ def main():
         inf, outf = os.path.join(tmp, "in"), os.path.join(tmp, "out")
         open(inf, "wb").write(before)
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
-        got, got_prims = open(outf, "rb").read(), out.split()
+        got, got_prims = open(outf, "rb").read(), out.splitlines()
         diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]]
         for i in range(0x10000):
             if not mask[i] and want[i] != before[i] and not any(a <= i <= b for a, b in SCRATCH):

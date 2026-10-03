@@ -43,7 +43,7 @@ void ep_rotate_by_player(const ep_space *s, int16_t p[3])
     ep_rotate_pair(&s->rot[2], &p[0], &p[1]);
 }
 
-static uint16_t abs16(uint16_t v) { return (v & 0x8000) ? (uint16_t)(0u - v) : v; }
+uint16_t ep_abs16(uint16_t v) { return (v & 0x8000) ? (uint16_t)(0u - v) : v; }
 
 /* 4217: every coordinate fits 16 bits (the high byte is the word's sign extension) */
 static int position_fits(const ep_object *o)
@@ -56,13 +56,12 @@ static int position_fits(const ep_object *o)
     return 1;
 }
 
-/* 4264: in range (each |coordinate| < 12000, squared distance below 0895h << 16) */
-static int in_range(ep_object *o)
+int ep_object_in_range(ep_object *o)
 {
     if (!position_fits(o)) return 0;
     uint16_t c[3];
     for (int k = 0; k < 3; k++) {
-        c[k] = abs16(get16(o, EP_OBJ_POS + 2 * k));
+        c[k] = ep_abs16(get16(o, EP_OBJ_POS + 2 * k));
         if (c[k] >= 0x2ee0) return 0;
     }
     uint16_t sum = (uint16_t)(((uint32_t)c[0] * c[0]) >> 16);
@@ -75,31 +74,52 @@ static int in_range(ep_object *o)
     return 1;
 }
 
-/* 4317: rotate into camera space; +3c = high byte of z before the extra rotation */
-static void rotate_to_camera(ep_space *s, ep_object *o, int16_t p[3])
+/* 2995: the blip's place on the scanner from the camera position; an object that lands on
+ * the scanner is marked (+1e bit 1, which also holds back its explosion timer) */
+static void scanner_blip(ep_object *o, const int16_t p[3])
+{
+    int16_t y = (int16_t)((p[1] >> 2) - ((p[1] >> 2) >> 2));
+    int16_t z = (int16_t)((p[2] >> 2) + ((p[2] >> 2) >> 2));
+    uint8_t xh = (uint8_t)((uint8_t)((uint16_t)p[0] >> 8) + 0xa0);
+    if (xh < 0x60 || xh >= 0xdf) return;
+    uint8_t zh = (uint8_t)(0xb0 - (uint8_t)((uint16_t)z >> 8));
+    if (zh < 0xa0 || zh >= 0xc1) return;
+    uint8_t top = (uint8_t)(zh + (uint8_t)((uint16_t)y >> 8));
+    if (top < 0xa0 || top >= 0xc1) return;
+    o->b[EP_OBJ_FLAGS1E] |= 2;
+}
+
+/* 4359: scanner, in flight and for the first 20 slots: ships blink when +1e bit 5 is set
+ * (bit 6: hidden, +34 counts the phases) */
+static void scanner(const ep_space *s, ep_object *o, const int16_t p[3])
+{
+    if (!s->in_flight || o >= &s->obj[20]) return;
+    uint8_t type = (uint8_t)((o->b[EP_OBJ_FLAGS] >> 1) & 0x1f);
+    if (type == 30 || type == 31) return;
+    uint8_t *f = &o->b[EP_OBJ_FLAGS1E];
+    if (*f & 0x20) {
+        if (*f & 0x40) {
+            *f |= 2;
+            if (--o->b[EP_OBJ_TIMER]) return;
+            *f ^= 0x40;
+            o->b[EP_OBJ_TIMER] = 0x14;
+        } else if (!--o->b[EP_OBJ_TIMER]) {
+            *f ^= 0x40;
+            o->b[EP_OBJ_TIMER] = 0x19;
+        }
+    }
+    scanner_blip(o, p);
+}
+
+void ep_object_rotate(ep_space *s, ep_object *o, int16_t p[3])
 {
     ep_rotate_by_player(s, p);
     o->b[EP_OBJ_ZHI] = (uint8_t)((uint16_t)p[2] >> 8);
-    /* 4359: scanner blip, only in flight (not reconstructed yet) */
+    scanner(s, o, p);
     if (s->extra_angle) {
         s->rot[5] = ep_rot_from_angle((uint16_t)(0u - s->extra_angle));
         ep_rotate_pair(&s->rot[5], &p[0], &p[2]);
     }
-}
-
-/* 42c8: camera-space position and the in-view test */
-static void to_camera(ep_space *s, ep_object *o)
-{
-    int16_t p[3];
-    for (int k = 0; k < 3; k++) p[k] = (int16_t)get16(o, EP_OBJ_POS + 2 * k);
-    rotate_to_camera(s, o, p);
-    /* 42d5: scooping (fuel scoops fitted) is not reconstructed yet */
-    if (p[2] < 100) return;
-    for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);
-    uint16_t z = (uint16_t)p[2];
-    if (z < (uint16_t)(abs16((uint16_t)p[0]) << 1)) return;
-    if (z < (uint16_t)(abs16((uint16_t)p[1]) << 1)) return;
-    o->b[EP_OBJ_FLAGS] |= 0x80;
 }
 
 /* |coordinate k| as 24 bits */
@@ -138,7 +158,7 @@ void ep_planet_to_camera(ep_space *s, ep_object *o)
                     8;
         p[k] = (int16_t)(uint16_t)(v >> cl);
     }
-    rotate_to_camera(s, o, p);
+    ep_object_rotate(s, o, p);
     for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);
     o->b[EP_OBJ_FLAGS] |= 0xc0;
 }
@@ -167,7 +187,7 @@ uint16_t ep_apparent_size(const ep_object *o, uint16_t size)
     return q < 0x100 ? (uint16_t)q : 0xff;
 }
 
-static ep_ship_view ship_view(const ep_space *s, const ep_object *o)
+ep_ship_view ep_ship_view_of(const ep_space *s, const ep_object *o)
 {
     ep_ship_view v;
     v.flags0 = o->b[EP_OBJ_FLAGS];
@@ -179,42 +199,4 @@ static ep_ship_view ship_view(const ep_space *s, const ep_object *o)
     v.flags1e = o->b[EP_OBJ_FLAGS1E];
     v.extra_angle = s->extra_angle;
     return v;
-}
-
-int ep_update_objects(ep_space *s, ep_render *r, int drawn[EP_OBJECTS])
-{
-    for (int k = 0; k < 3; k++) s->rot[k] = ep_rot_from_angle(s->player_angle[k]);
-    int n = s->count < EP_OBJECTS ? s->count : EP_OBJECTS;
-    for (int i = 0; i < n; i++) {
-        ep_object *o = &s->obj[i];
-        if (!(o->b[EP_OBJ_FLAGS] & 1)) continue;
-        o->b[EP_OBJ_FLAGS] &= 0x3f;
-        if (o->b[EP_OBJ_FLAGS] >= 0x3c) continue; /* 433c: planet and sun, not yet */
-        if (o->b[EP_OBJ_TIMER] && !(o->b[EP_OBJ_FLAGS1E] & 2))
-            if (++o->b[EP_OBJ_TIMER] == 0) continue; /* 7e82: explosion over, not yet */
-        o->b[EP_OBJ_FLAGS1E] &= 0xfd;
-        if (in_range(o)) to_camera(s, o);
-    }
-    /* 41aa: planet and sun first, not yet. 41e3: ships, farthest camera z first. */
-    int nd = 0;
-    for (;;) {
-        uint16_t far = 0;
-        int pick = -1;
-        for (int i = 0; i < n; i++) {
-            const ep_object *o = &s->obj[i];
-            if ((o->b[EP_OBJ_FLAGS] & 0xc1) != 0xc1) continue;
-            uint16_t z = get16(o, EP_OBJ_CAM + 4);
-            if (far < z) {
-                far = z;
-                pick = i;
-            }
-        }
-        if (!far) break;
-        s->obj[pick].b[EP_OBJ_FLAGS] &= 0xbf;
-        ep_ship_view v = ship_view(s, &s->obj[pick]);
-        ep_draw_ship(r, &v);
-        drawn[nd++] = pick;
-    }
-    /* 487e: compass, only in flight */
-    return nd;
 }
