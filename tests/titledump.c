@@ -3,8 +3,17 @@
  * stdout per frame: state, then the disc spans and the ship primitives drawn. */
 #include "ep_title.h"
 
+#include "ep_sound.h"
+
 #include <stdio.h>
 #include <string.h>
+
+/* the original's frame wait: the clock moves on to two ticks after the last flip */
+static void wait(ep_game *g, uint32_t until, int show)
+{
+    (void)show;
+    if (g->clock < until) g->clock = until;
+}
 
 int main(void)
 {
@@ -14,6 +23,7 @@ int main(void)
     if (scanf("%u %u %u %u %u %u %u %u %lu %lu %u", &r0, &r1, &r2, &r3, &type, &hold, &pos, &flash, &clock,
               &flip, &frames) != 11)
         return 1;
+    g.wait = wait;
     g.space.count = 3;
     g.in.last_key = 0xff;
     g.f.video = 2;
@@ -34,7 +44,6 @@ int main(void)
         g.render.ntext = 0;
         g.circles.n = 0;
         g.nevents = 0;
-        if (g.clock < g.flip + 2) g.clock = g.flip + 2; /* 301a waits two ticks after the last flip */
         ep_title_frame(&g);
         printf("%u %u %u %u %u %u %u %u %lu %lu ", g.rng.w[0], g.rng.w[1], g.rng.w[2], g.rng.w[3],
                g.f.title_ship, g.f.title_hold, g.f.title_list - 0xb263, g.f.flash, (unsigned long)g.clock,

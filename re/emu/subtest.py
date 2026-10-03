@@ -42,13 +42,6 @@ EV_SOUND, EV_SURFACE, EV_UNPORTED, EV_FLIP = 1, 2, 3, 9
 
 # Sound routines that wrap 4c98 (some skip the sound depending on audio state, which the core
 # does not keep): logged with the sound number they pass.
-SOUND_WRAPPERS = {
-    0x4D9F: lambda r: 0x0B, 0x4DC9: lambda r: 0x14 + (r["ax"] & 3), 0x4DEB: lambda r: 0x0F,
-    0x4DF5: lambda r: 0x12, 0x4DFF: lambda r: 0x13, 0x4EA7: lambda r: 2, 0x4EAC: lambda r: 5,
-    0x4EB1: lambda r: 6, 0x4DA4: lambda r: 0x17, 0x4E98: lambda r: 0x0C, 0x4E9D: lambda r: 0x19,
-    0x4EA2: lambda r: 1, 0x4EB6: lambda r: 0x0D, 0x4EBB: lambda r: 0x0E, 0x4EC0: lambda r: 0x18,
-    0x4EC5: lambda r: 0x1A, 0x4ECA: lambda r: 0x1B,
-}
 # Routines the core does not reconstruct yet: stubbed and logged on both sides.
 UNPORTED = []  # routines the core reports as EP_EV_UNPORTED instead of running
 UNPORTED_FOR = {}
@@ -101,6 +94,8 @@ ROUTINES = {
     "load_session": (0x08AB, {}, {}),  # 9e80: below
     "title_open": (0x9E9A, {}, {0x9F21: "end"}),
     "protection_pick": (0x32B8, {}, {}),
+    "timer": (0x4A50, {}, {}),
+    "key_event": (0x0215, {}, {}),
     "title_session": (0x9F21, {}, {0xA004: "start", **{a: "end" for a in (  # a screen up
         0x0480, 0x0DF6, 0x0945, 0x08E4, 0x0AAC, 0x0AEF, 0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0xA040)}}),
 }
@@ -580,6 +575,38 @@ def title_world(img, rng):
         w(0x775E, img[DS * 16 + 0xB263 + at] << 1 | 1)
 
 
+def key_bytes(img, rng):
+    """Presses and releases, E0h prefixes, NumLock, the shift."""
+    for k in range(8):
+        sc = rng.choice([rng.randrange(0x59), 0x1C, 0x39, 0x3B, 0x48, 0x2A, 0x45, 0xE0])
+        img[DS * 16 + 0xFF10 + k] = sc | (0x80 if sc != 0xE0 and rng.random() < 0.4 else 0)
+
+
+def speaker_world(img, rng):
+    """The speaker part way through a sequence, a note, a pattern, a rest or a loop."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    seqs = [int.from_bytes(img[DS * 16 + 0x4F7F + 2 * k:DS * 16 + 0x4F81 + 2 * k], "little") for k in range(12)]
+    pats = [int.from_bytes(img[DS * 16 + 0x4FCE + 2 * k:DS * 16 + 0x4FD0 + 2 * k], "little") for k in range(9)]
+    w(0x4801, rng.choice([2, 2, 2, 1, 0]))
+    w(0x45E7, rng.choice([0, 0, 0, 1]))
+    w(0x45E6, rng.choice([0, 0, 0, 1]))
+    w(0x45E4, rng.choice([0, 1, 2, 0x2EE]), 2)
+    w(0x45EA, rng.choice([0, 1, 2, 4, 5, 6, 8, 0x10, 0x12, 0x18, 0x0A, rng.randrange(0x20)]))
+    w(0x45EB, rng.choice(seqs) + rng.choice([0, 0, 0, 3, 6]), 2)
+    w(0x45EF, rng.randrange(0x60))
+    w(0x45F0, rng.choice([0, 1, 2, 5, 30]))
+    w(0x45F1, rng.choice([0, 0, 0, 1, 3]))
+    sp = rng.choice([0x45F4, 0x45F4, 0x45F7, 0x45FA])
+    w(0x45F2, sp, 2)  # mid-pattern only inside a loop (the patterns' loops balance)
+    w(0x45ED, rng.choice(pats) + (rng.choice([0, 1, 2, 3]) if sp > 0x45F4 else 0), 2)
+    for k in range((sp - 0x45F4) // 3):
+        w(0x45F4 + 3 * k, rng.choice(pats) + rng.randrange(4), 2)
+        w(0x45F6 + 3 * k, rng.randint(1, 4))
+    w(0x4600, rng.choice([0, 0, 1, 4]))
+    w(0x45DC, rng.getrandbits(16), 2)
+    w(0x4F74, rng.choice([0xA0, 0xC0, 0xFA]))
+
+
 def pause_world(img, rng):
     """From any screen; options toggled, sound, abandon or exit asked, space."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -959,6 +986,8 @@ FUZZ = {
     "equip_screen": [(0, trading), (0, equip_world)],
     "chart_session": [(0, chart_world)],
     "pause_session": [(0, pause_world)],
+    "timer": [(0, speaker_world)],
+    "key_event": [(0, key_bytes)],
     "title_open": [(0, title_world)],
     "protection_pick": [(0x0205, 8)],  # any generator state
     "title_session": [(0, title_world)],
@@ -1045,10 +1074,21 @@ def run_original(image, addr, regs, exits=None):
     e.hook(0x16DA, span)
     e.hook(0x1514, span)
     sounds = []
-    e.hook(0x4E1A, lambda e, r: sounds.append(f"event {EV_SURFACE}:{r['ax']}"))
-    e.hook(0x4C98, lambda e, r: sounds.append(f"event {EV_SOUND}:{r['ax'] & 0xFF}"))
-    for wrapper, snd in SOUND_WRAPPERS.items():
-        e.hook(wrapper, lambda e, r, snd=snd: sounds.append(f"event {EV_SOUND}:{snd(r)}"))
+    e.devices()
+
+    def observe(at, line):  # noted on entry; the routine runs
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: sounds.append(line(e)), begin=CS * 16 + at, end=CS * 16 + at)
+    observe(0x4E1A, lambda e: f"event {EV_SURFACE}:{e.mu.reg_read(REGS['ax'])}")
+    observe(0x4C98, lambda e: f"event {EV_SOUND}:{e.mu.reg_read(REGS['ax']) & 0xFF}")
+    observe(0x4D21, lambda e: "event 6:2")  # the title music on
+    observe(0x4D55, lambda e: "event 6:1")  # off
+    observe(0x4D6C, lambda e: f"event 6:{e.mu.reg_read(REGS['ax']) & 0xFF}")  # sound off/on from the options
+
+    def sound_wait(mu, ad, sz, u):  # 4e88: until the launch sound has played (the clock stands still here)
+        until = mu.reg_read(REGS["dx"]) << 16 | mu.reg_read(REGS["ax"])
+        sounds.append(f"event 5:{until - (e.r16(0x45E2) << 16 | e.r16(0x45E0))}")
+        mu.reg_write(UC_X86_REG_IP, 0x4E96)
+    e.mu.hook_add(UC_HOOK_CODE, sound_wait, begin=CS * 16 + 0x4E88, end=CS * 16 + 0x4E88)
     for stub in UNPORTED_FOR.get(NAME, UNPORTED):
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
@@ -1059,7 +1099,6 @@ def run_original(image, addr, regs, exits=None):
     def flip(e, r):  # 301a: the frame wait done, the flip noted
         e.mu.mem_write(DS * 16 + 0x267C, bytes(e.mu.mem_read(DS * 16 + 0x45E0, 4)))
         sounds.append(f"event {EV_FLIP}:0")
-    e.hook(0x4D6C, lambda e, r: sounds.append(f"event 6:{r['ax'] & 0xFF}"))  # the music driver switched
     for at, kind in ((0x397C, 7), (0x3981, 8)):  # the screen under a box or the top line kept, put back
         e.hook(at, lambda e, r, kind=kind: sounds.append(f"event {kind}:{1 if r['ax'] == 0x18 else 2}"))
     if NAME in ("arrive", "countdowns", "commands"):  # the crosshair: frontend's
@@ -1105,12 +1144,7 @@ def run_original(image, addr, regs, exits=None):
     if NAME in ("frame", "loop"):  # the original's DL at the AI, passed to the core
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
                       begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
-    if NAME in ("launch", "dock", "loop", "commands"):  # the launch sound and its wait
-        def launch_sound(e, r):
-            if e.r8(0x4801) != 2 and e.r8(0x45E7) == 0:
-                sounds.append(f"event {EV_SOUND}:17")
-                sounds.append(f"event 5:{0x78 if e.r8(0x4801) else 0x23A}")
-        e.hook(0x4E5A, launch_sound)
+    if NAME in ("launch", "dock", "loop", "commands"):
         e.hook(0x028D, lambda e, r: None)  # the mouse driver
     def pixel(e, r):
         x = (r["ax"] + (r["ax"] >> 2) - 8) & 0xFFFF
@@ -1130,7 +1164,6 @@ def run_original(image, addr, regs, exits=None):
                 prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
         e.hook(0x3411, sprite_or_icon)
     if NAME == "start_game":  # the music stops; the time of day from ds:ff30
-        e.hook(0x4D55, lambda e, r: sounds.append("event 6:1"))
         e.hook(0x4AC0, lambda e, r: None)
 
         def clock(mu, ad, sz, u):
@@ -1173,7 +1206,6 @@ def run_original(image, addr, regs, exits=None):
             e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
             return {"ax": (r["ax"] & 0xFF00) | fkeys.pop(0), "flags": r["flags"] | 1}
         e.hook(0x0276, file_key)
-        e.hook(0x4D55, lambda e, r: sounds.append("event 6:1"))
         e.hook(0x4AC0, lambda e, r: None)
 
         e.on_intr = fake_dos(files, written)
@@ -1203,7 +1235,6 @@ def run_original(image, addr, regs, exits=None):
             e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
             return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
         e.hook(0x0276, title_key)
-        e.hook(0x4D21, lambda e, r: sounds.append("event 6:2"))
         for stub in (0x30DC, 0x3821, 0x3941, 0x3956, 0x3B3E):
             e.hook(stub, lambda e, r: None)
         e.hook(0x3130, view_clear)
@@ -1219,7 +1250,6 @@ def run_original(image, addr, regs, exits=None):
                 return
             mu.mem_write(DS * 16 + 0x0D2F, bytes([tkeys.pop(0)]))
         e.mu.hook_add(UC_HOOK_CODE, title_pass, begin=CS * 16 + 0x9F21, end=CS * 16 + 0x9F21)
-        e.hook(0x4D21, lambda e, r: sounds.append("event 6:2"))
         e.hook(0x028D, lambda e, r: None)
         e.hook(0x3130, view_clear)
         e.hook(0x301A, flip)
@@ -1287,7 +1317,27 @@ def run_original(image, addr, regs, exits=None):
     try:
         if NAME == "explode":
             regs = dict(regs, di=0x76DE + 0x40 * image[DS * 16 + 0xFF00] % (0x40 * 36))
-        e.call(addr, max_insns=100_000_000 if NAME == "title_session" else 10_000_000, **regs)  # 12 title passes
+        if NAME == "key_event":  # the interrupt for each of 8 bytes from port 60h (ds:ff10); its iret a ret
+            e.hook(0x0274, lambda e, r: None)
+            for k in range(8):
+                e.port_in[0x60] = image[DS * 16 + 0xFF10 + k]
+                e.call(addr, **regs)
+        elif NAME == "timer":  # 24 ticks; 4a50 is far: its retf (4a98) taken as a near ret
+            e.hook(0x4A98, lambda e, r: None)
+            for _ in range(24):
+                e.call(addr, **regs)
+            div, gate, out = None, None, e.ports
+            for k, (port, v) in enumerate(out):
+                if port == 0x42 and k + 1 < len(out) and out[k + 1][0] == 0x42 and k and out[k - 1] == (0x43, 0xB6):
+                    div = v | out[k + 1][1] << 8
+                if port == 0x61:
+                    gate = v & 1
+            if div is not None:
+                sounds.append(f"speaker {div}")
+            if gate is not None:
+                sounds.append(f"gate {gate}")
+        else:
+            e.call(addr, max_insns=100_000_000 if NAME == "title_session" else 10_000_000, **regs)  # 12 title passes
     except RuntimeError:
         if not left:
             raise

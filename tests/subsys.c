@@ -11,6 +11,7 @@
 #include "ep_frame.h"
 #include "ep_commands.h"
 #include "ep_station.h"
+#include "ep_sound.h"
 #include "ep_boot.h"
 #include "ep_title.h"
 #include "ep_flight.h"
@@ -213,6 +214,14 @@ int main(int argc, char **argv)
             print_prims(&g.render);
             printf("end\n");
             if (g.f.leave) printf("leave %d\n", g.f.leave);
+        } else if (!strcmp(argv[1], "key_event")) {
+            for (int k = 0; k < 8; k++) ep_key_event(&g, ds[0xff10 + k]);
+        } else if (!strcmp(argv[1], "timer")) { /* 24 ticks; what the speaker was last set to */
+            g.speaker = 0xffff;
+            g.speaker_on = 0xff;
+            for (int k = 0; k < 24; k++) ep_timer_tick(&g);
+            if (g.speaker != 0xffff) printf("speaker %d\n", g.speaker);
+            if (g.speaker_on != 0xff) printf("gate %d\n", g.speaker_on);
         } else if (!strcmp(argv[1], "protection_pick")) {
             ep_protection_pick(&g);
         } else if (!strcmp(argv[1], "title_open")) { /* the waits given the keys at ds:ff10 */

@@ -1,5 +1,6 @@
 /* Checks of the core's flow that the difftests cannot reach (the original's timer does not
  * run under the emulator): the title's waits end by the clock as well as by a key. */
+#include "ep_sound.h"
 #include "ep_station.h"
 #include "ep_title.h"
 

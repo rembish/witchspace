@@ -9,7 +9,7 @@ import os
 import struct
 import sys
 
-from unicorn import UC_ARCH_X86, UC_HOOK_CODE, UC_HOOK_INTR, UC_MODE_16, Uc
+from unicorn import UC_ARCH_X86, UC_HOOK_CODE, UC_HOOK_INSN, UC_HOOK_INTR, UC_MODE_16, Uc
 from unicorn.x86_const import (UC_X86_REG_AX, UC_X86_REG_BP, UC_X86_REG_BX, UC_X86_REG_CS,
                                UC_X86_REG_CX, UC_X86_REG_DI, UC_X86_REG_DS, UC_X86_REG_DX,
                                UC_X86_REG_ES, UC_X86_REG_FLAGS, UC_X86_REG_IP, UC_X86_REG_SI,
@@ -54,6 +54,27 @@ class Elite:
         self.pyfuncs = {}
         self._resume = None
         self._hook_divisions(img)
+
+    def devices(self):
+        """No hardware: port reads give 0, writes to the speaker's ports (PIT 42h/43h, 61h) are
+        noted in self.ports; the music drivers' far entries (segment 2270) return at once."""
+        from unicorn.x86_const import UC_X86_INS_IN, UC_X86_INS_OUT
+        self.ports = []
+        self.port_in = {}  # what a port reads, if not 0
+        self.mu.hook_add(UC_HOOK_INSN, lambda mu, port, size, u: self.port_in.get(port, 0), None, 1, 0,
+                         UC_X86_INS_IN)
+        self.mu.hook_add(UC_HOOK_INSN, lambda mu, port, size, value, u: port in (0x42, 0x43, 0x61) and
+                         self.ports.append((port, value & 0xFF)), None, 1, 0, UC_X86_INS_OUT)
+        for off in (0x0000, 0x003B, 0x0045, 0x008F, 0x0116, 0x17C6, 0x1819, 0x185A):
+            self.mu.hook_add(UC_HOOK_CODE, self._retf, begin=(LOAD + 0x2270) * 16 + off,
+                             end=(LOAD + 0x2270) * 16 + off)
+
+    def _retf(self, mu, addr, size, _):
+        sp = mu.reg_read(UC_X86_REG_SP)
+        ip, cs = struct.unpack("<HH", mu.mem_read(SS * 16 + sp, 4))
+        mu.reg_write(UC_X86_REG_SP, sp + 4)
+        mu.reg_write(UC_X86_REG_CS, cs)
+        mu.reg_write(UC_X86_REG_IP, ip)
 
     def _intr(self, mu, intno, _):
         if self.on_intr and self.on_intr(self, intno):

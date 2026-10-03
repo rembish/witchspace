@@ -121,10 +121,11 @@ paragraph, line, word.
 - Effect: a `ret` (`c3 00`) is written over the first instruction of the menu routine at
   `03ad` (reached from `032a 0332 0363 0367 039b`). In this copy the store is
   unconditional (`mov bp,[09d9]` is immediately overwritten by `mov bp,00c3`, then four
-  `nop`s where the comparison presumably was), so any answer passes. **[verify]** what `03ad`
-  does when it is not patched, i.e. what a wrong answer costs.
-- The port will reconstruct it behind an opt-in switch, off by default; with it off it keeps
-  the RNG step and treats `03ad` as `ret`.
+  `nop`s where the comparison presumably was), so any answer passes. Unpatched, the title's
+  key bar (`05ac`) finds no `c3 00` at `cs:03ad` and jumps to `00ba`: back to DOS.
+- Ported (`core/ep_boot.c`) behind `g->protection`, off by default: the pick (and its RNG step)
+  always runs; the question is asked only when on, and a wrong word sets `f.protection_failed`
+  (the title then quits). The check is the hash comparison the no-ops replaced.
 
 ## System descriptions
 
@@ -469,3 +470,23 @@ Flight loop (`a027`, top `a040`): `0299` key map, `3921` flash, `a3f4`, `3130` c
   only free mount, or the player picks one (menu at `94bf`; `9524` fits the n-th free mount:
   bit in `8365`, two type bits in `8366`).
 - Checked: `subtest.py buy|sell|equip --fuzz 10` (random cargo, cash, equipment, system).
+
+## Sound
+
+- Every sound goes through `4c98` with a number. Speaker (`ds:4801` = 2): `ds:45c0` maps the
+  number to one of twelve sequences (`ds:4f7f`; bit 7 set: the index itself), else the
+  AdLib/Roland driver (segment `2270`, far calls) plays it.
+- The speaker's sequencer runs in the timer interrupt (`4a99` → `4a50`, 1193182 / 5555h Hz):
+  clock `45e0` (not while paused, `45e6`), countdown `45e4`, then unless sound is off (`45e7`)
+  or stopped (`45ea` bit 0): next note when due (`4aea`) and a tick of it (`4b6b`). A sequence
+  is notes (pattern index, pitch, length; `ff` pitch keeps the last) and rests (`fe n`), `ff`
+  ends it. Patterns (`ds:4fce`) bend the pitch each tick, wait (`80 n`), loop (`81 n` … `82`,
+  a 3-byte stack at `45f4`), end a held note (`83`), noise on/off (`7f`/`7e`, LFSR `45dc`).
+  Pitches index the PIT divisors at `ds:4601`. `45ea`: 1 stopped, 2 next note due, 4 speaker
+  to be turned on, 8 noise, 10h held note.
+- Wrappers decide: the laser (`4dc9`) does not cut short a sound marked by `4deb/4df5/4dff`
+  (`ds:4fe0`) still playing; under fire (`4da4`) is `10h` (`17h` on AdLib) and not over
+  another speaker sound; the surface sound (`4e1a`) writes its pitch into sequence 9
+  (`ds:4f74`) on the speaker. The title music restarts once its sequence ends (`4d8e`).
+- Ported in `core/ep_sound.c`; the speaker's output is `g->speaker` (divisor) and
+  `g->speaker_on` for the frontend.
