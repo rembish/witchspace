@@ -133,7 +133,4 @@ int ep_station_idle(ep_game *g);
 /* the pass the pause menu interrupted, from where it stopped (EP_CMD_*) */
 int ep_station_resume(ep_game *g);
 
-/* 4a50: one timer tick: the clock, and a note's time up */
-void ep_timer_tick(ep_game *g);
-
 #endif

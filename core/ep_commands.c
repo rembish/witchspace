@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "ep_sound.h"
 #include "ep_dsmap.h"
 
 #include "ep_chart.h"
@@ -23,7 +24,7 @@ static void message(ep_game *g, uint16_t text, uint16_t time)
     g->f.message_time = time;
 }
 
-static void sound(ep_game *g, uint8_t n) { ep_event_add(g, EP_EV_SOUND, n); }
+static void sound(ep_game *g, uint8_t n) { ep_sound(g, n); }
 
 /* 4e09: the beep (a different sound on device 2) */
 static void beep(ep_game *g) { sound(g, g->f.sound_device == 2 ? 0x88 : 4); }
@@ -537,7 +538,7 @@ static void bomb(ep_game *g)
     if (*equip(g, 7) != 1) return;
     *equip(g, 7) = 0;
     sound(g, 0x0d);
-    sound(g, 0x12);
+    ep_sound_marked(g, 0x12); /* 4df5 */
     ep_energy_bomb(g);
 }
 
@@ -661,7 +662,7 @@ static int run(ep_game *g, uint8_t id)
         g->f.sound_off ^= 1;
         g->f.sound_mode = 5;
         g->f.screen_shown = 0xff;
-        ep_event_add(g, EP_EV_MUSIC, g->f.sound_off);
+        ep_music_switch(g, g->f.sound_off); /* 4d6c */
         return EP_CMD_STAY;
     case 0x14: ep_save_screen(g); return EP_CMD_SCREEN;          /* 07aa */
     case 0x15: ep_load_screen(g); return EP_CMD_SCREEN;          /* 08ab */

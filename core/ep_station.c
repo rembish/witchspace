@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "ep_sound.h"
 #include "ep_chart.h"
 #include "ep_circle.h"
 #include "ep_flight.h"
@@ -2000,7 +2001,7 @@ static int load_key(ep_game *g, uint8_t key)
         }
         f->screen_shown = 0xff;
         g->space.in_flight = 1;
-        ep_event_add(g, EP_EV_MUSIC, 1); /* 4d55, 4ac0 */
+        ep_music_stop(g); /* 4d55, 4ac0 */
         f->leave = 3;
         return EP_WAIT_NONE;
     default: break;
@@ -2114,7 +2115,7 @@ void ep_new_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8
 int ep_start_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths)
 {
     ep_flight *f = &g->f;
-    ep_event_add(g, EP_EV_MUSIC, 1); /* 4d55, 4ac0: the title music stops */
+    ep_music_stop(g); /* 4d55, 4ac0: the title music stops */
     ep_new_game(g, hour, minute, second, hundredths);
     g->space.in_flight = 1;
     f->screen_shown = 0xff;
@@ -2170,11 +2171,4 @@ int ep_station_resume(ep_game *g)
 {
     g->f.resume = EP_RESUME_NONE;
     return idle_after(g, ep_commands(g)); /* 03c0 goes on reading keys */
-}
-
-void ep_timer_tick(ep_game *g)
-{
-    if (g->f.paused) return;
-    g->clock++;
-    if (g->f.note_ticks) g->f.note_ticks--;
 }

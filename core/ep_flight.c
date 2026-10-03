@@ -1,6 +1,7 @@
 /* Elite Plus flight loop subsystems, reconstructed from ELITE.EXE (see ep_flight.h). */
 #include "ep_flight.h"
 
+#include "ep_sound.h"
 #include "ep_dsmap.h"
 
 #include "ep_combat.h"
@@ -32,7 +33,7 @@ static void warnings(ep_game *g)
         if (!hit) continue;
         f->warn_time = 0x14;
         f->warn_index = (uint8_t)k;
-        if (k) ep_event_add(g, EP_EV_SOUND, 0x0b); /* 4d9f */
+        if (k) ep_sound(g, 0x0b); /* 4d9f */
         f->warn_message = text[k];
         return;
     }
@@ -521,7 +522,7 @@ static void autopilot(ep_game *g)
             f->autopilot_step = 9;
             if (g->space.extra_angle) {
                 g->space.extra_angle = 0;
-                ep_event_add(g, EP_EV_SOUND, 4); /* 4e15 */
+                ep_sound(g, 4); /* 4e15 */
             }
             ep_dust_reset(g);
             f->ap_flag = 1;
@@ -739,7 +740,7 @@ void ep_jump_drive(ep_game *g)
         text = 0xb04a; /* Velocity-Locked */
     } else {
         if (f->jump_new) {
-            ep_event_add(g, EP_EV_SOUND, 0x0c); /* 4e98 */
+            ep_sound(g, 0x0c); /* 4e98 */
             f->jump_new = 0;
         }
         text = 0xb01d; /* Engaged */

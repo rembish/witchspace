@@ -13,8 +13,8 @@ int ep_world_update(ep_game *g, int drawn[EP_OBJECTS]);
  * corners put back */
 void ep_view_clear(ep_game *g);
 
-/* 301a: the frame is shown (EP_EV_FLIP). The original first waits until two timer ticks
- * after the last flip; that wait is the caller's, the core takes the clock as it is. */
+/* 301a: the frame is shown (EP_EV_FLIP), two timer ticks after the last at the earliest
+ * (g->wait) */
 void ep_view_flip(ep_game *g);
 
 #endif

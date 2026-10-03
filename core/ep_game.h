@@ -19,10 +19,9 @@
 /* EP_EV_WAIT: the original stops for this many timer ticks (a sound playing out) */
 /* EP_EV_MUSIC: the music driver switched (arg: ds:45e7, 1 = sound off or the music stops (4d55);
  * 2 = the title music starts (4d21))
- * EP_EV_FLIP: a frame is complete (301a): show it, then go on two timer ticks after the last
- * flip. A call may hold several frames (the tunnel, the hyperspace rings): the frontend shows
- * them one by one at that pace; they take no keys (each clears it), so keys pressed meanwhile
- * are dropped.
+ * EP_EV_FLIP: a frame is complete (301a); g->wait shows it. A call may hold several frames
+ * (the tunnel, the hyperspace rings); they take no keys (each clears it), so keys pressed
+ * meanwhile are dropped.
  * EP_EV_KEEP / EP_EV_PUT_BACK: the screen under a box (arg 1, 397c at 18,c 112x75) or the top
  * line (arg 2, at 8,0 130x9) is kept, then put back (3981) */
 enum {
@@ -198,6 +197,19 @@ typedef struct {
     uint8_t prot_word;          /* ds:0aa1 */
     uint16_t prot_hash;         /* ds:09d9: the word's, 9 bits */
     uint8_t scoop_text[13];     /* ds:2c51: the scooped canister's goods, as a message */
+    uint16_t snd_noise;         /* ds:45dc: the speaker's noise generator */
+    uint16_t snd_ticks;         /* ds:45de: timer ticks, paused or not */
+    uint16_t snd_seq;           /* ds:45eb: the speaker's sequence, where it has got to */
+    uint16_t snd_pattern;       /* ds:45ed: the note's pattern, where it has got to */
+    uint8_t snd_note;           /* ds:45ef: the pitch (an index into ds:4601) */
+    uint8_t snd_length;         /* ds:45f0: ticks left of the note */
+    uint8_t snd_rest;           /* ds:45f1: ticks left of a rest */
+    uint16_t snd_loop_sp;       /* ds:45f2 */
+    uint8_t snd_loops[12];      /* ds:45f4: the pattern's loops (where, how many) */
+    uint8_t snd_wait;           /* ds:4600: ticks the pattern waits */
+    uint8_t snd_marked;         /* ds:4fe0: a sound the laser's must not cut short */
+    uint8_t music_on;           /* ds:4802 */
+    uint8_t surface_note;       /* ds:4f74: sequence 9's pitch (4e1a puts it there) */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -226,6 +238,8 @@ typedef struct {
     uint8_t faster, slower, up, down, left, right, fire; /* ds:b251 .. b25d */
     uint8_t last_key;                                    /* ds:0d2f: key code of the last press, ff none */
     uint8_t control;                                     /* ds:8f2c: 0 keyboard, 1 joystick, 2 mouse */
+    uint16_t last_scan;                                  /* ds:0d2d: ds:020d + the last key pressed */
+    uint8_t e0, num_lock;                                /* ds:0d30, 0d31: toggled by E0h, 45h */
 } ep_input;
 
 /* Commander files, the frontend's (DOS 8.3 names in capitals: "JAMESON.CDR") */
@@ -237,8 +251,18 @@ typedef struct {
     int (*list)(void *ctx, char names[][13], int max);                       /* the *.CDR there */
 } ep_io;
 
-typedef struct {
+typedef struct ep_game ep_game;
+
+/* Where the original busy-waits on the timer (301a: the frame shown two ticks after the last;
+ * 4e88: a sound playing out), the core calls this: the frontend lets time pass, calling
+ * ep_timer_tick each tick, until g->clock >= until; with show set it first shows the output so
+ * far (a frame is complete; it may then empty the output). NULL: time stands still (tests). */
+typedef void (*ep_wait_fn)(ep_game *g, uint32_t until, int show);
+
+struct ep_game {
     const ep_io *io;         /* NULL: no files */
+    ep_wait_fn wait;         /* NULL: no waiting */
+    void *frontend;          /* the frontend's, for the callbacks */
     uint8_t protection;      /* 1: the copy protection is asked (ep_boot.h); off by default */
     ep_commander cmdr;       /* ds:82db */
     ep_commander cmdr_saved; /* ds:83be: a second copy (the commander as last saved or docked) */
@@ -249,6 +273,8 @@ typedef struct {
     uint8_t dist_text[5];    /* ds:5562: the selected system's distance as digits */
     uint32_t clock;          /* ds:45e0: timer ticks */
     uint32_t flip;           /* ds:267c: tick count at the last frame flip */
+    uint16_t speaker;        /* the PC speaker's PIT divisor (1193182 / Hz), as the sequencer set it */
+    uint8_t speaker_on;      /* port 61h: the speaker sounding */
     ep_render render;        /* its vertex buffer (ds:28e6) carries over between ships */
     ep_flight f;
     ep_input in;
@@ -258,7 +284,7 @@ typedef struct {
     ep_circle_buf circles; /* planet and sun spans */
     ep_event event[EP_MAX_EVENTS];
     int nevents;
-} ep_game;
+};
 
 void ep_event_add(ep_game *g, uint8_t kind, uint16_t arg);
 

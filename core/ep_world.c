@@ -1,6 +1,7 @@
 /* Elite Plus objects in flight, reconstructed from ELITE.EXE (see ep_world.h). */
 #include "ep_world.h"
 
+#include "ep_sound.h"
 #include "ep_circle.h"
 #include "ep_combat.h"
 #include "ep_dsmap.h"
@@ -33,8 +34,9 @@ void ep_view_clear(ep_game *g)
 
 void ep_view_flip(ep_game *g)
 {
-    g->flip = g->clock;
     ep_event_add(g, EP_EV_FLIP, 0);
+    if (g->wait) g->wait(g, g->flip + 2, 1);
+    g->flip = g->clock;
 }
 
 void ep_output_begin(ep_game *g)
@@ -50,7 +52,7 @@ static void crash(ep_game *g)
 {
     if (g->f.no_crash) return;
     g->f.dead = 1;
-    ep_event_add(g, EP_EV_SOUND, 0x12); /* 4df5 */
+    ep_sound_marked(g, 0x12); /* 4df5 */
 }
 
 /* 46e2: what the fuel scoops pick up: anything in the box under the ship (|x|, |z| < 150,
@@ -231,7 +233,7 @@ static void draw_planet_or_sun(ep_game *g, ep_object *o)
     f->sun_size = (uint8_t)size;
     if (f->tribbles_shown) { /* 4527: Tribbles squeak now and then */
         uint32_t old = ep_rng_step(&g->rng);
-        if ((old >> 16) <= 0x1388) ep_event_add(g, EP_EV_SURFACE_SOUND, size);
+        if ((old >> 16) <= 0x1388) ep_surface_sound(g, size);
     }
     if (size >= 0xd2 && f->tribbles) {
         if (f->tribbles <= 0x10) {
@@ -254,7 +256,7 @@ static void draw_planet_or_sun(ep_game *g, ep_object *o)
             ep_commander_set_b(&g->cmdr, EP_CMDR_FUEL, (uint8_t)fuel);
             if (fuel > 0xff) {
                 ep_commander_set_b(&g->cmdr, EP_CMDR_FUEL, 0xff);
-                if (f->message != 0x2bf6) ep_event_add(g, EP_EV_SOUND, 2); /* 4ea7 */
+                if (f->message != 0x2bf6) ep_sound(g, 2); /* 4ea7 */
                 f->message = 0x2bf6;
                 f->message_time = 5;
             }

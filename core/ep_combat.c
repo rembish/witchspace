@@ -1,6 +1,7 @@
 /* Elite Plus laser hits, reconstructed from ELITE.EXE (see ep_combat.h). */
 #include "ep_combat.h"
 
+#include "ep_sound.h"
 #include "ep_ships.h"
 #include "ep_tables.h"
 
@@ -251,7 +252,7 @@ void ep_laser_hits(ep_game *g)
     if (slot >= 0) {
         ep_object *o = &g->space.obj[slot];
         o->b[EP_OBJ_FLAGS1E] |= 1;
-        ep_event_add(g, EP_EV_SOUND, 0x0f); /* 4deb */
+        ep_sound_marked(g, 0x0f); /* 4deb */
         uint8_t dmg = f->laser_fired;
         if (dmg == 2 && type_of(o) == 5) f->mining = 1;
         dmg++;
@@ -300,7 +301,7 @@ void ep_laser_hits(ep_game *g)
         }
     }
     beam(g);
-    ep_event_add(g, EP_EV_SOUND, (uint16_t)(0x14 + (f->laser_fired & 3))); /* 4dc9 */
+    ep_sound_laser(g, f->laser_fired); /* 4dc9 */
     f->mining = 0;
     f->firing = 0;
 }
@@ -325,7 +326,7 @@ void ep_damage(ep_game *g, uint16_t amount)
     if (f->energy < rest) {
         if (!f->no_crash) {
             f->dead = 1;
-            ep_event_add(g, EP_EV_SOUND, 0x12); /* 6cfa: 4df5 */
+            ep_sound_marked(g, 0x12); /* 6cfa: 4df5 */
         }
         f->energy = 0;
     } else {
@@ -414,7 +415,7 @@ void ep_collisions(ep_game *g)
         target_note(g, i);
         if (dmg == 0x5dc || !is_station(o)) o->b[EP_OBJ_FLAGS] &= 0xfe; /* 7e82 */
         ep_damage(g, dmg);
-        ep_event_add(g, EP_EV_SOUND, 0x12); /* 4df5 */
+        ep_sound_marked(g, 0x12); /* 4df5 */
     }
 }
 
@@ -448,7 +449,7 @@ void ep_enemy_fire(ep_game *g)
 {
     ep_flight *f = &g->f;
     if (!f->under_fire) return;
-    ep_event_add(g, EP_EV_SOUND, 0x17); /* 4da4 */
+    ep_sound_under_fire(g); /* 4da4 */
     const ep_object *o = &g->space.obj[(uint16_t)(f->attacker - 0x76de) / 0x40 % EP_OBJECTS];
     if (o->b[EP_OBJ_FLAGS] & 0x80) { /* the beam, from an edge of the view to the attacker */
         int16_t sx, sy;
@@ -475,7 +476,7 @@ void ep_enemy_fire(ep_game *g)
     uint8_t *shield = (f->hit_from_behind & 0x80) ? &f->aft_shield : &f->fore_shield;
     if (*shield >= 0x0f) {
         *shield = (uint8_t)(*shield - 0x0f);
-        ep_event_add(g, EP_EV_SOUND, 0x19); /* 4e9d */
+        ep_sound(g, 0x19); /* 4e9d */
         return;
     }
     uint8_t over = (uint8_t)(*shield - 0x0f);
@@ -487,7 +488,7 @@ void ep_enemy_fire(ep_game *g)
         return;
     }
     f->energy = (uint16_t)(f->energy - rest);
-    ep_event_add(g, EP_EV_SOUND, 1); /* 4ea2 */
+    ep_sound(g, 1); /* 4ea2 */
 }
 
 /* 7110: copy the n-th NUL-terminated name from the text at off; returns the end (the NUL) */
@@ -542,5 +543,5 @@ void ep_missile_lock(ep_game *g)
     f->target_slot = (uint16_t)(0x76de + 0x40 * i);
     f->target_note = 2;
     lock_message(g, o);
-    ep_event_add(g, EP_EV_SOUND, f->sound_device == 2 ? 0x88 : 4); /* 4e09 */
+    ep_sound(g, f->sound_device == 2 ? 0x88 : 4); /* 4e09 */
 }

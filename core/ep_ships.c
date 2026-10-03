@@ -2,6 +2,7 @@
  * ep_ships.h and re/SHIPS.md). */
 #include "ep_ships.h"
 
+#include "ep_sound.h"
 #include "ep_combat.h"
 #include "ep_tables.h"
 
@@ -319,7 +320,7 @@ void ep_explode(ep_game *g, ep_object *o)
         return;
     }
     o->b[EP_OBJ_FLAGS] &= 0xfe;
-    ep_event_add(g, EP_EV_SOUND, 0x13); /* 4dff */
+    ep_sound_marked(g, 0x13); /* 4dff */
     f->exploding_station = type_of(o) <= 1;
     int mining = f->mining == 1;
     for (int n = o->b[0x2d]; n > 0; n--) {

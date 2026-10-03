@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "ep_sound.h"
 #include "ep_chart.h"
 #include "ep_combat.h"
 #include "ep_commands.h"
@@ -315,11 +316,8 @@ void ep_tunnel_frame(ep_game *g, int k)
     }
     /* 6988, 6941: the walls (the frontend's) */
     ep_view_flip(g);
-    g->in.last_key = 0xff;                                               /* 0287 */
-    if (k == 0 && !f->docked && f->sound_device != 2 && !f->sound_off) { /* 4e5a: the launch */
-        ep_event_add(g, EP_EV_SOUND, 0x11);
-        ep_event_add(g, EP_EV_WAIT, f->sound_device ? 0x78 : 0x23a);
-    }
+    g->in.last_key = 0xff;                        /* 0287 */
+    if (k == 0 && !f->docked) ep_launch_sound(g); /* 4e5a */
 }
 
 void ep_launch(ep_game *g)

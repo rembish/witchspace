@@ -1,6 +1,7 @@
 /* Elite Plus title screen, reconstructed from ELITE.EXE (see ep_title.h). */
 #include "ep_title.h"
 
+#include "ep_sound.h"
 #include "ep_commands.h"
 #include "ep_dsmap.h"
 #include "ep_station.h"
@@ -29,7 +30,7 @@ int ep_title_open(ep_game *g)
 {
     ep_space *s = &g->space;
     memset(s->obj, 0, (size_t)s->count * sizeof s->obj[0]); /* 816b */
-    ep_event_add(g, EP_EV_MUSIC, 2);                        /* 4d21: the title music */
+    ep_music_start(g);                                      /* 4d21: the title music */
     ep_render_sprite(&g->render, 0x89, 0, 0);               /* 3ae5: the intro picture */
     g->f.intro_until = g->clock + 1000;
     g->f.title_step = 1;
@@ -102,8 +103,8 @@ int ep_title_frame(ep_game *g)
     ep_flight *f = &g->f;
     ep_key_bar(g);
     if (f->leave == 2) return EP_CMD_QUIT;
-    if (f->sound_device == 2 && (f->sound_mode & 1)) ep_event_add(g, EP_EV_MUSIC, 2); /* 4d8e */
-    ep_view_clear(g);                                                                 /* 3130 */
+    ep_music_again(g); /* 4d8e */
+    ep_view_clear(g);  /* 3130 */
     /* 9f2a: the red disc, jittered (ds:108f = 1) */
     int n0 = g->circles.n;
     ep_draw_circle(&g->rng, 0xc8, 0x3c, 0x19, 1, 0, f->video == 2, &g->circles);
