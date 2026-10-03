@@ -1,0 +1,2 @@
+# <addr> <name> [# comment]   addr = code offset in segment 0000, or ds:XXXX in data segment 0b00
+0000 entry  # set stack, resize memory, hook ctrl-break/crit, check DOS, seed RNG, init, main loop
