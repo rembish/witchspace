@@ -1,2 +1,46 @@
 # <addr> <name> [# comment]   addr = code offset in segment 0000, or ds:XXXX in data segment 0b00
-0000 entry  # set stack, resize memory, hook ctrl-break/crit, check DOS, seed RNG, init, main loop
+0000 entry  # set stack, resize memory, hook ctrl-break/crit, check DOS, seed RNG, init, ret into 1415
+00b3 restart_main  # mov [0000],sp; jmp title_loop (abort target)
+1415 init_screens  # first-time init, returns to restart_main
+30dc clear_screen  # EGA planar / MCGA a000 + back buffer
+02e8 set_key_map  # copy 12-byte key map row ds:031f+12*n to ds:030d
+03c0 command_loop  # keys -> command handlers through ds:0399
+5e0f twist  # w0,w1,w2 <- w1,w2,w0+w1+w2
+5e25 load_galaxy_seed  # ds:5509 + 6*galaxy(ds:8315) -> ds:5503
+5e4d chart_to_screen
+5e95 seed_to_chart  # chart cursor ds:3318/3319 from the current seed
+5ee8 system_data  # nearest system to cursor, distance, then government..radius, name
+5fe1 find_nearest_system
+6047 system_distance  # -> ds:8343 (light years * 40)
+608f show_system_name_distance
+610e galaxy_step  # load galaxy seed, cx * 4 twists
+6124 twist4
+6130 planet_name  # -> ds:8338, length ds:8341
+6f91 word_to_digits  # ax -> ascii at di using divisors ds:8016
+6fbc blank_leading_zeros
+8880 data_on_system  # screen: economy, government, tech, population, species, productivity, radius
+9e80 title_loop  # rotating ships until a key
+a027 flight_loop
+ds:0000 saved_sp
+ds:0202 bios_video_mode
+ds:0205 rng_state  # 4 words, see NOTES
+ds:030d key_map  # 12 bytes, current screen
+ds:0319 key_pressed
+ds:0399 command_table
+ds:107a vec_draw_char
+ds:107c vec_hspan
+ds:107e vec_hspan2
+ds:5503 seed  # 3 words
+ds:5509 galaxy_seeds  # 8 x 3 words
+ds:5585 digrams
+ds:8315 galaxy
+ds:8338 system_name
+ds:8345 sys_government
+ds:8346 sys_economy
+ds:8347 sys_tech
+ds:8348 sys_population
+ds:8349 sys_species
+ds:834d sys_productivity
+ds:834f sys_radius
+ds:8351 sys_desc_seed
+ds:b1bb title_ship_type
