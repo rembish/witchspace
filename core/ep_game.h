@@ -25,68 +25,83 @@ typedef struct {
 
 /* Flight variables (data segment addresses) */
 typedef struct {
-    uint8_t hyperspace;       /* ds:83a4: witchspace (Thargoids left): no sun or planet */
-    uint16_t approach;        /* ds:83ae: frames left falling into the sun */
-    uint8_t approach_size;    /* ds:83ad: sun size while falling */
-    uint8_t sun_size;         /* ds:54c1: apparent size of the sun last frame (temperature) */
-    uint8_t altitude;         /* ds:54c3: 2 x (127 - apparent size of the planet), 254 when far */
-    uint16_t surface;         /* ds:0aa4: solar activity (random sounds near the sun) */
-    uint16_t surface_count;   /* ds:0aa6 */
-    uint16_t atmosphere;      /* ds:83b5 */
-    uint16_t message;         /* ds:8058: message shown (data address of the text) */
-    uint16_t message_time;    /* ds:805a */
-    uint8_t dead;             /* ds:76bd */
-    uint8_t no_crash;         /* ds:ae23: launch tunnel frames left (no crashing meanwhile) */
-    uint16_t message_shown;   /* ds:8056: last message drawn */
-    uint8_t leak_countdown;   /* ds:83a5: frames until a fuel leak starts */
-    uint8_t leak;             /* ds:83a6: frames of fuel leak left */
-    uint16_t energy;          /* ds:54c8 */
-    uint8_t energy_drain;     /* ds:b139 */
-    uint8_t laser_temp;       /* ds:54c2 */
-    uint8_t laser_hold;       /* ds:b3d3: fire held, waiting for release */
-    uint8_t pulse_phase;      /* ds:b125 */
-    uint8_t laser_fired;      /* ds:b0e3: type of laser fired this frame */
-    uint8_t firing;           /* ds:b0e4 */
-    uint8_t warn_time;        /* ds:81f4: frames the current warning still shows */
-    uint8_t warn_index;       /* ds:81f5: 0 missile, 1 altitude, 2 temperature, 3 energy */
-    uint16_t warn_message;    /* ds:81f2 */
-    uint8_t missile_alert;    /* ds:8892 */
-    uint16_t speed;           /* ds:af56: 4..48 */
-    uint8_t moved;            /* ds:af58: speed or attitude changed: recompute the velocity */
-    uint8_t autopilot;        /* ds:af14: docking computer flying */
-    uint16_t autopilot_in;    /* ds:af15 */
-    int8_t roll, pitch;       /* ds:09d1, 09d2: steering, -23..23 */
-    int8_t last_x, last_y;    /* ds:09d3, 09d4: arrow keys last frame */
-    int8_t accel_x, accel_y;  /* ds:09d5, 09d6: held arrow keys build up */
-    uint16_t steer;           /* ds:09d7: the steering word of this frame */
-    uint8_t opt_reverse_stop; /* ds:b134: reversing stops the turn */
-    uint8_t opt_self_centre;  /* ds:b135: steering returns to centre */
-    uint8_t opt_invert_pitch; /* ds:b136 */
-    uint8_t opt_invert_both;  /* ds:b137 */
-    uint16_t pitch_angle[2];  /* ds:af4c, af4e: angles found while pitching */
-    int16_t velocity[3];      /* ds:af50, af52, af54 */
-    uint8_t jump_speed;       /* ds:b0dd: speed x 32 */
-    uint8_t mission;          /* ds:83a0 */
-    uint8_t mission_state;    /* ds:83a2 */
-    uint8_t station_angry;    /* ds:83aa */
-    uint8_t station_hit;      /* ds:83ab */
-    uint8_t mining;           /* ds:ae22: mining laser on an asteroid */
-    uint8_t target_note;      /* ds:54ca */
-    uint16_t target_slot;     /* ds:b0e1: data address of a slot the mission cares about */
-    uint8_t beam_flip;        /* ds:54b9 */
-    uint8_t beam_pair;        /* ds:54ba */
-    uint8_t beam_colour;      /* ds:54bb */
-    uint8_t safe_zone;        /* ds:7680: bit 0, near the station */
-    uint8_t ap_flag;          /* ds:b0e0 */
-    char bounty_text[16];     /* ds:805c: "BOUNTY: ... Cr", shown as a message */
-    uint8_t docked;           /* ds:7613: docking succeeded */
-    uint8_t under_fire;       /* ds:7612: an enemy laser hit us this frame */
-    uint16_t attacker;        /* ds:7610: data address of its slot */
-    uint8_t hit_from_behind;  /* ds:7681: bit 7, the aft shield takes it */
-    uint8_t fore_shield;      /* ds:54c4 */
-    uint8_t aft_shield;       /* ds:54c5 */
-    uint8_t scoop_lock;       /* ds:b126 */
-    uint8_t video;            /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
+    uint8_t hyperspace;         /* ds:83a4: witchspace (Thargoids left): no sun or planet */
+    uint16_t approach;          /* ds:83ae: frames left falling into the sun */
+    uint8_t approach_size;      /* ds:83ad: sun size while falling */
+    uint8_t sun_size;           /* ds:54c1: apparent size of the sun last frame (temperature) */
+    uint8_t altitude;           /* ds:54c3: 2 x (127 - apparent size of the planet), 254 when far */
+    uint16_t tribbles_shown;    /* ds:0aa4: Tribble sprites on screen (each frame they may squeak) */
+    uint16_t tribble_sprites;   /* ds:0aa6: how many (up to 64) */
+    uint16_t tribbles;          /* ds:83b5: Tribbles aboard (the sun's heat kills them) */
+    uint16_t message;           /* ds:8058: message shown (data address of the text) */
+    uint16_t message_time;      /* ds:805a */
+    uint8_t dead;               /* ds:76bd */
+    uint8_t no_crash;           /* ds:ae23: launch tunnel frames left (no crashing meanwhile) */
+    uint16_t message_shown;     /* ds:8056: last message drawn */
+    uint8_t leak_countdown;     /* ds:83a5: frames until a fuel leak starts */
+    uint8_t leak;               /* ds:83a6: frames of fuel leak left */
+    uint16_t energy;            /* ds:54c8 */
+    uint8_t energy_drain;       /* ds:b139 */
+    uint8_t laser_temp;         /* ds:54c2 */
+    uint8_t laser_hold;         /* ds:b3d3: fire held, waiting for release */
+    uint8_t pulse_phase;        /* ds:b125 */
+    uint8_t laser_fired;        /* ds:b0e3: type of laser fired this frame */
+    uint8_t firing;             /* ds:b0e4 */
+    uint8_t warn_time;          /* ds:81f4: frames the current warning still shows */
+    uint8_t warn_index;         /* ds:81f5: 0 missile, 1 altitude, 2 temperature, 3 energy */
+    uint16_t warn_message;      /* ds:81f2 */
+    uint8_t missile_alert;      /* ds:8892 */
+    uint16_t speed;             /* ds:af56: 4..48 */
+    uint8_t moved;              /* ds:af58: speed or attitude changed: recompute the velocity */
+    uint8_t autopilot;          /* ds:af14: docking computer flying */
+    uint16_t autopilot_in;      /* ds:af15 */
+    int8_t roll, pitch;         /* ds:09d1, 09d2: steering, -23..23 */
+    int8_t last_x, last_y;      /* ds:09d3, 09d4: arrow keys last frame */
+    int8_t accel_x, accel_y;    /* ds:09d5, 09d6: held arrow keys build up */
+    uint16_t steer;             /* ds:09d7: the steering word of this frame */
+    uint8_t opt_reverse_stop;   /* ds:b134: reversing stops the turn */
+    uint8_t opt_self_centre;    /* ds:b135: steering returns to centre */
+    uint8_t opt_invert_pitch;   /* ds:b136 */
+    uint8_t opt_invert_both;    /* ds:b137 */
+    uint16_t pitch_angle[2];    /* ds:af4c, af4e: angles found while pitching */
+    int16_t velocity[3];        /* ds:af50, af52, af54 */
+    uint8_t jump_speed;         /* ds:b0dd: speed x 32 */
+    uint8_t mission;            /* ds:83a0 */
+    uint8_t mission_state;      /* ds:83a2 */
+    uint8_t station_angry;      /* ds:83aa */
+    uint8_t station_hit;        /* ds:83ab */
+    uint8_t mining;             /* ds:ae22: mining laser on an asteroid */
+    uint8_t target_note;        /* ds:54ca */
+    uint16_t target_slot;       /* ds:b0e1: data address of a slot the mission cares about */
+    uint8_t beam_flip;          /* ds:54b9 */
+    uint8_t beam_pair;          /* ds:54ba */
+    uint8_t beam_colour;        /* ds:54bb */
+    uint8_t safe_zone;          /* ds:7680: bit 0, near the station */
+    uint8_t ap_flag;            /* ds:b0e0 */
+    char bounty_text[16];       /* ds:805c: "BOUNTY: ... Cr", shown as a message */
+    uint8_t docked;             /* ds:7613: docking succeeded */
+    uint8_t under_fire;         /* ds:7612: an enemy laser hit us this frame */
+    uint16_t attacker;          /* ds:7610: data address of its slot */
+    uint8_t hit_from_behind;    /* ds:7681: bit 7, the aft shield takes it */
+    uint8_t fore_shield;        /* ds:54c4 */
+    uint8_t class_count[9];     /* ds:8730: objects but debris, then per AI class 0..7 */
+    uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
+    uint8_t danger_gov;         /* ds:76b6: the government for spawning (0 in witchspace) */
+    uint16_t spawn_gov8;        /* ds:8897: government x 8 */
+    uint16_t spawn_row;         /* ds:888f: danger government x 4 */
+    uint16_t convoy_leader;     /* ds:8893: data address of its slot */
+    uint8_t exploding_station;  /* ds:8896 */
+    uint8_t convoy_left;        /* ds:83a9 */
+    uint8_t convoy_leader_dead; /* ds:83a7 */
+    uint8_t convoy_countdown;   /* ds:83b3 */
+    uint8_t siege;              /* ds:83b1 */
+    uint8_t mission_system;     /* ds:83a3 */
+    uint8_t mission5_phase;     /* ds:83b0 */
+    uint8_t mission5_count;     /* ds:839e */
+    uint8_t mission5_flag;      /* ds:839f */
+    uint8_t aft_shield;         /* ds:54c5 */
+    uint8_t scoop_lock;         /* ds:b126 */
+    uint8_t video;              /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
 } ep_flight;
 
 /* Input as the keyboard handler keeps it (ds:020d: per scancode 0 down, 80h up) and the

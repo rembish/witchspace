@@ -6,6 +6,7 @@
 
 #include "ep_combat.h"
 #include "ep_flight.h"
+#include "ep_ships.h"
 #include "ep_trade.h"
 #include "ep_world.h"
 
@@ -66,6 +67,10 @@ int main(int argc, char **argv)
                 printf("choose mount\n");
             else if (r > EP_TRADE_CHOOSE_MOUNT)
                 printf("result %u\n", r);
+        } else if (!strcmp(argv[1], "ai")) {
+            ep_ai_frame(&g);
+        } else if (!strcmp(argv[1], "explode")) {
+            ep_explode(&g, &g.space.obj[ds[0xff00]]); /* the slot is passed in a spare byte */
         } else if (!strcmp(argv[1], "collisions")) {
             ep_collisions(&g);
         } else if (!strcmp(argv[1], "enemy_fire")) {

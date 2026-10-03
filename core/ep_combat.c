@@ -1,6 +1,7 @@
 /* Elite Plus laser hits, reconstructed from ELITE.EXE (see ep_combat.h). */
 #include "ep_combat.h"
 
+#include "ep_ships.h"
 #include "ep_tables.h"
 
 #include <string.h>
@@ -290,7 +291,7 @@ void ep_laser_hits(ep_game *g)
             if (destroy) {
                 kill_reward(g, o);
                 target_note(g, slot);
-                ep_event_add(g, EP_EV_UNPORTED, 0x7ea8); /* the explosion */
+                ep_explode(g, o);
                 beam(g);
                 f->mining = 0;
                 f->firing = 0;

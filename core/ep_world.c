@@ -107,18 +107,18 @@ static void draw_planet_or_sun(ep_game *g, ep_object *o)
         size = ep_apparent_size(o, 100);
     }
     f->sun_size = (uint8_t)size;
-    if (f->surface) { /* 4527: solar activity, random sounds */
+    if (f->tribbles_shown) { /* 4527: Tribbles squeak now and then */
         uint32_t old = ep_rng_step(&g->rng);
         if ((old >> 16) <= 0x1388) ep_event_add(g, EP_EV_SURFACE_SOUND, size);
     }
-    if (size >= 0xd2 && f->atmosphere) {
-        if (f->atmosphere <= 0x10) {
-            f->atmosphere = 0;
-            f->surface = 0;
+    if (size >= 0xd2 && f->tribbles) {
+        if (f->tribbles <= 0x10) {
+            f->tribbles = 0;
+            f->tribbles_shown = 0;
         } else {
-            f->atmosphere = (uint16_t)(f->atmosphere - 0x10);
+            f->tribbles = (uint16_t)(f->tribbles - 0x10);
         }
-        if (f->surface_count) f->surface_count--;
+        if (f->tribble_sprites) f->tribble_sprites--;
     }
     if (o->b[EP_OBJ_CAM + 5] & 0x80) return; /* behind */
     uint16_t mask = 1;

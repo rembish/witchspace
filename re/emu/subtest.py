@@ -49,7 +49,8 @@ SOUND_WRAPPERS = {
     0x4EC5: lambda r: 0x1A, 0x4ECA: lambda r: 0x1B,
 }
 # Routines the core does not reconstruct yet: stubbed and logged on both sides.
-UNPORTED = [0x7EA8]
+UNPORTED = [0x7EA8, 0x83F5, 0x8352, 0x84E1, 0x84FC, 0x8645, 0x873B]
+UNPORTED_FOR = {"laser_hits": [], "explode": [0x83F5, 0x8352, 0x84E1, 0x84FC, 0x8645, 0x873B]}
 
 # name -> (address, registers, {exit address: line printed}) - exits are where a routine
 # leaves without returning (the core reports them as a result line instead)
@@ -64,6 +65,8 @@ ROUTINES = {
     "laser_hits": (0xAC52, {}, {}),
     "collisions": (0x66D6, {}, {}),
     "enemy_fire": (0xAE50, {}, {}),
+    "ai": (0x77E0, {}, {}),
+    "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
     "equip": (0x932F, {}, {0x94BF: "choose mount"}),
@@ -161,6 +164,40 @@ def trading(img, rng):
         img[d + 0x832E] = rng.randint(min_tech - 1, 12)
 
 
+def exploding(img, rng):
+    """A random ship to explode (slot index in the spare byte ds:ff00)."""
+    slot = rng.randint(2, 19)
+    base = DS * 16 + 0x76DE + 0x40 * slot
+    img[DS * 16 + 0xFF00] = slot
+    img[base] = (rng.randrange(30) << 1) | 1 | rng.choice([0, 0x80, 0x80])
+    img[base + 0x2D] = rng.choice([0, 1, 3, 7, rng.randrange(12)])
+    img[base + 0x2C] = rng.choice([0, 1, 3, 7, rng.getrandbits(8)])
+    img[base + 0x1E] = rng.choice([0, 0x20, rng.getrandbits(8)])
+    img[base + 0x31] = rng.choice([0, 0xC8, 0xFF])
+    for k in range(3):
+        img[base + 0x19 + k] = rng.getrandbits(8)
+    for i in range(3, 36):
+        if rng.random() < 0.5:
+            img[DS * 16 + 0x76DE + 0x40 * i] |= 1
+
+
+def ai_world(img, rng):
+    """Random counts per class, missions, witchspace, government."""
+    d = DS * 16
+    for i in range(3, 36):
+        b = d + 0x76DE + 0x40 * i
+        if rng.random() < 0.4:
+            img[b] = (rng.randrange(30) << 1) | 1
+            img[b + 0x33] = rng.choice([0, 3, 4, 5, 6, 7, 7])
+            img[b + 0x2E] = rng.choice([1, 2, 30])
+        elif rng.random() < 0.5:
+            img[b] &= 0xFE
+    img[d + 0x832C] = rng.randrange(8)
+    img[d + 0x76B6] = rng.randrange(8)
+    img[d + 0x888F:d + 0x8891] = (4 * rng.randrange(8)).to_bytes(2, "little")
+    img[d + 0x8362] = rng.choice([0, 1])
+
+
 def attacker(img, rng):
     slot = rng.randint(2, 19)
     base = DS * 16 + 0x76DE + 0x40 * slot
@@ -187,6 +224,11 @@ FUZZ = {
                    (0x83AA, [0, 0, 1]), (0x83A0, [0, 4, 6]), (0x83A2, [0, 1, 2, 3]), (0x836B, [0, 0xD7, 0xD8, 0xFF]),
                    (0x7680, [0, 1]), (0x83A4, [0, 0, 1, 5, 6, 0x23, 0x24, 0x40]), (0x805A, [0, 0, 3]),
                    (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
+    "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
+    "ai": [(0, ai_world), (0xB0DD, [0, 0, 1]), (0x83A4, [0, 0, 0, 5]), (0x83A9, [0, 0, 0, 3]), (0x83B3, [0, 1]),
+           (0x83A7, [0, 0, 1]), (0x83AA, [0, 0, 1]), (0x83B1, [0, 1]), (0x83AB, [0, 0, 1]), (0x7680, [0, 1]),
+           (0x83A0, [0, 4, 5, 6]), (0x83A2, [0, 2, 3]), (0x83B0, [0, 1]), (0x839E, [0, 5, 0x0D]),
+           (0x839F, [0, 1]), (0x83A3, [0, 7]), (0x8329, [7, 7, 3])],
     "buy": [(0, trading)], "sell": [(0, trading)], "equip": [(0, trading)],
     "collisions": [(0, something_close), (0, docking_approach), (0x83AA, [0, 0, 1]), (0xAE23, [0, 0, 0, 1]),
                    (0x54C4, [0, 10, 0x80, 0xFF]), (0x54C8, [0, 0x10, 0x200, 0x3FF])],
@@ -254,7 +296,7 @@ def run_original(image, addr, regs, exits=None):
     e.hook(0x4C98, lambda e, r: sounds.append(f"event {EV_SOUND}:{r['ax'] & 0xFF}"))
     for wrapper, snd in SOUND_WRAPPERS.items():
         e.hook(wrapper, lambda e, r, snd=snd: sounds.append(f"event {EV_SOUND}:{snd(r)}"))
-    for stub in UNPORTED:
+    for stub in UNPORTED_FOR.get(NAME, UNPORTED):
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
     if NAME in ("buy", "sell"):
@@ -264,6 +306,8 @@ def run_original(image, addr, regs, exits=None):
     e.hook(0x2FC0, lambda e, r: left.append(f"result {r['si']}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
+        if NAME == "explode":
+            regs = dict(regs, di=0x76DE + 0x40 * image[DS * 16 + 0xFF00] % (0x40 * 36))
         e.call(addr, **regs)
     except RuntimeError:
         if not left:

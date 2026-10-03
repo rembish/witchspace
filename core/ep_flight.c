@@ -110,7 +110,7 @@ int ep_tunnel_tick(ep_game *g)
 {
     if (!g->f.no_crash) return 0;
     if (--g->f.no_crash) return 0;
-    if (g->f.atmosphere) g->f.atmosphere = 1;
+    if (g->f.tribbles) g->f.tribbles = 1;
     return 1;
 }
 
