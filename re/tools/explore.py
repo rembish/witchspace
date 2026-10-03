@@ -29,7 +29,7 @@ JUMP_TABLES = {
     (0, 0x3DFB): (0x2B6C, 3),
     (0, 0x7155): (0x81EA, 4),
     (0, 0x7813): (0x8720, 8),
-    (0, 0x63B0): (0x5B3E, 31),  # text control codes 1..31; handlers return to 63d8
+    (0, 0x63B0): (0x5B3E, 6),  # text control codes 1..6 (5b4a on is the token table); handlers return to 63d8
 }
 # Code reached only through values the walker cannot see (pushed return addresses etc.).
 EXTRA_ROOTS = [(0, 0x63D8)]

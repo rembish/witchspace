@@ -77,8 +77,9 @@ class Elite:
         return s[:s.index(0)] if 0 in s else s
 
     # ---- calls ----
-    def call(self, func, max_insns=10_000_000, **regs):
-        """Near-call CS:func with the given registers; return the registers on return."""
+    def call(self, func, max_insns=10_000_000, until=None, **regs):
+        """Near-call CS:func with the given registers; return the registers on return, or when
+        execution reaches CS:until (for routines that go on to draw)."""
         mu = self.mu
         for seg, v in ((UC_X86_REG_DS, DS), (UC_X86_REG_ES, DS), (UC_X86_REG_SS, SS),
                        (UC_X86_REG_CS, CS)):
@@ -88,7 +89,12 @@ class Elite:
         sp = STACK_TOP - 2
         mu.mem_write(SS * 16 + sp, struct.pack("<H", SENTINEL))
         mu.reg_write(UC_X86_REG_SP, sp)
-        mu.emu_start(CS * 16 + func, CS * 16 + SENTINEL, count=max_insns)
+        stop = SENTINEL if until is None else until
+        mu.emu_start(CS * 16 + func, CS * 16 + stop, count=max_insns)
+        if until is not None:
+            if mu.reg_read(UC_X86_REG_IP) != until:
+                raise RuntimeError(f"call {func:04x} did not reach {until:04x}")
+            return {k: mu.reg_read(r) for k, r in REGS.items()}
         if mu.reg_read(UC_X86_REG_IP) != SENTINEL:
             raise RuntimeError(f"call {func:04x} did not return (ip {mu.reg_read(UC_X86_REG_IP):04x})")
         if mu.reg_read(UC_X86_REG_SP) != STACK_TOP:

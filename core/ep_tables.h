@@ -7,4 +7,10 @@
 extern const uint16_t ep_galaxy_seeds[8][3];
 extern const char ep_digrams[65];
 
+#define EP_DESC_TOKENS 39
+
+extern const char ep_desc_template[];
+extern const char ep_desc_ian[];
+extern const char *const ep_desc_tokens[EP_DESC_TOKENS][5];
+
 #endif

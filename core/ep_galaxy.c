@@ -27,25 +27,32 @@ ep_seed ep_system_seed(int galaxy, int n)
     return s;
 }
 
-void ep_system_name(ep_seed *s, char out[EP_NAME_MAX + 1])
+void ep_planet_name(ep_seed *s, uint8_t nb[EP_NAMEBUF])
 {
-    /* The original writes each digram as a word and advances past its non-space letters, so a
-     * buffer of 8 letters plus the terminator always suffices. */
-    char buf[EP_NAME_MAX + 2];
-    int len = 0;
+    /* Digrams are stored as words and the position only advances past letters, so a pair can
+     * leave a stray space behind the name; bytes 4..7 are pre-filled with spaces. */
+    memset(nb + 4, ' ', 4);
     uint8_t long_name = (uint8_t)(s->w[0] & 0x40);
+    int len = 0;
     for (int k = 4; k > 0; k--) {
         int idx = (s->w[2] >> 8) & 0x1f;
         ep_twist(s);
         if (k == 1 && !long_name) continue;
         char a = ep_digrams[2 * idx], b = ep_digrams[2 * idx + 1];
-        buf[len] = a;
-        buf[len + 1] = b;
+        nb[len] = (uint8_t)a;
+        nb[len + 1] = (uint8_t)b;
         if (b != ' ') len++;
         if (a != ' ') len++;
     }
-    buf[len] = 0;
-    memcpy(out, buf, (size_t)len + 1);
+    nb[9] = (uint8_t)len;
+    nb[len] = 0;
+}
+
+void ep_system_name(ep_seed *s, char out[EP_NAME_MAX + 1])
+{
+    uint8_t nb[EP_NAMEBUF] = { 0 };
+    ep_planet_name(s, nb);
+    memcpy(out, nb, EP_NAME_MAX + 1);
 }
 
 void ep_system_data(const ep_seed *s, ep_system *out)

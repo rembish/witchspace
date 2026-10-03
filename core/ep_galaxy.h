@@ -40,7 +40,14 @@ ep_seed ep_galaxy_seed(int galaxy);
 /* Seed of system n of a galaxy (610e). */
 ep_seed ep_system_seed(int galaxy, int n);
 
-/* Name of the system with seed s (6130): two to four digrams. Twists *s four times. */
+/* The original's name buffer ds:8338..8341: up to 8 letters, a terminator, and the length in
+ * the last byte. Kept as raw bytes because some text codes read it with stale contents. */
+#define EP_NAMEBUF 10
+
+/* planet_name (6130) on the raw buffer: two to four digrams. Twists *s four times. */
+void ep_planet_name(ep_seed *s, uint8_t nb[EP_NAMEBUF]);
+
+/* Name of the system with seed s, generated into a zeroed buffer. Twists *s four times. */
 void ep_system_name(ep_seed *s, char out[EP_NAME_MAX + 1]);
 
 /* Everything about the system with seed s (5f00..5fe0, then the name). */

@@ -54,7 +54,7 @@ ee0d9a9d4b388f3af3ed6ec6aadd38a27823c1eee614af4bf378227e98364081  ADBLUE.MID
 | `02f0` | `[bx+0368]`, 6 entries | `04b2 0534 0580 05aa 05ab 05ac` |
 | `041f` | `[bx+0399]`, 32 entries | command handlers; index = per-screen key map `ds:030d` (12 bytes copied by `02e8` from rows at `ds:031f`) |
 | `3dfb` | `[bx+2b6c]`, 3 entries | `3e19 3e4b 3e8e` |
-| `63b0` | `[5b3e+2·(c-1)]`, codes 1–31 | text control codes; handlers return to `63d8` |
+| `63b0` | `[5b3e+2·(c-1)]`, codes 1–6 | text control codes (`5b4a` on is the token table); handlers return to `63d8` |
 | `7155` | `[bx+81ea]`, 4 entries | `7178 7189 7195 71a1` |
 | `7813` | `[bx+8720]`, 8 entries | `83f4 83f5 8352 84e1 84fc 8645 873b 81c7` |
 | `call [107c]` ×24 | span routine | `14e0 14fc 1507 1514` (stored by `1a2f 1aa9 263c 264c`) |
@@ -124,3 +124,28 @@ paragraph, line, word.
   `nop`s where the comparison presumably was), so any answer passes. **[verify]** what `03ad`
   does when it is not patched, i.e. what a wrong answer costs.
 - The port leaves the protection out but keeps the RNG step, and treats `03ad` as `ret`.
+
+## System descriptions
+
+- `describe_system` (`632b`, from `data_on_system` at `8a55`): clears `ds:5a3e` (256 bytes),
+  expands the template `ds:5a35` = `06 92 "is " 93 04 "."` with `print_text` (`6396`), then
+  word-wraps it on screen. `data_on_system` calls `system_data` again afterwards.
+- `print_text`: byte 0 ends; 1–6 control codes through `ds:5b3e`; ≥ 80h token: alternatives
+  table `ds:5b4a + 2·(t − 80h)` → 5 string pointers, choice = `(low byte of desc_random) / 52`;
+  other bytes are copied, a space after a space is dropped, and with capitals on
+  (`ds:5a34` = 1) a byte `60h..78h` after a space is upper-cased (so `y`/`z` are not; no
+  table text makes that visible).
+- `desc_random` (`6496`): `8351, 8353 ← 8353, 8351 + 8353`; returns the new `8353`.
+  Seeded by `system_data` (`w0^w1`, `w0^w1^w2`).
+- Codes: 1 system name (`6401`), 2 name + "ian" with a final vowel dropped (`6414`), 3
+  random name (`6446`: seed `8351, 8353, 8351^8353` → `planet_name`, which also clobbers
+  the system seed at `ds:5503`), 4 back one character, 5/6 capitals on/off. Names are
+  printed from `ds:63f2` as "Xxxx " (`64a5`: first letter as is, the rest `| 20h`).
+- Original bug, kept: code 3 saves and restores the 8 name bytes but not the length byte
+  `ds:8341`, and `64a5` terminates the name at that length, so a system name after a shorter
+  random name is cut (Biqurala: "the Biquralian black Sotezaoid and the Biqurian yellow
+  stripey walking eviloid").
+- 39 token tables (80h–a6h; 98h and 99h are not reachable from the template). Spellings
+  such as "wierd" are the original's.
+- Checked: `re/emu/desctest.py` compares all 2048 systems and 20 000 random seeds with
+  `core/ep_desc.c`.

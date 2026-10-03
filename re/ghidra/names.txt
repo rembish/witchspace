@@ -51,3 +51,17 @@ ds:b1bb title_ship_type
 ds:09d9 protection_hash
 ds:0a83 protection_page
 ds:5070 protection_records
+632b describe_system  # expand ds:5a35 into ds:5a3e and draw it word-wrapped
+6396 print_text  # control codes 1..6 via ds:5b3e, tokens >= 80h via ds:5b4a
+6401 text_system_name
+6414 text_system_adjective
+6446 text_random_name
+6496 desc_random
+64a5 name_to_scratch  # ds:8338 -> "Xxxx " at ds:63f2
+8dd1 terminate_name  # 0 at ds:8338 + [ds:8341]
+ds:5a34 text_caps
+ds:5a35 desc_template
+ds:5a3e desc_buffer
+ds:5b3e text_codes
+ds:5b4a desc_tokens
+ds:8341 system_name_len
