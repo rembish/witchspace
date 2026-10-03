@@ -194,3 +194,9 @@ void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y)
     p->pt[0] = x;
     p->pt[1] = y;
 }
+
+void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y)
+{
+    ep_render_pixel(r, sprite, x, y);
+    r->prim[r->nprim - 1].kind = EP_PRIM_SPRITE;
+}

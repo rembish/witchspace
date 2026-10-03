@@ -404,3 +404,81 @@ void ep_dashboard_tick(ep_game *g)
     station_zone(g);
     if (f->ecm_shown == 1) f->ecm_shown = 0;
 }
+
+static uint16_t main_hi(ep_game *g) { return (uint16_t)(ep_rng_step(&g->rng) >> 16); }
+
+static uint16_t w16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
+
+static void put16(uint8_t *p, uint16_t v)
+{
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+}
+
+void ep_tribbles_tick(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    if (!f->tribbles) return;
+    if (f->tribbles == 1) {
+        if (main_hi(g) > 0xf) return;
+        f->tribbles++;
+        f->tribbles_shown = 0;
+    }
+    uint16_t h = main_hi(g);
+    uint16_t lim = f->tribbles < 15    ? 250
+                   : f->tribbles < 30  ? 500
+                   : f->tribbles < 80  ? 750
+                   : f->tribbles < 125 ? 2000
+                                       : 10000;
+    if (h <= lim && f->tribbles <= 0x98c9) f->tribbles++;
+    if (f->tribbles >= 0x5f) { /* they eat the cargo */
+        uint32_t r = ep_rng_step(&g->rng);
+        if ((r >> 16) <= 0xfa0) {
+            unsigned b = r & 0x1e;
+            uint8_t *c = &g->cmdr.b[EP_CMDR_CARGO + b];
+            if (*c) {
+                (*c)--;
+                f->tribbles++;
+                if (b < 0x1a) g->cmdr.b[EP_CMDR_CARGO_USED]--;
+            }
+        }
+    }
+    if (f->tribbles <= 0x2ab) return;
+    if (!f->tribbles_shown) {
+        f->tribbles_shown = 1;
+        f->tribble_sprites = 0;
+    }
+    uint16_t h1 = main_hi(g), h2 = main_hi(g);
+    if ((h1 >> 8) < 0xa) {
+        if (f->tribble_sprites == 0x40) f->tribble_sprites--;
+        uint16_t x = (uint16_t)((h1 & 0xff) + ((h2 >> 8) & 0x3f)), y = h2 & 0xff;
+        if (x >= 8 && x < 0x128 && y < 0xbd) {
+            uint16_t v = 0;
+            if (y >= 9 && y < 0x7a) {
+                v = main_hi(g) & 7;
+                if (v >= 3) v = (uint16_t)(v - 5);
+            }
+            uint8_t *t = f->tribble[f->tribble_sprites & 63];
+            put16(t, x);
+            put16(t + 2, y);
+            put16(t + 4, v);
+            f->tribble_sprites++;
+        }
+    }
+    for (unsigned k = 0; k < f->tribble_sprites && k < 64; k++) {
+        uint8_t *t = f->tribble[k];
+        uint16_t x = w16(t), dx = w16(t + 4);
+        uint8_t sprite = 0x5d;
+        if (dx) {
+            if (!(dx & 0x8000)) sprite++;
+            uint16_t nx = (uint16_t)(x + dx);
+            if (nx < 8 || nx >= 0x128) { /* bounce */
+                put16(t + 4, (uint16_t)(0u - dx));
+                nx = x;
+            }
+            x = nx;
+            put16(t, x);
+        }
+        ep_render_sprite(&g->render, sprite, (int16_t)x, (int16_t)w16(t + 2));
+    }
+}

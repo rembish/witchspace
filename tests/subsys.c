@@ -20,7 +20,10 @@ static void print_prims(const ep_render *r)
 {
     for (int k = 0; k < r->nprim; k++) {
         const ep_prim *p = &r->prim[k];
-        int n = p->kind == EP_PRIM_TRI ? 3 : p->kind == EP_PRIM_QUAD ? 4 : p->kind == EP_PRIM_PIXEL ? 1 : 2;
+        int n = p->kind == EP_PRIM_TRI                                  ? 3
+                : p->kind == EP_PRIM_QUAD                               ? 4
+                : p->kind == EP_PRIM_PIXEL || p->kind == EP_PRIM_SPRITE ? 1
+                                                                        : 2;
         printf("%d:%d", p->kind, p->colour);
         for (int j = 0; j < 2 * n; j++) printf(",%d", p->pt[j]);
         printf("\n");
@@ -70,6 +73,9 @@ int main(int argc, char **argv)
                 printf("result %u\n", r);
         } else if (!strcmp(argv[1], "dust")) {
             ep_dust_frame(&g);
+            print_prims(&g.render);
+        } else if (!strcmp(argv[1], "tribbles")) {
+            ep_tribbles_tick(&g);
             print_prims(&g.render);
         } else if (!strcmp(argv[1], "dust_reset")) {
             ep_dust_reset(&g);

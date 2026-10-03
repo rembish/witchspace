@@ -25,7 +25,14 @@ typedef struct {
     int16_t x, y, z, sx, sy;
 } ep_vertex;
 
-enum { EP_PRIM_TRI = 0, EP_PRIM_QUAD = 2, EP_PRIM_LINE = 4, EP_PRIM_CLIPPED_LINE = 6, EP_PRIM_PIXEL = 8 };
+enum {
+    EP_PRIM_TRI = 0,
+    EP_PRIM_QUAD = 2,
+    EP_PRIM_LINE = 4,
+    EP_PRIM_CLIPPED_LINE = 6,
+    EP_PRIM_PIXEL = 8,
+    EP_PRIM_SPRITE = 10
+};
 
 typedef struct {
     uint8_t kind;   /* EP_PRIM_* */
@@ -70,6 +77,9 @@ void ep_render_clipped_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0
 /* draw_ship (43ce). Appends to r->prim. */
 /* a dust pixel (2973): colour is the particle's colour byte, one point */
 void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y);
+
+/* a sprite (3411): colour is the sprite number, one point */
+void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y);
 
 void ep_draw_ship(ep_render *r, const ep_ship_view *v);
 

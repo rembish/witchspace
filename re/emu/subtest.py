@@ -68,6 +68,7 @@ ROUTINES = {
     "dashboard": (0x549F, {}, {}),
     "dust": (0x4FA3, {}, {}),
     "dust_reset": (0x5374, {}, {}),
+    "tribbles": (0x1221, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
@@ -160,6 +161,26 @@ def dust_world(img, rng):
             w(p + 4, rng.choice([1, 2, rng.getrandbits(8)]))
         if rng.random() < 0.2:
             w(p + 5, rng.choice([0, 1]))
+
+
+def tribble_world(img, rng):
+    """Any number of Tribbles, cargo to eat, sprites walking to the edges."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0x83B5, rng.choice([0, 1, 1, 2, 14, 15, 29, 30, 79, 80, 124, 125, 0x5E, 0x5F, 0x2AB, 0x2AC, 0x1000, 0x98C9, 0x98CA]), 2)
+    w(0x0AA4, rng.choice([0, 1]), 2)
+    n = rng.choice([0, 1, 5, 0x3F, 0x40])
+    w(0x0AA6, n, 2)
+    for k in range(n):
+        p = 0x0AA8 + 8 * k
+        w(p, rng.choice([rng.randint(8, 0x127), 8, 9, 0x126, 0x127]), 2)
+        w(p + 2, rng.randint(0, 0xBC), 2)
+        w(p + 4, rng.choice([0, 1, 2, -1, -2]), 2)
+    for k in range(17):
+        if rng.random() < 0.3:
+            w(0x8379 + 2 * k, rng.choice([0, 1, 5]))
+    if rng.random() < 0.4:  # the main generator about to give small numbers
+        for j in range(4):
+            w(0x0205 + 2 * j, rng.randrange(0x30), 2)
 
 
 def docking_approach(img, rng):
@@ -371,6 +392,7 @@ FUZZ = {
                    (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
     "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
     "dust": [(0, dust_world)],
+    "tribbles": [(0, tribble_world)],
     "dust_reset": [(0x805A, [0, 0x100, 0x128, 0x28])],
     "dashboard": [(0x54C8, [0, 0xFF, 0x100, 0x1FF, 0x200, 0x2FF, 0x300, 0x3FE, 0x3FF]), (0x54C1, [0, 0x7F, 0x80, 0xBF, 0xC0, 0xDF, 0xE0]),
                   (0x54C3, [0x1F, 0x20, 0x27, 0x28, 0x7F, 0x80, 0xFF]), (0x54C4, [0, 1, 0x7F, 0x80, 0xFF]),
@@ -460,6 +482,8 @@ def run_original(image, addr, regs, exits=None):
         if x < 0x130 and r["bx"] < 0x7C:
             prims.append(f"8:{e.r8(r['si'] + 6) & 0xF},{x},{r['bx']}")
     e.hook(0x2973, pixel)
+    if NAME == "tribbles":
+        e.hook(0x3411, lambda e, r: prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
     try:
         if NAME == "explode":

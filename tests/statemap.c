@@ -49,6 +49,7 @@ static const field fields[] = {
     F(0x0aa4, f.tribbles_shown, 0),
     F(0x0aa6, f.tribble_sprites, 0),
     F(0x83b5, f.tribbles, 0),
+    F(0x0aa8, f.tribble, 1),
     F(0x8058, f.message, 0),
     F(0x805a, f.message_time, 0),
     F(0x76bd, f.dead, 0),

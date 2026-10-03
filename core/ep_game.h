@@ -32,6 +32,7 @@ typedef struct {
     uint8_t altitude;           /* ds:54c3: 2 x (127 - apparent size of the planet), 254 when far */
     uint16_t tribbles_shown;    /* ds:0aa4: Tribble sprites on screen (each frame they may squeak) */
     uint16_t tribble_sprites;   /* ds:0aa6: how many (up to 64) */
+    uint8_t tribble[64][8];     /* ds:0aa8: Tribble sprites: x, y, dx words */
     uint16_t tribbles;          /* ds:83b5: Tribbles aboard (the sun's heat kills them) */
     uint16_t message;           /* ds:8058: message shown (data address of the text) */
     uint16_t message_time;      /* ds:805a */
