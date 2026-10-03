@@ -207,11 +207,24 @@ quantities are random.
   bits 1–5 type, bit 6 drawn-this-frame candidate, bit 7 in view; `+04/06/08` position
   relative to the player, `+0a/0c/0e` angles, `+10/12/14` camera-space position, `+1e`
   flags (`60h` both set = not drawn), `+3c/3e` distance keys. Types 30/31 are planet and sun.
-- `update_objects` (`4154`): player angles `ds:76d8/da/dc` → sin/cos slots (`6d0a…`, table
-  `ds:6410`: 2048 words, angle & 7ffh, cosine 512 entries on); per object `6e01` rotates the
-  position by the player's axes (`6d83`: rotate a pair with rounding), the in-view test is
-  `|x|·2 ≤ z`, `|y|·2 ≤ z`, z ≥ 100. Then painter's order: planet/sun farthest first
-  (`44c7`), ships farthest first by camera z (`draw_ship` `43ce`).
+- Positions are 24 bits: high bytes `+01/02/03`, low words `+04/06/08`.
+- `update_objects` (`4154`): player angles `ds:76d8/da/dc` → rotation slots `ds:76be/c2/c6`
+  (`6d26`: sine table `ds:6410`, 2048 words, angle & 7ffh, cosine 512 entries on). Per
+  active object: flags `&= 3f`; types 30/31 → `433c` (planet/sun); explosion timer `+34`
+  counts up unless `+1e` bit 1 (wrapping to 0 → `7e82`); `+1e &= ~2`; `4264` in range
+  (`4217`: all three high bytes are sign extensions; each |low word| < 12000; Σ hi(c²) <
+  895h, checked after y and after z; `+3e` = Σ >> 6; flag bit 6) → `42c8`: `6e01` rotates by
+  the player's slots in the order (y,z), (x,z), (x,y) (`6d83`: both operands doubled with
+  16-bit wrap, products rounded `hi16(p << 1) + bit 14 of p`, `a cos − b sin`, `b cos +
+  a sin`); `+3c` = high byte of z; scanner blip (`4359`, flight only); if `ds:b0de` ≠ 0 a
+  further (x,z) rotation by −b0de; scooping check (`46e2`, fuel scoops only); then z ≥ 100,
+  store `+10/12/14`, in view (bit 7) if `2|x| ≤ z` and `2|y| ≤ z` (16-bit, unsigned).
+  Drawing: planet/sun farthest first by `+3c` (`44c7`), then ships with flags `c1` farthest
+  first by camera z (strictly greater, unsigned), clearing bit 6 of each one drawn
+  (`draw_ship` `43ce`). `487e` (flight only) is the compass.
+- Checked: `re/emu/objtest.py` (random tables of ships with boundary positions, player and
+  extra angles; slots drawn, primitives and all slot bytes afterwards) against
+  `core/ep_objects.c`. Not yet reconstructed: planets, sun, scanner, scooping, explosions.
 - `draw_ship` (`43ce`): angles a = −(obj a + player a)·32, b = −obj b·32, c = obj c·32,
   player b, c and `ds:b0de` likewise; single-axis matrices `3f4d` (X), `3f99` (Y), `3fe5`
   (Z) from the sine table `ds:2cc0` (1024 words, index angle >> 6, cosine = angle + 4000h;

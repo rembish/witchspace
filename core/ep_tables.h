@@ -36,5 +36,6 @@ extern const ep_equipment_record ep_equipment[EP_EQUIPMENT];
 extern const uint16_t ep_model_offset[32];
 extern const uint8_t ep_models[9644];
 extern const int16_t ep_sin1024[1024];
+extern const int16_t ep_sin2048[2048];
 
 #endif

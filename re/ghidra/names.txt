@@ -118,3 +118,11 @@ ds:6410 sin2048
 ds:28e6 vertex_buffer
 ds:10a2 draw_colour
 ds:01f8 div_error_resume
+4217 position_fits_16bit
+4317 rotate_object_to_camera
+4359 scanner_blip
+46e2 scoop_check
+487e compass
+433c planet_to_camera
+7e82 remove_object
+6d26 set_rot_slot
