@@ -25,7 +25,7 @@ typedef struct {
 
 /* Flight variables (data segment addresses) */
 typedef struct {
-    uint8_t hyperspace;       /* ds:83a4: in the hyperspace tunnel, nothing to draw */
+    uint8_t hyperspace;       /* ds:83a4: witchspace (Thargoids left): no sun or planet */
     uint16_t approach;        /* ds:83ae: frames left falling into the sun */
     uint8_t approach_size;    /* ds:83ad: sun size while falling */
     uint8_t sun_size;         /* ds:54c1: apparent size of the sun last frame (temperature) */
