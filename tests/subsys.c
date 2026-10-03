@@ -45,6 +45,74 @@ static void print_prims(const ep_render *r)
     }
 }
 
+/* The fake disk of re/emu/subtest.py (ds:fc00): a count, then 16 bytes a file: its name, its
+ * kind, and a byte that varies the commander in the state into the file's */
+enum { DISK = 0xfc00, FILE_GOOD = 0, FILE_BAD_SUM, FILE_SHORT, FILE_NO_OPEN, FILE_READ_ONLY };
+static ep_commander disk_base;
+static char written[64][8 + 2 * EP_COMMANDER_SIZE + 16];
+static int nwritten;
+
+static int disk_find(const char *name)
+{
+    for (int j = 0; j < ds[DISK]; j++)
+        if (!strcmp((const char *)&ds[DISK + 0x10 + 0x10 * j], name)) return j;
+    return -1;
+}
+
+static int disk_exists(void *ctx, const char *name)
+{
+    (void)ctx;
+    int j = disk_find(name); /* 3d00: it opens */
+    return j >= 0 && ds[DISK + 0x10 + 0x10 * j + 13] != FILE_NO_OPEN;
+}
+
+static int disk_read(void *ctx, const char *name, uint8_t *data, int max)
+{
+    (void)ctx;
+    int j = disk_find(name);
+    if (j < 0) return -1;
+    const uint8_t *e = &ds[DISK + 0x10 + 0x10 * j];
+    if (e[13] == FILE_NO_OPEN) return -1;
+    ep_commander c = disk_base;
+    c.b[EP_CMDR_FUEL] = e[14];
+    c.b[EP_CMDR_CASH] ^= e[14];
+    ep_commander_seal(&c);
+    if (e[13] == FILE_BAD_SUM) c.b[EP_CMDR_CHECKSUM] ^= 1;
+    int n = e[13] == FILE_SHORT ? 100 : EP_COMMANDER_SIZE;
+    if (n > max) n = max;
+    memcpy(data, c.b, (size_t)n);
+    return n;
+}
+
+static int disk_write(void *ctx, const char *name, const uint8_t *data, int len)
+{
+    (void)ctx;
+    int j = disk_find(name);
+    if (j >= 0 && ds[DISK + 0x10 + 0x10 * j + 13] == FILE_READ_ONLY) return -1;
+    if (nwritten < 64) {
+        char *w = written[nwritten++];
+        int n = sprintf(w, "write %s:", name);
+        for (int k = 0; k < len; k++) n += sprintf(w + n, "%02x", data[k]);
+    }
+    return len;
+}
+
+static int disk_list(void *ctx, char names[][13], int max)
+{
+    (void)ctx;
+    int n = 0;
+    for (int j = 0; j < ds[DISK] && n < max; j++) memcpy(names[n++], &ds[DISK + 0x10 + 0x10 * j], 13);
+    return n;
+}
+
+static const ep_io disk = { NULL, disk_exists, disk_read, disk_write, disk_list };
+
+/* a dialog given the scripted keys (ds:ff10, 32 of them) until it is done */
+static void dialog_keys(ep_game *g, int w)
+{
+    for (int k = 0; w != EP_WAIT_NONE && k < 32; k++) w = ep_station_key(g, ds[0xff10 + k]);
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 3 && !strcmp(argv[1], "mask")) {
@@ -133,6 +201,12 @@ int main(int argc, char **argv)
                 g.in.last_key = key;
                 if (ep_pause_idle(&g) == EP_CMD_RESUME) break;
             }
+            print_prims(&g.render);
+            printf("end\n");
+        } else if (!strcmp(argv[1], "save_session") || !strcmp(argv[1], "load_session")) {
+            memcpy(disk_base.b, &ds[0x82db], EP_COMMANDER_SIZE);
+            g.io = &disk;
+            dialog_keys(&g, argv[1][0] == 's' ? ep_save_screen(&g) : ep_load_screen(&g));
             print_prims(&g.render);
             printf("end\n");
         } else if (!strcmp(argv[1], "data_screen")) {
@@ -233,6 +307,7 @@ int main(int argc, char **argv)
             return 2;
         }
         for (int k = 0; k < g.nevents; k++) printf("event %d:%d\n", g.event[k].kind, g.event[k].arg);
+        for (int k = 0; k < nwritten; k++) printf("%s\n", written[k]);
         state_store(&g, ds);
     } else {
         fprintf(stderr, "usage: subsys mask OUT | subsys NAME IN OUT\n");

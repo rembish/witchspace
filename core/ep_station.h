@@ -104,6 +104,13 @@ void ep_new_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8
  * screen at the station (EP_WAIT_* as ep_status_screen) */
 int ep_start_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths);
 
+/* 07aa: SAVE COMMANDER: the name typed, the file written (asking before overwriting) */
+int ep_save_screen(ep_game *g);
+
+/* 08ab: LOAD COMMANDER: a list of the files; a good one takes the player to the station
+ * (f.leave 3), a bad one to the title (f.leave 1) */
+int ep_load_screen(ep_game *g);
+
 /* where the screens idle */
 enum {
     EP_IDLE_NONE = 0,

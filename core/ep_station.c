@@ -226,7 +226,15 @@ enum {
     ST_MOUNT_SELL, /* 968f: the mount of a laser sold */
     ST_FIND_TEXT,  /* 61b1: the name to find */
     ST_ABANDON,    /* 0aac: Sure ? (Y/N) */
-    ST_EXIT        /* 0aef */
+    ST_EXIT,       /* 0aef */
+    ST_SAVE_NAME,  /* 07f7: the commander's name */
+    ST_SAVE_ASK,   /* 084f: overwrite? (Y/N) */
+    ST_SAVE_DONE,  /* 086a: space, then the box goes */
+    ST_LOAD_LIST,  /* 0945: which file */
+    ST_LOAD_NONE,  /* 08e4: none there (space) */
+    ST_LOAD_GONE,  /* 0a29: it could not be opened (space) */
+    ST_LOAD_BAD,   /* 0a0f: a bad file (space), then the title */
+    ST_LOAD_GOOD   /* 0a35: loaded (space), then the station */
 };
 
 static int wait(ep_game *g, uint8_t step, int kind)
@@ -433,6 +441,8 @@ int ep_status_screen(ep_game *g)
 }
 
 static int find_key(ep_game *g, uint8_t key);
+static int save_key(ep_game *g, uint8_t key);
+static int load_key(ep_game *g, uint8_t key);
 static int mount_key(ep_game *g, uint8_t key);
 
 int ep_station_key(ep_game *g, uint8_t key)
@@ -503,6 +513,14 @@ int ep_station_key(ep_game *g, uint8_t key)
     case ST_MOUNT_BUY:
     case ST_MOUNT_SELL: return mount_key(g, key);
     case ST_FIND_TEXT: return find_key(g, key);
+    case ST_SAVE_NAME:
+    case ST_SAVE_ASK:
+    case ST_SAVE_DONE: return save_key(g, key);
+    case ST_LOAD_LIST:
+    case ST_LOAD_NONE:
+    case ST_LOAD_GONE:
+    case ST_LOAD_BAD:
+    case ST_LOAD_GOOD: return load_key(g, key);
     case ST_ABANDON:
     case ST_EXIT:
         if (!yes && !no) return EP_WAIT_YN;
@@ -1813,6 +1831,207 @@ int ep_station_ask(ep_game *g, uint16_t title_text, int what)
     title(g, 0xa0, 0x46, 0x0f, t, n);
     wait(g, what == EP_ASK_ABANDON ? ST_ABANDON : ST_EXIT, EP_WAIT_YN);
     return EP_CMD_SCREEN;
+}
+
+/* ---- saving and loading ---- */
+
+/* 2fc0: centred on x */
+static void centred(ep_game *g, int16_t x, int16_t y, uint8_t colour, uint16_t addr)
+{
+    uint8_t t[96];
+    int n = ep_ds_text(g, addr, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(x - (ep_text_width(t) >> 1)), y, colour);
+    ep_text(&g->render, t, n, 0);
+}
+
+int ep_save_screen(ep_game *g)
+{
+    ep_box_open(g, 0x03f3);
+    centred(g, 0xa0, 0x24, 0x0e, 0x045e);
+    uint8_t *e = entry_b(g, 0x9a4), *name = &g->cmdr.b[EP_CMDR_NAME];
+    int n = 0;
+    uint8_t c;
+    do e[n] = c = name[n]; /* up to a space or the end */
+    while (++n < 16 && c && c != ' ');
+    e[n - 1] = 0;
+    *entry_b(g, 0x9a3) = (uint8_t)(n - 1);
+    *entry_b(g, 0x9a2) = 8;
+    entry_open(g, 8, 0x80, 0x3c, 0x010f, 1);
+    g->f.station_step = ST_SAVE_NAME;
+    return EP_WAIT_TEXT;
+}
+
+/* 0864..086d: a text, then space */
+static int save_said(ep_game *g, uint16_t text)
+{
+    text_header(g, text);
+    g->f.station_step = ST_SAVE_DONE;
+    return EP_WAIT_KEY;
+}
+
+static int save_key(ep_game *g, uint8_t key)
+{
+    ep_flight *f = &g->f;
+    const ep_io *io = g->io;
+    char *file = (char *)entry_b(g, 0x9a4); /* the name typed, then the file's */
+    if (f->station_step == ST_SAVE_DONE) {  /* 0ed5 */
+        if (key != ' ') return EP_WAIT_KEY;
+        f->station_step = ST_NONE;
+        ep_box_close(g);
+        return EP_WAIT_NONE;
+    }
+    if (f->station_step == ST_SAVE_NAME) {
+        int r = entry_key(g, key);
+        if (!r) return EP_WAIT_TEXT;
+        if (r < 0) {
+            f->station_step = ST_NONE;
+            ep_box_close(g);
+            return EP_WAIT_NONE;
+        }
+        uint8_t *name = &g->cmdr.b[EP_CMDR_NAME];
+        int n = 0;
+        do name[n] = (uint8_t)file[n];
+        while (file[n++]);
+        memcpy(&file[n - 1], ".CDR", 5);
+        f->screen_redraw = 1;
+        ep_sync_to_commander(g); /* 77c5 */
+        ep_commander_seal(&g->cmdr);
+        if (io && io->exists && io->exists(io->ctx, file)) {
+            centred(g, 0xa0, 0x4b, 0x0f, 0x047c);
+            f->station_step = ST_SAVE_ASK;
+            return EP_WAIT_YN;
+        }
+    } else { /* ST_SAVE_ASK */
+        int yes = key == 'Y' || key == 'y', no = key == 'N' || key == 'n';
+        if (!yes && !no) return EP_WAIT_YN;
+        if (no) return save_said(g, 0x04a3);
+    }
+    if ((io && io->write ? io->write(io->ctx, file, g->cmdr.b, EP_COMMANDER_SIZE) : -1) !=
+        EP_COMMANDER_SIZE) {
+        text_header(g, 0x04dd);
+        return save_said(g, 0x04a3);
+    }
+    return save_said(g, 0x04ff);
+}
+
+int ep_load_screen(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    const ep_io *io = g->io;
+    memcpy(f->menu_kept, f->menu, sizeof f->menu_kept);
+    ep_box_open(g, 0x0402);
+    static char names[0x28][13];
+    int n = io && io->list ? io->list(io->ctx, names, 0x28) : 0;
+    if (n <= 0) {
+        text_header(g, 0x053b);
+        return wait(g, ST_LOAD_NONE, EP_WAIT_KEY);
+    }
+    text_header(g, 0x057e);
+    f->file_count = 0;
+    int at = 0;
+    for (int k = 0; k < n && f->file_count < 0x28; k++) { /* 0a70: up to the dot */
+        for (const char *p = names[k]; *p && *p != '.' && at < (int)sizeof f->files - 1; p++)
+            f->files[at++] = (uint8_t)*p;
+        f->files[at++] = 0;
+        f->file_count++;
+    }
+    uint8_t rows = f->file_count;
+    if (rows > 0x0c) {
+        rows = 0x0c;
+        f->file_top = 0;
+    }
+    ep_list_open(g, 0x0107, 0x090f, (uint8_t)(rows | 0x80), 0, 0x0088, 0x1e, 0x1a, 0x4c);
+    f->station_step = ST_LOAD_LIST;
+    return EP_WAIT_LIST;
+}
+
+/* 08e7: the list as it was, the box gone */
+static int load_back(ep_game *g)
+{
+    memcpy(g->f.menu, g->f.menu_kept, sizeof g->f.menu_kept);
+    g->f.station_step = ST_NONE;
+    ep_box_close(g);
+    return EP_WAIT_NONE;
+}
+
+/* 0979, 09a8: the list scrolled; the cursor's item is the one at row */
+static void load_scroll(ep_game *g, uint8_t row)
+{
+    menu_set_word(g, 2, 0x0088);
+    menu_set_word(g, 2, list_item(g, g->f.file_top));
+    menu_set_word(g, 4, list_item(g, row));
+    ep_list_poll(g, 1);
+}
+
+static int load_key(ep_game *g, uint8_t key)
+{
+    ep_flight *f = &g->f;
+    const ep_io *io = g->io;
+    uint8_t *c = g->cmdr.b;
+    switch (f->station_step) {
+    case ST_LOAD_NONE:
+    case ST_LOAD_GONE:
+        if (key != ' ') return EP_WAIT_KEY;
+        return load_back(g);
+    case ST_LOAD_BAD:
+        if (key != ' ') return EP_WAIT_KEY;
+        f->station_step = ST_NONE;
+        f->leave = 1; /* 0a12 */
+        f->screen_shown = 0xff;
+        g->space.in_flight = 0;
+        return EP_WAIT_NONE;
+    case ST_LOAD_GOOD:
+        if (key != ' ') return EP_WAIT_KEY;
+        f->station_step = ST_NONE;
+        /* 0a3c: a military laser in front counts as fitted */
+        if ((c[EP_CMDR_LASERS] & 1) && (c[EP_CMDR_LASER_TYPES] & 3) == 3 && !c[EP_CMDR_EQUIPMENT + 12]) {
+            c[EP_CMDR_EQUIPMENT + 12] = 1;
+            c[EP_CMDR_EQUIPMENT + 3] = 0;
+        }
+        f->screen_shown = 0xff;
+        g->space.in_flight = 1;
+        ep_event_add(g, EP_EV_MUSIC, 1); /* 4d55, 4ac0 */
+        f->leave = 3;
+        return EP_WAIT_NONE;
+    default: break;
+    }
+    f->last_cmd_key = key; /* 03b6 */
+    uint8_t got = ep_list_poll(g, 0);
+    if (got == 0x1b) return load_back(g);
+    if (got == 0x48 && f->file_count > 0x0c && f->file_top) {
+        f->file_top--;
+        load_scroll(g, 0);
+        return EP_WAIT_LIST;
+    }
+    if (got == 0x50 && f->file_count > 0x0c && f->file_top + 1 + 0x0c <= f->file_count) {
+        f->file_top++;
+        load_scroll(g, 0x0b);
+        return EP_WAIT_LIST;
+    }
+    if (got != 0x0d) return EP_WAIT_LIST;
+    /* 09c2: ".CDR" written after the name under the cursor (over the next one's) */
+    uint16_t item = list_item(g, f->menu[1]), end = item;
+    while (ep_ds_byte(g, end)) end++;
+    char file[13];
+    int k = 0;
+    for (uint16_t a = item; a < end && k < 8; a++) file[k++] = (char)ep_ds_byte(g, a);
+    memcpy(file + k, ".CDR", 5);
+    for (int j = 0; j < 5 && end - 0x88 + j < (int)sizeof f->files; j++)
+        f->files[end - 0x88 + j] = (uint8_t)".CDR"[j];
+    uint8_t data[EP_COMMANDER_SIZE];
+    int r = io && io->read ? io->read(io->ctx, file, data, EP_COMMANDER_SIZE) : -1;
+    if (r < 0) {
+        text_header(g, 0x05fe);
+        f->station_step = ST_LOAD_GONE;
+        return EP_WAIT_KEY;
+    }
+    memcpy(c, data, (size_t)r);
+    ep_sync_from_commander(g);
+    int good = r == EP_COMMANDER_SIZE && ep_commander_valid(&g->cmdr);
+    if (r == EP_COMMANDER_SIZE) ep_commander_seal(&g->cmdr); /* 77c5 stores the sum it made */
+    text_header(g, good ? 0x05c8 : 0x063d);
+    f->station_step = good ? ST_LOAD_GOOD : ST_LOAD_BAD;
+    return EP_WAIT_KEY;
 }
 
 /* ---- a new game ---- */

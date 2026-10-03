@@ -19,7 +19,7 @@ import tempfile
 from corpus import load
 from eliteemu import CS, DS, REGS, SS, Elite
 from unicorn import UC_HOOK_CODE
-from unicorn.x86_const import UC_X86_REG_IP, UC_X86_REG_SP
+from unicorn.x86_const import UC_X86_REG_EFLAGS, UC_X86_REG_IP, UC_X86_REG_SP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARGS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in ("--fuzz", "--show")]
@@ -32,7 +32,7 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary; and sound state (the core
 # reports sounds as events).
-SCRATCH = [(0x54CC, 0x54E1), (0x6405, 0x6405), (0x63F2, 0x6401), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0x8D00, 0x8D09), (0xA3A0, 0xA40F), (0xACA8, 0xACAF), (0xACB1, 0xACB3),
+SCRATCH = [(0x0002, 0x002C), (0x54CC, 0x54E1), (0x6405, 0x6405), (0x63F2, 0x6401), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0x8D00, 0x8D09), (0xA3A0, 0xA40F), (0xACA8, 0xACAF), (0xACB1, 0xACB3),
            (0x031B, 0x031E), (0x03F2, 0x03F2),
            (0x01F8, 0x01F9), (0x1074, 0x108E), (0x1091, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
            (0x76D6, 0x76D7), (0x45E8, 0x45E9), (0x45EB, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
@@ -96,6 +96,8 @@ ROUTINES = {
     "pause_session": (0x0425, {}, {0x9E80: "end", 0x00BA: "end"}),
     "start_game": (0xA004, {}, {0x8DAC: "end"}),  # a040: no chart in witchspace, back to the view
     "equip_session": (0x924A, {}, {}),
+    "save_session": (0x07AA, {}, {}),
+    "load_session": (0x08AB, {}, {0x9E80: "end"}),
 }
 
 
@@ -393,6 +395,130 @@ def start_world(img, rng):
     w(b + 0x3A, rng.randrange(8))                                  # galaxy
     w(0x83BE + 0x93, rng.choice([0, 1, 9, 0x14]), 2)  # its kills (836e) and the current ones
     w(0x83BE + 0x91, rng.choice([0, 1, 9, 0x14, 0x15]), 2)
+
+
+FILES = 0xFC00  # the fake disk: a count, then 16 bytes a file (name, NUL, kind, a byte to vary it)
+FILE_GOOD, FILE_BAD_SUM, FILE_SHORT, FILE_NO_OPEN, FILE_READ_ONLY = range(5)
+
+
+def disk(image):
+    """The files ds:fc00 describes: {name: (kind, contents)}, in directory order. A commander file
+    is the commander in the state with its cash and fuel varied (tests/subsys.c makes the same)."""
+    files = {}
+    base = bytearray(image[DS * 16 + 0x82DB:DS * 16 + 0x82DB + 0xE2])
+    for j in range(image[DS * 16 + FILES]):
+        at = DS * 16 + FILES + 0x10 + 0x10 * j
+        name = bytes(image[at:at + 13]).split(b"\0")[0].decode()
+        kind, vary = image[at + 13], image[at + 14]
+        c = bytearray(base)
+        c[0x7B] = vary
+        c[0x8C] ^= vary
+        s = 0x454C
+        for b in c[:0xE0]:
+            s = (s & 0xFF00) + (s & 0xFF) + b & 0xFFFF  # add al; adc ah, 0
+            s = (s << 1 | s >> 15) & 0xFFFF
+        c[0xE0:0xE2] = (s ^ (1 if kind == FILE_BAD_SUM else 0)).to_bytes(2, "little")
+        files[name] = (kind, bytes(c[:100] if kind == FILE_SHORT else c))
+    return files
+
+
+def fake_dos(files, written):
+    """int 21h for the commander files: {name: (kind, contents)}; what is written is noted."""
+    found, handles = [], {}
+
+    def string(e, at):
+        out = b""
+        while e.r8(at + len(out)):
+            out += bytes([e.r8(at + len(out))])
+        return out.decode("latin-1")
+
+    def dos(e, intno):
+        if intno != 0x21:
+            return False
+        mu = e.mu
+        ax, bx, cx, dx = (mu.reg_read(REGS[k]) for k in ("ax", "bx", "cx", "dx"))
+        fn, fail, out = ax >> 8, False, ax
+        if fn == 0x1A:
+            assert dx == 2
+        elif fn in (0x4E, 0x4F):
+            if fn == 0x4E:
+                assert string(e, dx) == "*.CDR"
+                found[:] = list(files)
+            if found:
+                mu.mem_write(DS * 16 + 0x20, found.pop(0).encode() + b"\0")
+            else:
+                fail, out = True, 0x12
+        elif fn == 0x3D:
+            name = string(e, dx)
+            if name not in files or files[name][0] == FILE_NO_OPEN:
+                fail, out = True, 2
+            else:
+                out = 5 + len(handles)
+                handles[out] = name
+        elif fn == 0x3C:
+            name = string(e, dx)
+            if name in files and files[name][0] == FILE_READ_ONLY:
+                fail, out = True, 5
+            else:
+                files[name] = (FILE_GOOD, b"")
+                out = 5 + len(handles)
+                handles[out] = name
+        elif fn == 0x3F:
+            data = files[handles[bx]][1][:cx]
+            mu.mem_write(DS * 16 + dx, data)
+            out = len(data)
+        elif fn == 0x40:
+            data = bytes(mu.mem_read(DS * 16 + dx, cx))
+            files[handles[bx]] = (FILE_GOOD, data)
+            written.append(f"write {handles[bx]}:{data.hex()}")
+            out = cx
+        elif fn == 0x3E:  # a bad file is closed twice, the second time with the checksum as the handle
+            if handles.pop(bx, None) is None:
+                fail, out = True, 6
+        else:
+            raise RuntimeError(f"int 21h function {fn:#x}")
+        mu.reg_write(REGS["ax"], out)
+        fl = mu.reg_read(UC_X86_REG_EFLAGS)
+        mu.reg_write(UC_X86_REG_EFLAGS, fl | 1 if fail else fl & ~1)
+        return True
+    return dos
+
+
+def files_world(img, rng):
+    """Commander files on the disk (none to a screenful and more), good and bad; a name to save."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    name = rng.choice(["JAMESON", "A", "ELITE-8", "Z9", "NEWCMDR", "LAVE", "ABCDEFGH"])
+    w(0x8370, 0, 9)
+    img[DS * 16 + 0x8370:DS * 16 + 0x8370 + len(name)] = name.encode()
+    n = rng.choice([0, 1, 2, 3, 5, 12, 13, 14, 20, 40])
+    names = set()
+    while len(names) < n:
+        names.add("".join(rng.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-") for _ in range(rng.randint(1, 8))))
+    names = sorted(names)
+    if names and rng.random() < 0.5:
+        names[rng.randrange(len(names))] = name  # saving would overwrite it
+    names = list(dict.fromkeys(names))
+    w(FILES, len(names))
+    for j, f in enumerate(names):
+        at = FILES + 0x10 + 0x10 * j
+        w(at, 0, 16)
+        img[DS * 16 + at:DS * 16 + at + len(f) + 4] = (f + ".CDR").encode()
+        w(at + 13, rng.choice([FILE_GOOD, FILE_GOOD, FILE_GOOD, FILE_BAD_SUM, FILE_SHORT, FILE_NO_OPEN, FILE_READ_ONLY]))
+        w(at + 14, rng.randrange(256))
+    w(0x8365, rng.choice([0, 1, 1, 3]))  # lasers, a military one in front
+    w(0x8366, rng.choice([0, 3, 3, 0x0F]))
+    w(0x8363, rng.choice([0, 0, 1]))
+    keys = []
+    if NAME == "save_session":
+        if rng.random() < 0.5:
+            keys += [8] * rng.randrange(4) + [ord(c) for c in rng.choice(["", "X", "LAVE", "AB-1", "x"])]
+        keys += [rng.choice([0x0D, 0x0D, 0x0D, 0x1B, 0xFF])]
+    if rng.random() < 0.5:  # down past the end of a long list and back up past its top
+        keys += [0x50] * rng.randint(11, 16) + [0x48] * rng.randint(11, 15)
+    while len(keys) < 32:
+        keys.append(rng.choice([0x48, 0x50, 0x50, 0x50, 0x0D, 0x1B, 0xFF, ord("Y"), ord("n"), ord("N"), ord("y"), 0x20, 0x20]))
+    for j in range(32):
+        w(0xFF10 + j, keys[j])
 
 
 def pause_world(img, rng):
@@ -774,6 +900,8 @@ FUZZ = {
     "equip_screen": [(0, trading), (0, equip_world)],
     "chart_session": [(0, chart_world)],
     "pause_session": [(0, pause_world)],
+    "save_session": [(0, files_world)],
+    "load_session": [(0, files_world)],
     "start_game": [(0, start_world), (0, arrival_dialogs)],
     "data_screen": [(0, chart_world), (0x031D, [0, 1]), (0xAE60, [0, 0, 3]), (0x831E, [0, 1])],
     "equip_session": [(0, trading), (0, equip_world), (0, equip_keys)],
@@ -889,13 +1017,14 @@ def run_original(image, addr, regs, exits=None):
                     sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
             e.hook(0x37BD, cmd_icon)
         done = "cmd 2" if NAME == "commands" else "frame 2"
-        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0x0DF6, 0x0AAC, 0x0AEF):  # screens up
+        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0x0DF6, 0x0AAC, 0x0AEF, 0x08E4):  # screens up
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
                           begin=CS * 16 + at, end=CS * 16 + at)
         paused = "cmd 3" if NAME == "commands" else "frame 4"
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(paused), mu.emu_stop()),
                       begin=CS * 16 + 0x0480, end=CS * 16 + 0x0480)  # the pause menu is up
-        for stub in (0x07AA, 0x08AB, 0x0674, 0x0736, 0x0779):  # not reconstructed yet
+        e.on_intr = fake_dos({}, [])  # no commander files
+        for stub in (0x0674, 0x0736, 0x0779):  # not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
                 sounds.append(f"event {EV_UNPORTED}:{stub}"),
                 left.append("frame 1" if stub == 0x6864 else done), mu.emu_stop()),
@@ -922,7 +1051,7 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session"):
         def sprite_or_icon(e, r):
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":  # the bar's (0312)
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
@@ -960,6 +1089,23 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([pkeys.pop(0)]))
         for at in (0x0480, 0x0AAC, 0x0AEF):
             e.mu.hook_add(UC_HOOK_CODE, pause_key, begin=CS * 16 + at, end=CS * 16 + at)
+    written = []
+    if NAME in ("save_session", "load_session"):  # the keys (0276, 32 of them) and a fake DOS
+        fkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF30])
+        files = disk(image)
+
+        def file_key(e, r):
+            if not fkeys:
+                left.append("end")
+                e.mu.emu_stop()
+                return
+            e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
+            return {"ax": (r["ax"] & 0xFF00) | fkeys.pop(0), "flags": r["flags"] | 1}
+        e.hook(0x0276, file_key)
+        e.hook(0x4D55, lambda e, r: sounds.append("event 6:1"))
+        e.hook(0x4AC0, lambda e, r: None)
+
+        e.on_intr = fake_dos(files, written)
     if NAME == "chart_session":  # a key and the arrows held at each pass (5c80, 595a), 12 passes
         ckeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
         carrows = list(image[DS * 16 + 0xFF20:DS * 16 + 0xFF2C])
@@ -1013,7 +1159,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
@@ -1026,7 +1172,7 @@ def run_original(image, addr, regs, exits=None):
             raise
     if NAME == "pause_session" and not left:
         left.append("end")
-    if NAME == "chart_session" and not left:
+    if NAME in ("chart_session", "save_session", "load_session") and not left:
         left.append("end")
     if NAME == "commands" and not left:
         left.append("cmd 0")
@@ -1034,7 +1180,7 @@ def run_original(image, addr, regs, exits=None):
         left.append("end 0")
     if NAME in ("buy", "sell", "equip", "dashboard", "arrive", "countdowns", "launch", "dock"):  # the screens' drawing is the frontend's
         prims, spans = [], []
-    return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds
+    return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds + written
 
 
 def main():

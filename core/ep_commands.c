@@ -648,6 +648,8 @@ static int run(ep_game *g, uint8_t id)
         g->f.screen_shown = 0xff;
         ep_event_add(g, EP_EV_MUSIC, g->f.sound_off);
         return EP_CMD_STAY;
+    case 0x14: ep_save_screen(g); return EP_CMD_SCREEN;          /* 07aa */
+    case 0x15: ep_load_screen(g); return EP_CMD_SCREEN;          /* 08ab */
     case 0x1e: return ep_station_ask(g, 0x0451, EP_ASK_ABANDON); /* 0a92 */
     case 0x1f: return ep_station_ask(g, 0x0445, EP_ASK_EXIT);    /* 0ad5 */
     case 0x23: masking(g); return EP_CMD_STAY;

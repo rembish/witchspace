@@ -172,8 +172,13 @@ typedef struct {
     uint8_t sound_mode;         /* ds:45ea */
     uint8_t pause_screen;       /* the screen the pause menu came from (on the original's stack) */
     uint8_t resume;             /* what the pause interrupted (EP_RESUME_*) */
-    uint8_t leave;              /* 1 back to the title (abandon), 2 to DOS (exit) */
+    uint8_t
+        leave; /* 1 back to the title (abandon), 2 to DOS (exit), 3 a commander loaded: the station (9e80, a012) */
     uint8_t bar_quiet;          /* ds:b3d4: the bar's marks are not drawn */
+    uint8_t menu_kept[0x11];    /* ds:0991: the list as it was while files are listed */
+    uint8_t files[0x16d];       /* ds:0088: the commander files' names */
+    uint8_t file_count;         /* ds:01f5 */
+    uint8_t file_top;           /* ds:01f6: the first one shown */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -204,7 +209,17 @@ typedef struct {
     uint8_t control;                                     /* ds:8f2c: 0 keyboard, 1 joystick, 2 mouse */
 } ep_input;
 
+/* Commander files, the frontend's (DOS 8.3 names in capitals: "JAMESON.CDR") */
 typedef struct {
+    void *ctx;
+    int (*exists)(void *ctx, const char *name);                              /* 1 if it does */
+    int (*read)(void *ctx, const char *name, uint8_t *data, int max);        /* bytes read, -1 none */
+    int (*write)(void *ctx, const char *name, const uint8_t *data, int len); /* bytes written, -1 */
+    int (*list)(void *ctx, char names[][13], int max);                       /* the *.CDR there */
+} ep_io;
+
+typedef struct {
+    const ep_io *io;         /* NULL: no files */
     ep_commander cmdr;       /* ds:82db */
     ep_commander cmdr_saved; /* ds:83be: a second copy (the commander as last saved or docked) */
     ep_space space;          /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */

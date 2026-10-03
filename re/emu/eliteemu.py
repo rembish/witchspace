@@ -50,11 +50,14 @@ class Elite:
         mu.mem_map(0, 0x100000)
         mu.mem_write(LOAD * 16, bytes(img))
         mu.hook_add(UC_HOOK_INTR, self._intr)
+        self.on_intr = None  # fn(emu, intno) -> True when it handled the interrupt
         self.pyfuncs = {}
         self._resume = None
         self._hook_divisions(img)
 
     def _intr(self, mu, intno, _):
+        if self.on_intr and self.on_intr(self, intno):
+            return
         ip = mu.reg_read(UC_X86_REG_IP)
         raise RuntimeError(f"unhandled int {intno:#x} near {ip:04x}")
 
