@@ -9,7 +9,7 @@ import os
 import struct
 import sys
 
-from unicorn import UC_ARCH_X86, UC_HOOK_INTR, UC_MODE_16, Uc
+from unicorn import UC_ARCH_X86, UC_HOOK_CODE, UC_HOOK_INTR, UC_MODE_16, Uc
 from unicorn.x86_const import (UC_X86_REG_AX, UC_X86_REG_BP, UC_X86_REG_BX, UC_X86_REG_CS,
                                UC_X86_REG_CX, UC_X86_REG_DI, UC_X86_REG_DS, UC_X86_REG_DX,
                                UC_X86_REG_ES, UC_X86_REG_FLAGS, UC_X86_REG_IP, UC_X86_REG_SI,
@@ -48,10 +48,40 @@ class Elite:
         mu.mem_map(0, 0x100000)
         mu.mem_write(LOAD * 16, bytes(img))
         mu.hook_add(UC_HOOK_INTR, self._intr)
+        self.pyfuncs = {}
 
     def _intr(self, mu, intno, _):
         ip = mu.reg_read(UC_X86_REG_IP)
+        if intno == 0:
+            # Divide error: the game's INT 0 handler (00d6) resumes at the address it stored
+            # in ds:01f8 before the division, with registers and stack unchanged.
+            mu.reg_write(UC_X86_REG_IP, self.r16(0x01F8))
+            return
         raise RuntimeError(f"unhandled int {intno:#x} near {ip:04x}")
+
+    def hook(self, func, fn):
+        """Replace the near routine at CS:func by fn(emu, regs) followed by a near `ret`.
+        fn may return a dict of registers to set."""
+        self.pyfuncs[func] = fn
+        self.mu.hook_add(UC_HOOK_CODE, self._py, begin=CS * 16 + func, end=CS * 16 + func)
+
+    def _py(self, mu, addr, size, _):
+        fn = self.pyfuncs[addr - CS * 16]
+        regs = {k: mu.reg_read(r) for k, r in REGS.items()}
+        out = fn(self, regs) or {}
+        for k, v in out.items():
+            mu.reg_write(REGS[k], v & 0xFFFF)
+        sp = mu.reg_read(UC_X86_REG_SP)
+        ret = struct.unpack("<H", mu.mem_read(SS * 16 + sp, 2))[0]
+        mu.reg_write(UC_X86_REG_SP, sp + 2)
+        mu.reg_write(UC_X86_REG_IP, ret)
+
+    # ---- stack segment (ship models and their table live there) ----
+    def ss_rb(self, off, n=1):
+        return bytes(self.mu.mem_read(SS * 16 + off, n))
+
+    def ss_r16(self, off):
+        return struct.unpack("<H", self.ss_rb(off, 2))[0]
 
     # ---- data segment helpers ----
     def rb(self, off, n=1):
