@@ -122,7 +122,8 @@ frame from a040 back to a040, or out to docking, a screen or the title), `frame`
   compass's (48c9/48e7): the compass's tail runs with stray registers, draws a sprite and
   returns past the rest of the step. The core divides by 1 instead. Its roll match stores the
   11-bit sign-extended angle.
-- `find_nearest` (5fe1) keeps the caller's BP when no system lies in the chart's window: on
-  the find and home commands (60a3) it is mostly 140h (the glyph routine's row stride),
-  sometimes 30a8h/3088h/3108h. The core picks system 0.
+- `find_nearest` (5fe1) keeps the caller's BP when no system lies in the zoomed chart's
+  window (which a galaxy's spread of systems seems never to allow). BP is then what the
+  drawing last left: 140h after text (2e3f), 140h minus the width after a sprite (377f), or
+  the line rasterizer's step flag (26da, 0 or 1). The core picks system 0.
 
