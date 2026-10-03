@@ -46,8 +46,13 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -DIN=${FONT_SRC} -DOUT=${FONT_C} -DNAME=font_ttf -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
   DEPENDS ${FONT_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake)
 find_package(SDL2 REQUIRED)
+# The AdLib's chip: Nuked OPL3 (LGPL-2.1+, third_party/nuked-opl3), for the frontend only
+add_library(opl3 STATIC third_party/nuked-opl3/opl3.c)
+target_include_directories(opl3 PUBLIC third_party/nuked-opl3)
 add_executable(eliteplus src/main.c src/screen.c src/grf.c src/audio.c src/files.c)
-target_link_libraries(eliteplus PRIVATE epcore SDL2::SDL2)
+target_link_libraries(eliteplus PRIVATE epcore opl3 SDL2::SDL2)
+add_executable(ep_musicwav tests/musicwav.c)
+target_link_libraries(ep_musicwav PRIVATE epcore opl3)
 if(TARGET SDL2::SDL2main)
   target_link_libraries(eliteplus PRIVATE SDL2::SDL2main)
 endif()

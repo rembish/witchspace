@@ -6,9 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 
-static char base[1024] = ".";
+static char base[1024] = ".", data[1024] = "original";
 
-void files_init(const char *dir) { snprintf(base, sizeof base, "%s", dir); }
+void files_init(const char *dir, const char *data_dir)
+{
+    snprintf(base, sizeof base, "%s", dir);
+    snprintf(data, sizeof data, "%s", data_dir);
+}
 
 static void path(char *out, size_t n, const char *name) { snprintf(out, n, "%s/%s", base, name); }
 
@@ -23,14 +27,18 @@ static int exists(void *ctx, const char *name)
     return 1;
 }
 
-static int read_file(void *ctx, const char *name, uint8_t *data, int max)
+static int read_file(void *ctx, const char *name, uint8_t *buf, int max)
 {
     (void)ctx;
     char p[1100];
-    path(p, sizeof p, name);
+    size_t len = strlen(name);
+    if (len > 4 && !strcmp(name + len - 4, ".MID")) /* the music: with the game's files */
+        snprintf(p, sizeof p, "%s/%s", data, name);
+    else
+        path(p, sizeof p, name);
     FILE *f = fopen(p, "rb");
     if (!f) return -1;
-    int n = (int)fread(data, 1, (size_t)max, f);
+    int n = (int)fread(buf, 1, (size_t)max, f);
     fclose(f);
     return n;
 }

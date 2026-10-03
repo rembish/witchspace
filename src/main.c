@@ -1,17 +1,20 @@
 /* Elite Plus port: SDL2 frontend. The core plays the game; this keeps its clock (the timer the
- * original programs, 1193182 / 5555h Hz), feeds it the keyboard as PC scancodes, shows what it
- * draws on a 320 x 200 MCGA screen, sounds the PC speaker, and goes from one of the core's
- * loops to the next as their results say (title, station screens, flight, pause, dialogues).
+ * original programs: 1193182 Hz over the divisor the core sets, 5555h, or the music's),
+ * feeds it the keyboard as PC scancodes, shows what it draws on a 320 x 200 MCGA screen,
+ * sounds the PC speaker or the AdLib, and goes from one of the core's loops to the next as
+ * their results say (title, station screens, flight, pause, dialogues).
  *
- * usage: eliteplus [--data DIR] [--saves DIR] [--protection]
- *   --data DIR     where ELITE.GRF is (your own copy; default original/)
+ * usage: eliteplus [--data DIR] [--saves DIR] [--adlib] [--protection]
+ *   --data DIR     where ELITE.GRF and ADBLUE.MID are (your own copy; default original/)
  *   --saves DIR    where commanders are saved (default .)
+ *   --adlib        an AdLib for the sound (default the PC speaker)
  *   --protection   ask the copy protection's question (off by default) */
 #include "audio.h"
 #include "files.h"
 #include "grf.h"
 #include "screen.h"
 
+#include "ep_adlib.h"
 #include "ep_boot.h"
 #include "ep_commands.h"
 #include "ep_frame.h"
@@ -25,7 +28,7 @@
 #include <string.h>
 #include <time.h>
 
-#define TICK_S (0x5555 / 1193182.0) /* a timer tick */
+#define PIT_HZ 1193182.0 /* the timer's input clock */
 
 static ep_game g;
 static SDL_Window *win;
@@ -33,7 +36,7 @@ static SDL_Renderer *ren;
 static SDL_Texture *tex;
 static uint32_t rgba[SCREEN_W * SCREEN_H];
 static int running = 1;
-static Uint64 t0, ticks_done;
+static Uint64 t0, clocks_done; /* the timer's input clock, since t0 */
 
 enum { M_TITLE_OPENING, M_TITLE, M_DIALOG, M_IDLE, M_FLIGHT, M_PAUSE };
 static int mode, after_dialog, waiting; /* waiting: the dialogue's EP_WAIT_* */
@@ -207,12 +210,18 @@ static void pump(void)
 static void advance(void)
 {
     Uint64 due =
-        (Uint64)((double)(SDL_GetPerformanceCounter() - t0) / (double)SDL_GetPerformanceFrequency() / TICK_S);
-    if (due > ticks_done + 30) ticks_done = due - 30; /* far behind (the window held): let it go */
-    while (ticks_done < due) {
-        ep_timer_tick(&g);
+        (Uint64)((double)(SDL_GetPerformanceCounter() - t0) / (double)SDL_GetPerformanceFrequency() * PIT_HZ);
+    if (due > clocks_done + 30 * 0x5555) clocks_done = due - 30 * 0x5555; /* far behind (the window held) */
+    for (;;) {
+        Uint64 divisor = g.pit ? g.pit : 0x10000;
+        if (clocks_done + divisor > due) break;
+        clocks_done += divisor;
+        ep_pit_tick(&g);
         audio_speaker(g.speaker, g.speaker_on);
-        ticks_done++;
+        if (g.nopl) {
+            audio_opl(g.opl, g.nopl, (double)(due - clocks_done) / PIT_HZ);
+            g.nopl = 0;
+        }
     }
 }
 
@@ -434,7 +443,7 @@ static void step(void)
 int main(int argc, char **argv)
 {
     const char *data = "original", *saves = ".";
-    int protection = 0;
+    int protection = 0, adlib = 0;
     for (int k = 1; k < argc; k++) {
         if (!strcmp(argv[k], "--data") && k + 1 < argc)
             data = argv[++k];
@@ -442,13 +451,15 @@ int main(int argc, char **argv)
             saves = argv[++k];
         else if (!strcmp(argv[k], "--protection"))
             protection = 1;
+        else if (!strcmp(argv[k], "--adlib"))
+            adlib = 1;
         else if (!strcmp(argv[k], "--shots") && k + 1 < argc)
             shots = argv[++k];
     }
     char path[1100];
     snprintf(path, sizeof path, "%s/ELITE.GRF", data);
     if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
-    files_init(saves);
+    files_init(saves, data);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
@@ -470,10 +481,10 @@ int main(int argc, char **argv)
 
     uint8_t t[4];
     time_of_day(t);
-    ep_boot(&g, 2, 2, t[1], t[2], t[3]); /* MCGA, the PC speaker */
     g.io = &files_io;
     g.wait = wait_for;
     g.protection = (uint8_t)protection;
+    ep_boot(&g, 2, adlib ? 1 : 2, t[1], t[2], t[3]); /* MCGA; the AdLib or the PC speaker */
     t0 = SDL_GetPerformanceCounter();
     if (protection)
         dialog(ep_protection_ask(&g), M_TITLE_OPENING);
