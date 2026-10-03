@@ -665,13 +665,13 @@ static int run(ep_game *g, uint8_t id)
         g->f.screen_shown = 0xff;
         ep_music_switch(g, g->f.sound_off); /* 4d6c */
         return EP_CMD_STAY;
-    case 0x14: ep_save_screen(g); return EP_CMD_SCREEN;          /* 07aa */
-    case 0x16: ep_define_keys(g); return EP_CMD_SCREEN;          /* 0674 */
-    case 0x17: ep_joystick(g); return EP_CMD_SCREEN;             /* 0736 */
-    case 0x18: ep_mouse(g); return EP_CMD_SCREEN;                /* 0779 */
-    case 0x15: ep_load_screen(g); return EP_CMD_SCREEN;          /* 08ab */
-    case 0x1e: return ep_station_ask(g, 0x0451, EP_ASK_ABANDON); /* 0a92 */
-    case 0x1f: return ep_station_ask(g, 0x0445, EP_ASK_EXIT);    /* 0ad5 */
+    case 0x14: ep_save_screen(g); return EP_CMD_SCREEN;                /* 07aa */
+    case 0x16: return ep_define_keys(g) ? EP_CMD_SCREEN : EP_CMD_STAY; /* 0674 */
+    case 0x17: return ep_joystick(g) ? EP_CMD_SCREEN : EP_CMD_STAY;    /* 0736 */
+    case 0x18: return ep_mouse(g) ? EP_CMD_SCREEN : EP_CMD_STAY;       /* 0779: none: no dialogue */
+    case 0x15: ep_load_screen(g); return EP_CMD_SCREEN;                /* 08ab */
+    case 0x1e: return ep_station_ask(g, 0x0451, EP_ASK_ABANDON);       /* 0a92 */
+    case 0x1f: return ep_station_ask(g, 0x0445, EP_ASK_EXIT);          /* 0ad5 */
     case 0x23: masking(g); return EP_CMD_STAY;
     case 0x24: anti_ecm(g); return EP_CMD_STAY;
     default: ep_event_add(g, EP_EV_UNPORTED, id < 37 ? handler[id] : id); return EP_CMD_SCREEN;

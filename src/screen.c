@@ -183,7 +183,7 @@ static void prim(const ep_game *g, const ep_prim *p)
     case EP_PRIM_CLIPPED_LINE: view_line(p->pt[0], p->pt[1], p->pt[2], p->pt[3], c); break;
     case EP_PRIM_PIXEL: view_put(p->pt[0], p->pt[1], c); break;
     case EP_PRIM_SPANS:
-        for (int k = p->pt[0]; k < p->pt[0] + p->pt[1] && k < g->circles.n; k++) {
+        for (int k = (uint16_t)p->pt[0]; k < (uint16_t)p->pt[0] + p->pt[1] && k < g->circles.n; k++) {
             const ep_span *s = &g->circles.span[k];
             for (int x = s->x; x < s->x + s->w; x++) view_put(x, s->row, c);
         }

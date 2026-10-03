@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-#define EP_MAX_SPANS 16384
+#define EP_MAX_SPANS 49152 /* 50 frames of hyperspace rings, unshown, fit */
 
 typedef struct {
     int16_t x, w; /* after clipping, w >= 1 */
