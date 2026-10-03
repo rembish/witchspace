@@ -14,7 +14,8 @@
 enum {
     EP_WAIT_NONE = 0, /* the screen is up, idling */
     EP_WAIT_KEY,      /* any key goes on */
-    EP_WAIT_YN        /* Y/y or N/n (other keys are ignored) */
+    EP_WAIT_YN,       /* Y/y or N/n (other keys are ignored) */
+    EP_WAIT_LIST      /* a list: arrows move, Enter (0dh) picks */
 };
 
 /* 8bea up to its idle loop (8dac): on arrival the promotion, the Tribble offer and the
@@ -57,8 +58,19 @@ void ep_market_screen(ep_game *g);
 void ep_market_buy(ep_game *g);
 void ep_market_sell(ep_game *g);
 
+/* 9161: the equipment rows (price, and what the station pays back for what is fitted) */
+void ep_equipment_rows(ep_game *g);
+
+/* 924a: EQUIP SHIP */
+void ep_equipment_screen(ep_game *g);
+
+/* 932f, 9563: buy or sell the item under the cursor; a laser with several mounts to choose
+ * asks for one (EP_WAIT_LIST: the arrows and Enter, through ep_station_key) */
+int ep_equipment_buy(ep_game *g);
+int ep_equipment_sell(ep_game *g);
+
 /* where the screens idle */
-enum { EP_IDLE_NONE = 0, EP_IDLE_STATUS, EP_IDLE_PLAIN, EP_IDLE_MARKET };
+enum { EP_IDLE_NONE = 0, EP_IDLE_STATUS, EP_IDLE_PLAIN, EP_IDLE_MARKET, EP_IDLE_EQUIP };
 
 /* one pass of the current screen's idle loop: the bar, the commands, the screen's own
  * work; returns the commands' EP_CMD_* (a new screen to show: EP_CMD_SCREEN) */

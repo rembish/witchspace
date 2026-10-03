@@ -78,16 +78,6 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "laser_hits")) {
             ep_laser_hits(&g);
             print_prims(&g.render);
-        } else if (!strncmp(argv[1], "buy", 3) || !strncmp(argv[1], "sell", 4) ||
-                   !strncmp(argv[1], "equip", 5)) {
-            int row = ds[0xad2b]; /* the selected row, as the screen leaves it */
-            uint16_t r = argv[1][0] == 'b'   ? ep_trade_buy(&g, row)
-                         : argv[1][0] == 's' ? ep_trade_sell(&g, row)
-                                             : ep_equip_buy(&g, row);
-            if (r == EP_TRADE_CHOOSE_MOUNT)
-                printf("choose mount\n");
-            else if (r > EP_TRADE_CHOOSE_MOUNT)
-                printf("result %u\n", r);
         } else if (!strcmp(argv[1], "dust")) {
             ep_dust_frame(&g);
             print_prims(&g.render);
@@ -102,6 +92,23 @@ int main(int argc, char **argv)
             for (int k = 0; k < 12; k++) {
                 g.in.last_key = ds[0xff10 + k];
                 ep_station_idle(&g);
+            }
+            print_prims(&g.render);
+            printf("end\n");
+        } else if (!strcmp(argv[1], "equip_screen")) {
+            ep_equipment_screen(&g);
+            print_prims(&g.render);
+            printf("end\n");
+        } else if (!strcmp(argv[1], "equip_session")) { /* 12 keys: a pass each, or a dialog's */
+            ep_equipment_screen(&g);
+            for (int k = 0; k < 12; k++) {
+                uint8_t key = ds[0xff10 + k];
+                if (g.f.station_step)
+                    ep_station_key(&g, key);
+                else {
+                    g.in.last_key = key;
+                    ep_station_idle(&g);
+                }
             }
             print_prims(&g.render);
             printf("end\n");

@@ -143,6 +143,9 @@ typedef struct {
     uint16_t note_ticks;        /* ds:45e4: timer ticks a note (an error) stays up */
     uint8_t paused;             /* ds:45e6: the timer stands still */
     uint8_t idle;               /* which screen's idle loop runs (EP_IDLE_*), and where in it */
+    uint8_t list_keep;          /* ds:ad2c: the row to come back to when the list is rebuilt */
+    uint8_t laser_kind;         /* ds:92f9: the laser type of the row (8df7) */
+    uint8_t list_count;         /* ds:acb0: rows of the equipment list */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

@@ -212,7 +212,9 @@ enum {
     ST_M1_DONE,    /* 9b5c */
     ST_M2_DONE,    /* 9ba5 */
     ST_M3_DONE,    /* 9c25 */
-    ST_M456_DONE   /* 9c75, 9cb5, 9cf3 */
+    ST_M456_DONE,  /* 9c75, 9cb5, 9cf3 */
+    ST_MOUNT_BUY,  /* 9502: the mount for a laser bought */
+    ST_MOUNT_SELL  /* 968f: the mount of a laser sold */
 };
 
 static int wait(ep_game *g, uint8_t step, int kind)
@@ -418,6 +420,8 @@ int ep_status_screen(ep_game *g)
     return arrival(g);
 }
 
+static int mount_key(ep_game *g, uint8_t key);
+
 int ep_station_key(ep_game *g, uint8_t key)
 {
     ep_flight *f = &g->f;
@@ -483,6 +487,8 @@ int ep_station_key(ep_game *g, uint8_t key)
         f->mission5_phase = 0;
         f->station_hit = 0;
         break;
+    case ST_MOUNT_BUY:
+    case ST_MOUNT_SELL: return mount_key(g, key);
     case ST_NONE: return EP_WAIT_NONE;
     default: break;
     }
@@ -784,6 +790,321 @@ void ep_market_sell(ep_game *g)
     market_done(g);
 }
 
+/* ---- equipment ---- */
+
+static uint8_t *owned(ep_game *g, int row) { return &g->cmdr.b[EP_CMDR_FUEL + row]; }
+
+/* 8df7: the laser type of the row (pulse 4, beam 5, mining 12, military 13), else 4 */
+static int laser_row(ep_game *g, int row)
+{
+    static const int rows[4] = { 4, 5, 12, 13 };
+    int k = 0;
+    while (k < 3 && rows[k] != row) k++;
+    g->f.laser_kind = (uint8_t)k;
+    return rows[k] == row;
+}
+
+void ep_equipment_rows(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    const uint8_t *cur = &g->cmdr.b[EP_CMDR_CURRENT];
+    uint8_t *o = f->rows;
+    int at = 0;
+#define PUT(b)     (at < (int)sizeof f->rows ? (void)(o[at++] = (uint8_t)(b)) : (void)0)
+#define MOVE(x, y) (PUT(2), PUT(x), PUT((x) >> 8), PUT(y), PUT((y) >> 8))
+    uint16_t rec = 0x8bef, y = 0x14;
+    uint8_t tech = (uint8_t)(cur[EP_SYSREC_TECH] + 1);
+    int k = 0;
+    while (k < 14 && tech >= ep_ds_byte(g, rec)) {
+        rec++;
+        uint8_t c;
+        while ((c = ep_ds_byte(g, rec++)) != 0) PUT(c);
+        int16_t a = (int8_t)ep_ds_byte(g, rec), b = (int8_t)ep_ds_byte(g, (uint16_t)(rec + 1));
+        uint16_t price = (uint16_t)(a * (int8_t)cur[EP_SYSREC_GOVERNMENT] +
+                                    b * (int8_t)cur[EP_SYSREC_ECONOMY] + ep_ds_word(g, (uint16_t)(rec + 2)));
+        rec = (uint16_t)(rec + 4);
+        f->prices[2 * k] = price;
+        /* the original clears the selling price with [bx+2] instead of [bx+8d0c]: it zeroes
+           ds:0002 + 4k (unused) and the old selling price stays */
+        uint16_t back = k && *owned(g, k) ? price : 0; /* ds:8d08 */
+        uint8_t t[12];
+        int n = price_text(t, price);
+        MOVE((uint16_t)(0xd2 - ep_text_width(t)), y);
+        for (int i = 0; i < n; i++) PUT(t[i]);
+        uint16_t sell = ep_sell_price(back);
+        if (sell) {
+            f->prices[2 * k + 1] = sell;
+            n = price_text(t, sell);
+            MOVE((uint16_t)(0x122 - ep_text_width(t)), y);
+            for (int i = 0; i < n; i++) PUT(t[i]);
+        }
+        PUT(0);
+        k++;
+        y = (uint16_t)(y + 8);
+    }
+#undef MOVE
+#undef PUT
+    f->list_count = (uint8_t)k;
+}
+
+static void equipment_list(ep_game *g, uint8_t cursor)
+{
+    ep_list_open(g, 0x040e, 0x0c0f, g->f.list_count, cursor, 0xa410, 8, 0x14, 0x130);
+}
+
+/* 92a8: the picture and the cash, when no note is up */
+static void equipment_cash(ep_game *g)
+{
+    ep_status_picture(g);
+    uint16_t a = 0x82fb;
+    while (ep_ds_byte(g, a) == ' ') a++;
+    uint8_t t[32];
+    int n = ep_ds_text(g, a, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0x87, 0x0f);
+    ep_text(&g->render, t, n, 0);
+    g->f.list_row = 0xff;
+    g->f.list_busy = 0;
+}
+
+void ep_equipment_screen(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    f->note_ticks = 0;
+    f->screen_flag = 0;
+    f->screen_bits = 0;
+    frame(g);
+    uint8_t t[32];
+    int n = ep_ds_text(g, 0x88fa, t, sizeof t);
+    title(g, 0xa0, 0, 0x0f, t, n);
+    ep_equipment_rows(g);
+    ep_render_rect(&g->render, 4, 8, 0x0a, 0x130, 0x7a);
+    text_header(g, 0xadef);
+    equipment_list(g, 0);
+    equipment_cash(g);
+    f->idle = EP_IDLE_EQUIP;
+}
+
+/* 9403: a note in a box for 100 ticks */
+static void box_note(ep_game *g, uint16_t text)
+{
+    ep_render_rect(&g->render, 1, 0x41, 0x96, 0xbe, 0x10);
+    uint8_t t[64];
+    int n = ep_ds_text(g, text, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0x9a, 0x0f);
+    ep_text(&g->render, t, n, 0);
+    g->f.note_ticks = 0x64;
+    g->f.list_busy = 1;
+}
+
+/* the mounts' names into the rows, those that `take` says; returns how many */
+static int mount_names(ep_game *g, int sell)
+{
+    uint8_t *o = g->f.rows;
+    int at = 0, count = 0;
+    uint16_t name = 0xaddb;
+    uint8_t mounts = g->cmdr.b[EP_CMDR_LASERS] & 0x0f, types = g->cmdr.b[EP_CMDR_LASER_TYPES];
+    for (int m = 0; m < 4; m++) {
+        int bit = mounts >> m & 1;
+        int take = sell ? bit && (types >> (2 * m) & 3) == g->f.laser_kind : !bit;
+        uint8_t c;
+        if (take) {
+            count++;
+            do o[at++] = c = ep_ds_byte(g, name++);
+            while (c);
+        } else {
+            while (ep_ds_byte(g, name++)) {}
+        }
+    }
+    return count;
+}
+
+/* the box asking which mount (94bf, 964c) */
+static int ask_mount(ep_game *g, int count, uint16_t text, uint8_t step)
+{
+    ep_render_rect(&g->render, 1, 0x50, 0x1e, 0xa0, 0x38);
+    uint8_t t[64];
+    int n = ep_ds_text(g, text, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0x22, 0x0f);
+    ep_text(&g->render, t, n, 0);
+    ep_list_open(g, 0x010b, 0x090f, (uint8_t)(count | 0x80), 0, 0xa410, 0x6e, 0x32, 0x64);
+    return wait(g, step, EP_WAIT_LIST);
+}
+
+/* the laser into the n-th free mount (0 = the first) */
+static void fit_mount(ep_game *g, int n)
+{
+    uint8_t *c = g->cmdr.b;
+    for (int m = 0; m < 8; m++) {
+        if (c[EP_CMDR_LASERS] >> m & 1) continue;
+        if (n-- > 0) continue;
+        c[EP_CMDR_LASERS] |= (uint8_t)(1u << m);
+        c[EP_CMDR_LASER_TYPES] = (uint8_t)((c[EP_CMDR_LASER_TYPES] & ~(3u << (2 * m))) |
+                                           (unsigned)(g->f.laser_kind & 3) << (2 * m));
+        return;
+    }
+}
+
+/* the n-th mount carrying this laser loses it */
+static void unfit_mount(ep_game *g, int n)
+{
+    uint8_t *c = g->cmdr.b;
+    for (int m = 0; m < 8; m++) {
+        if (!(c[EP_CMDR_LASERS] >> m & 1) || (c[EP_CMDR_LASER_TYPES] >> (2 * m) & 3) != g->f.laser_kind)
+            continue;
+        if (n-- > 0) continue;
+        c[EP_CMDR_LASERS] &= (uint8_t)~(1u << m);
+        return;
+    }
+}
+
+/* 92d9..92f9: after the commands, the cursor's row, the bar's bits, rebuilding the list */
+static void equipment_tail(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_list_poll(g, 0);
+    uint8_t row = f->menu[1];
+    f->list_row = row;
+    f->screen_bits = (uint8_t)(4 | (*owned(g, row) && row ? 8 : 0));
+    for (;;) {
+        if (f->list_busy == 2) {
+            f->list_busy--;
+            ep_equipment_rows(g);
+            equipment_list(g, f->list_keep);
+            continue;
+        }
+        if (f->list_busy && !f->note_ticks) equipment_cash(g); /* 92a8 */
+        return;
+    }
+}
+
+static int mount_key(ep_game *g, uint8_t key)
+{
+    g->f.last_cmd_key = key; /* 03b6 */
+    if (ep_list_poll(g, 0) != 0x0d) return EP_WAIT_LIST;
+    ep_render_rect(&g->render, 4, 0x50, 0x1e, 0xa0, 0x38);
+    if (g->f.station_step == ST_MOUNT_BUY)
+        fit_mount(g, g->f.menu[1]);
+    else
+        unfit_mount(g, g->f.menu[1]);
+    g->f.station_step = ST_NONE;
+    if (g->f.idle == EP_IDLE_EQUIP) equipment_tail(g); /* back in the pass the dialog interrupted */
+    return EP_WAIT_NONE;
+}
+
+int ep_equipment_buy(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b;
+    int row = f->list_row;
+    if (row == 0xff) return EP_WAIT_NONE;
+    if (row == 0) { /* fuel */
+        if (f->mission == 1) {
+            box_note(g, 0x8dad);
+            return EP_WAIT_NONE;
+        }
+        if (c[EP_CMDR_FUEL] >= 0xfb) {
+            box_note(g, 0xadaa);
+            return EP_WAIT_NONE;
+        }
+        uint32_t p = (uint32_t)(uint16_t)((0xff - c[EP_CMDR_FUEL]) * 7) * f->prices[0];
+        if (ep_pay(g, (uint16_t)(p >> 8))) {
+            c[EP_CMDR_FUEL] = 0xff;
+            box_note(g, 0xadc3);
+            return EP_WAIT_NONE;
+        }
+        uint16_t lo = (uint16_t)ep_commander_cash(&g->cmdr);
+        if (!lo) {
+            box_note(g, 0xad50);
+            return EP_WAIT_NONE;
+        }
+        uint32_t q = ((uint32_t)lo << 8) / f->prices[0];
+        c[EP_CMDR_FUEL] = (uint8_t)(c[EP_CMDR_FUEL] + (uint8_t)((q & 0xffff) / 7));
+        ep_pay(g, lo);
+        f->list_busy = 1;
+        f->note_ticks = 0;
+        return EP_WAIT_NONE;
+    }
+    /* 93a9: what is fitted already, then lasers' own checks (8df7 only where the original asks) */
+    int laser;
+    if (*owned(g, row) && row == 1) {
+        if (c[EP_CMDR_EQUIPMENT] == 4) {
+            box_note(g, 0xad64);
+            return EP_WAIT_NONE;
+        }
+        laser = laser_row(g, row);
+    } else if (*owned(g, row)) {
+        if (!(laser = laser_row(g, row))) {
+            box_note(g, 0x8d5a);
+            return EP_WAIT_NONE;
+        }
+    } else {
+        laser = laser_row(g, row);
+    }
+    if (laser) {
+        if (c[EP_CMDR_LASERS] == 0x0f) {
+            box_note(g, 0x92e6);
+            return EP_WAIT_NONE;
+        }
+        if (row == 12 && c[EP_CMDR_EQUIPMENT + 5] != 1) {
+            box_note(g, 0x8d7a);
+            return EP_WAIT_NONE;
+        }
+    }
+    if (!ep_pay(g, f->prices[2 * row])) {
+        box_note(g, 0xad50);
+        return EP_WAIT_NONE;
+    }
+    f->list_busy = 1;
+    f->note_ticks = 0;
+    (*owned(g, row))++;
+    if (!laser_row(g, row)) {
+        ep_equipment_rows(g);
+        ep_list_poll(g, 2);
+        return EP_WAIT_NONE;
+    }
+    f->list_busy = 2;
+    f->list_keep = (uint8_t)row;
+    int n = mount_names(g, 0);
+    if (n == 1) {
+        fit_mount(g, 0);
+        return EP_WAIT_NONE;
+    }
+    return ask_mount(g, n, 0xad7c, ST_MOUNT_BUY);
+}
+
+int ep_equipment_sell(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    int row = f->list_row;
+    if (row == 0xff || !*owned(g, row)) return EP_WAIT_NONE;
+    if (row == 2 && g->cmdr.b[EP_CMDR_CARGO_USED] > 0x14) {
+        box_note(g, 0x8d6a);
+        return EP_WAIT_NONE;
+    }
+    if (row == 6 && g->cmdr.b[EP_CMDR_EQUIPMENT + 11]) {
+        box_note(g, 0x8d94);
+        return EP_WAIT_NONE;
+    }
+    ep_commander_set_cash(&g->cmdr, ep_commander_cash(&g->cmdr) + f->prices[2 * row + 1]);
+    ep_cash_text(&g->cmdr);
+    f->list_busy = 1;
+    f->note_ticks = 0;
+    (*owned(g, row))--;
+    if (!laser_row(g, row)) {
+        ep_equipment_rows(g);
+        ep_list_poll(g, 2);
+        return EP_WAIT_NONE;
+    }
+    f->list_busy = 2;
+    f->list_keep = (uint8_t)row;
+    int n = mount_names(g, 1);
+    if (n == 1) {
+        unfit_mount(g, 0);
+        return EP_WAIT_NONE;
+    }
+    return ask_mount(g, n, 0xad95, ST_MOUNT_SELL);
+}
+
 int ep_station_idle(ep_game *g)
 {
     ep_flight *f = &g->f;
@@ -807,6 +1128,12 @@ int ep_station_idle(ep_game *g)
         if (f->list_busy && !f->note_ticks) cash_line(g); /* 90d7 */
         return r;
     }
+    case EP_IDLE_EQUIP: /* 92d3 .. up to the next 92d3 */
+        ep_key_bar(g);
+        r = ep_commands(g);
+        if (r != EP_CMD_STAY || f->station_step) return r;
+        equipment_tail(g);
+        return r;
     default: /* the bar and the commands */ ep_key_bar(g); return ep_commands(g);
     }
 }

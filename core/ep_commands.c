@@ -533,6 +533,9 @@ static int run(ep_game *g, uint8_t id)
     case 0x02: ep_market_screen(g); return EP_CMD_SCREEN;
     case 0x03: ep_status_screen(g); return EP_CMD_SCREEN;
     case 0x0c: ep_market_buy(g); return EP_CMD_STAY;
+    case 0x13: ep_equipment_screen(g); return EP_CMD_SCREEN;
+    case 0x21: ep_equipment_buy(g); return EP_CMD_STAY;
+    case 0x22: ep_equipment_sell(g); return EP_CMD_STAY;
     case 0x20: ep_market_sell(g); return EP_CMD_STAY;
     case 0x23: masking(g); return EP_CMD_STAY;
     case 0x24: anti_ecm(g); return EP_CMD_STAY;
