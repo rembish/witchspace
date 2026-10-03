@@ -17,7 +17,8 @@ enum {
     EP_CMD_PAUSE = 3,   /* the pause menu is up: ep_pause_idle, then ep_resume */
     EP_CMD_RESUME = 4,  /* the pause menu closed: ep_resume carries on with what it interrupted */
     EP_CMD_TITLE = 5,   /* the game was abandoned: back to the title */
-    EP_CMD_QUIT = 6     /* quit to DOS */
+    EP_CMD_QUIT = 6,    /* quit to DOS */
+    EP_CMD_START = 7    /* space at the title: a new game (ep_start_game) */
 };
 
 /* what the pause interrupted */
@@ -31,6 +32,9 @@ int ep_pause_idle(ep_game *g);
 
 /* 0299: set up the bar for the current screen, redraw the icons that changed */
 void ep_key_bar(ep_game *g);
+
+/* 763e: the cockpit drawn again when another screen was up (f.other_screen) */
+void ep_cockpit(ep_game *g);
 
 /* 03c0: the key latched in g->in.last_key, if any: space, Esc, or a bar key */
 int ep_commands(ep_game *g);

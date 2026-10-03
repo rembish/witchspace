@@ -16,6 +16,7 @@ enum {
     EP_WAIT_KEY,      /* any key goes on */
     EP_WAIT_YN,       /* Y/y or N/n (other keys are ignored) */
     EP_WAIT_LIST,     /* a list: arrows move, Enter (0dh) picks */
+    EP_WAIT_TIME,     /* a key, or until a time (ffh: no key, the clock looked at) */
     EP_WAIT_TEXT      /* a text: '-', digits, capitals; backspace, Enter, Esc (ffh: no key, the
                          cursor blinks with the clock) */
 };
@@ -23,6 +24,9 @@ enum {
 /* 8bea up to its idle loop (8dac): on arrival the promotion, the Tribble offer and the
  * mission briefings, each maybe waiting for a key; then the commander's status */
 int ep_status_screen(ep_game *g);
+
+/* station_step while the title comes up (ep_title_key) */
+#define EP_STEP_TITLE 0xf0
 
 /* a key for the screen that waits (EP_WAIT_*); returns what it waits for next */
 int ep_station_key(ep_game *g, uint8_t key);

@@ -13,6 +13,7 @@
 #include "ep_commands.h"
 #include "ep_render.h"
 #include "ep_market.h"
+#include "ep_title.h"
 #include "ep_trade.h"
 
 /* 2e6d at (x, y): the text at ds:addr */
@@ -513,6 +514,7 @@ int ep_station_key(ep_game *g, uint8_t key)
     case ST_MOUNT_BUY:
     case ST_MOUNT_SELL: return mount_key(g, key);
     case ST_FIND_TEXT: return find_key(g, key);
+    case EP_STEP_TITLE: return ep_title_key(g, key);
     case ST_SAVE_NAME:
     case ST_SAVE_ASK:
     case ST_SAVE_DONE: return save_key(g, key);

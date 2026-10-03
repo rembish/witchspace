@@ -31,17 +31,18 @@ typedef struct {
 static float vx(const view *v, float x) { return (VIEW_X + x) * v->s + v->ox; }
 static float vy(const view *v, float y) { return (VIEW_Y + y) * v->s + v->oy; }
 
-static void draw_title(const ep_title *t, const view *v)
+static void draw_title(const ep_game *g, const view *v)
 {
     /* the 3D view */
     gfx_rect(vx(v, 0), vy(v, 0), 304 * v->s, 124 * v->s, rgb_hex(0x000000, 1));
     rgba disc = game_colour(0xb6);
-    for (int k = 0; k < t->disc.n; k++) {
-        const ep_span *sp = &t->disc.span[k];
+    for (int k = 0; k < g->circles.n; k++) {
+        const ep_span *sp = &g->circles.span[k];
         gfx_rect(vx(v, sp->x), vy(v, sp->row), sp->w * v->s, v->s, disc);
     }
-    for (int k = 0; k < t->g.render.nprim; k++) {
-        const ep_prim *p = &t->g.render.prim[k];
+    for (int k = 0; k < g->render.nprim; k++) {
+        const ep_prim *p = &g->render.prim[k];
+        if (p->kind != EP_PRIM_TRI && p->kind != EP_PRIM_QUAD && p->kind != EP_PRIM_LINE) continue;
         rgba c = game_colour(p->colour);
         float q[8];
         for (int j = 0; j < 4; j++) {
@@ -58,7 +59,7 @@ static void draw_title(const ep_title *t, const view *v)
     gfx_flush();
     float size = 9 * v->s;
     font_draw(160 * v->s + v->ox, 12 * v->s + v->oy, size, game_colour(0x11), ALIGN_CENTER,
-              ep_ship_names[t->ship_type % 30]);
+              ep_ship_names[g->f.title_ship % 30]);
     font_draw(160 * v->s + v->ox, 120 * v->s + v->oy, size, game_colour(0x0a), ALIGN_CENTER,
               "Press spacebar to start game");
 }
@@ -85,11 +86,16 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    static ep_title t;
-    ep_title_init(&t);
-    t.g.f.video = 2;
-    t.g.rng = ep_rng_init();
-    ep_rng_seed(&t.g.rng, (uint8_t)time(NULL));
+    static ep_game g; /* the title as it is when its loop starts (9f21) */
+    g.space.count = 3;
+    g.in.last_key = 0xff;
+    g.f.video = 2;
+    g.f.title_list = 0xb263;
+    g.f.title_ship = ep_title_ships[0];
+    g.space.obj[EP_TITLE_SLOT].b[EP_OBJ_POS + 4] = 5000 & 0xff;
+    g.space.obj[EP_TITLE_SLOT].b[EP_OBJ_POS + 5] = 5000 >> 8;
+    g.rng = ep_rng_init();
+    ep_rng_seed(&g.rng, (uint8_t)time(NULL));
 
     Uint64 t0 = SDL_GetPerformanceCounter(), freq = SDL_GetPerformanceFrequency();
     int running = 1;
@@ -102,8 +108,15 @@ int main(int argc, char **argv)
         /* the original's clock: run title frames until the tick count catches up */
         uint32_t ticks = (uint32_t)((double)(SDL_GetPerformanceCounter() - t0) / (double)freq * TICK_HZ);
         int guard = 0; /* a frame ends two ticks after the last one, as the frame wait does */
-        while (t.g.flip + 2 <= ticks && guard++ < 8) ep_title_frame(&t, 0);
-        if (t.g.flip + 2 <= ticks) t.g.flip = t.g.clock = ticks; /* far behind (window dragged): skip */
+        while (g.flip + 2 <= ticks && guard++ < 8) {
+            g.render.nprim = g.render.ntext = 0;
+            g.circles.n = 0;
+            g.nevents = 0;
+            ep_title_frame(&g);
+            if (g.clock < g.flip + 2) g.clock = g.flip + 2;
+            g.flip = g.clock;
+        }
+        if (g.flip + 2 <= ticks) g.flip = g.clock = ticks; /* far behind (window dragged): skip */
 
         int w, h;
         SDL_GetRendererOutputSize(ren, &w, &h);
@@ -113,7 +126,7 @@ int main(int argc, char **argv)
         v.oy = (h - 200 * v.s) / 2;
         SDL_SetRenderDrawColor(ren, 16, 16, 20, 255);
         SDL_RenderClear(ren);
-        draw_title(&t, &v);
+        draw_title(&g, &v);
         SDL_RenderPresent(ren);
     }
     SDL_Quit();

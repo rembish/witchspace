@@ -102,7 +102,16 @@ void ep_key_bar(ep_game *g)
     case 0: flight_bar(g); break;
     case 1: screen1_bar(g); break;
     case 2: screen2_bar(g); break;
-    case 5: ep_event_add(g, EP_EV_UNPORTED, 0x05ac); break;
+    case 5: /* 05ac: the title's, where the protection's ret is looked for (else 00ba: to DOS) */
+        if (f->protection_failed) {
+            f->leave = 2;
+            return;
+        }
+        if (f->bar_quiet) { /* the credits: only some keys */
+            static const uint8_t quiet[6] = { 0, 1, 2, 7, 8, 11 };
+            for (int k = 0; k < 6; k++) f->bar_wanted[quiet[k]] = 0;
+        }
+        break;
     default: break; /* 05aa, 05ab: nothing */
     }
     for (int k = 0; k < 12; k++) {
@@ -265,11 +274,10 @@ void ep_countdowns(ep_game *g)
 
 /* ---- the commands ---- */
 
-/* the way back to the space view, front, from a command (a1db, a2f8, a398) */
-static int back_to_flight(ep_game *g)
+void ep_cockpit(ep_game *g)
 {
     ep_flight *f = &g->f;
-    if (f->other_screen) { /* 763e: the cockpit is redrawn */
+    if (f->other_screen) {
         static const struct {
             uint8_t id;
             int16_t x, y;
@@ -282,6 +290,13 @@ static int back_to_flight(ep_game *g)
         f->message_time = (uint16_t)(f->message_time & 0xff);
         f->message_shown = 0;
     }
+}
+
+/* the way back to the space view, front, from a command (a1db, a2f8, a398) */
+static int back_to_flight(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_cockpit(g);
     g->space.extra_angle = 0;
     ep_dust_reset(g);
     f->screen = 0;

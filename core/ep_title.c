@@ -1,7 +1,9 @@
 /* Elite Plus title screen, reconstructed from ELITE.EXE (see ep_title.h). */
 #include "ep_title.h"
 
-#include "ep_tables.h"
+#include "ep_commands.h"
+#include "ep_dsmap.h"
+#include "ep_station.h"
 #include "ep_world.h"
 
 #include <string.h>
@@ -14,14 +16,41 @@ static void set16(ep_object *o, int off, uint16_t v)
 
 static uint16_t get16(const ep_object *o, int off) { return (uint16_t)(o->b[off] | o->b[off + 1] << 8); }
 
-void ep_title_init(ep_title *t)
+/* 2fca: centred on x, shadowed */
+static void centred(ep_game *g, int16_t x, int16_t y, uint8_t colour, uint16_t addr)
 {
-    ep_space *s = &t->g.space;
+    uint8_t t[96];
+    int n = ep_ds_text(g, addr, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(x - (ep_text_width(t) >> 1)), y, colour);
+    ep_text(&g->render, t, n, 1);
+}
+
+int ep_title_open(ep_game *g)
+{
+    ep_space *s = &g->space;
+    memset(s->obj, 0, (size_t)s->count * sizeof s->obj[0]); /* 816b */
+    ep_event_add(g, EP_EV_MUSIC, 2);                        /* 4d21: the title music */
+    ep_render_sprite(&g->render, 0x89, 0, 0);               /* 3ae5: the intro picture */
+    g->f.intro_until = g->clock + 1000;
+    g->f.title_step = 1;
+    g->f.station_step = EP_STEP_TITLE;
+    return EP_WAIT_TIME;
+}
+
+/* 9ea3..9f1c: the title behind the credits */
+static void title_setup(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_space *s = &g->space;
+    g->cmdr.b[EP_CMDR_LASERS] = 0;
     memset(s->player_angle, 0, sizeof s->player_angle);
     s->extra_angle = 0;
-    s->in_flight = 0;
-    s->count = 3;
+    f->other_screen = 2;
+    ep_cockpit(g); /* 763e */
+    f->screen = 5;
+    centred(g, 0xa0, 0, 0x0f, 0xaf36); /* 2f12: on both pages */
     ep_object *o = &s->obj[EP_TITLE_SLOT];
+    s->count = 3;
     set16(o, 0x0c, 0);
     set16(o, 0x0e, 0);
     set16(o, EP_OBJ_POS, 0);
@@ -29,49 +58,83 @@ void ep_title_init(ep_title *t)
     set16(o, EP_OBJ_POS + 4, 5000);
     set16(o, EP_OBJ_POS_HI, 0);
     o->b[EP_OBJ_POS_HI + 2] = 0;
-    t->ship_type = ep_title_ships[0];
-    t->list_pos = 0;
-    t->hold = 0;
+    f->title_ship = ep_ds_byte(g, 0xb263);
+    f->title_list = 0xb263;
+    f->title_hold = 0;
+    f->space_pressed = 0;
+    /* af73: the credits */
+    f->bar_quiet++;
+    ep_key_bar(g);
+    uint8_t t[512];
+    int n = ep_ds_header_text(g, 0xb13a, t, sizeof t);
+    ep_text_header(&g->render, t, n, 1);
+    f->note_ticks = 0x2ee;
+    g->in.last_key = 0xff; /* 0287 */
 }
 
-int ep_title_frame(ep_title *t, int space)
+int ep_title_key(ep_game *g, uint8_t key)
 {
+    ep_flight *f = &g->f;
+    if (f->title_step == 1) { /* 3b18: until a key or the time is past */
+        if (g->clock <= f->intro_until && key == 0xff) return EP_WAIT_TIME;
+        if (key != 0xff) g->in.last_key = 0xff;
+        title_setup(g);
+        f->title_step = 2;
+        return EP_WAIT_TIME;
+    }
+    if (key != 0xff) { /* af8f */
+        g->in.last_key = 0xff;
+        f->note_ticks = 0;
+    }
+    if (f->note_ticks) return EP_WAIT_TIME;
+    g->in.last_key = 0xff; /* afa1 */
+    f->bar_quiet--;
+    f->screen_shown = 0xff;
+    f->title_step = 0;
+    f->station_step = 0;
+    return EP_WAIT_NONE;
+}
+
+int ep_title_frame(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_key_bar(g);
+    if (f->leave == 2) return EP_CMD_QUIT;
+    if (f->sound_device == 2 && (f->sound_mode & 1)) ep_event_add(g, EP_EV_MUSIC, 2); /* 4d8e */
     /* 9f2a: the red disc, jittered (ds:108f = 1) */
-    t->disc.n = 0;
-    ep_draw_circle(&t->g.rng, 0xc8, 0x3c, 0x19, 1, 0, t->g.f.video == 2, &t->disc);
+    ep_draw_circle(&g->rng, 0xc8, 0x3c, 0x19, 1, 0, f->video == 2, &g->circles);
 
     /* 9f47: the ship's distance */
-    ep_object *o = &t->g.space.obj[EP_TITLE_SLOT];
+    ep_object *o = &g->space.obj[EP_TITLE_SLOT];
     uint16_t z = get16(o, EP_OBJ_POS + 4);
-    if (t->hold == 0 && (uint16_t)(z - 0x50) >= ep_title_min_dist[t->ship_type & 31]) {
+    if (f->title_hold == 0 && (uint16_t)(z - 0x50) >= ep_ds_word(g, (uint16_t)(0xb1bc + 2 * f->title_ship))) {
         set16(o, EP_OBJ_POS + 4, (uint16_t)(z - 0x50));
-    } else if (++t->hold >= 0x78) {
-        t->hold--;
+    } else if (++f->title_hold >= 0x78) {
+        f->title_hold--;
         z = (uint16_t)(z + 100);
         set16(o, EP_OBJ_POS + 4, z);
         if (z >= 5000) {
             set16(o, EP_OBJ_POS + 4, 5000);
-            if (++t->list_pos >= EP_TITLE_SHIPS) t->list_pos = 0;
-            t->ship_type = ep_title_ships[t->list_pos];
-            t->hold = 0;
+            uint16_t at = (uint16_t)(f->title_list + 1);
+            if (ep_ds_byte(g, at) == 0xff) at = 0xb263;
+            f->title_list = at;
+            f->title_ship = ep_ds_byte(g, at);
+            f->title_hold = 0;
         }
     }
     /* 9fab: type, spin */
     o->b[EP_OBJ_FLAGS1E] = 2;
-    o->b[EP_OBJ_FLAGS] = (uint8_t)(t->ship_type << 1 | 1);
+    o->b[EP_OBJ_FLAGS] = (uint8_t)(f->title_ship << 1 | 1);
     set16(o, 0x0e, (uint16_t)(get16(o, 0x0e) + 0x1e));
     set16(o, 0x0c, (uint16_t)(get16(o, 0x0c) + 0x14));
     set16(o, 0x0a, (uint16_t)(get16(o, 0x0a) + 0x19));
-    /* 9fc3: name and "Press spacebar to start game" are text; 3921: flashing colour */
-    if (++t->flash == 6) t->flash = 0;
-    /* 4154 */
+    /* 9fc3: the ship's name, the invitation */
+    centred(g, 0xa0, 0x0c, 0x11, ep_ds_word(g, (uint16_t)(0xb27c + 2 * f->title_ship)));
+    centred(g, 0xa0, 0x78, 0x0a, 0xaf19);
+    if (++f->flash == 6) f->flash = 0; /* 3921: the flashing colour */
     int drawn[EP_OBJECTS];
-    t->g.render.nprim = 0;
-    t->g.circles.n = 0;
-    ep_world_update(&t->g, drawn);
-    /* 301a: wait until two ticks after the last flip */
-    if (t->g.clock < t->g.flip + 2) t->g.clock = t->g.flip + 2;
-    t->g.flip = t->g.clock;
-    /* 03c0: space starts the game */
-    return space;
+    ep_world_update(g, drawn); /* 4154 */
+    int r = ep_commands(g);
+    if (r != EP_CMD_STAY) return r;
+    return f->space_pressed ? EP_CMD_START : EP_CMD_STAY;
 }

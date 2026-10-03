@@ -179,6 +179,12 @@ typedef struct {
     uint8_t files[0x16d];       /* ds:0088: the commander files' names */
     uint8_t file_count;         /* ds:01f5 */
     uint8_t file_top;           /* ds:01f6: the first one shown */
+    uint8_t title_ship;         /* ds:b1bb: the type on the title */
+    uint16_t title_hold;        /* ds:b25f: frames at the closest point */
+    uint16_t title_list;        /* ds:b261: where in the title list (ds:b263, ffh at the end) */
+    uint8_t title_step;         /* the title coming up: 1 the intro picture, 2 the credits */
+    uint32_t intro_until;       /* 3ae5: the intro picture's time (in registers) */
+    uint8_t protection_failed;  /* the copy protection was asked and answered wrong (off: never) */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

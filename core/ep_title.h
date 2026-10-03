@@ -1,35 +1,31 @@
-/* Elite Plus title screen, reconstructed from ELITE.EXE (title_loop, 9e80).
+/* Elite Plus title screen, reconstructed from ELITE.EXE (9e80..a004).
  *
- * One ship in object slot 2 turns in front of a red disc and cycles through the title list:
- * it closes in by 80 a frame down to the type's closest distance, holds for 120 frames, backs
- * off by 100 a frame to 5000 and is replaced by the next type. The disc is a jittered circle
- * drawn every frame, so the title steps the main RNG. A frame lasts two timer ticks.
+ * ep_title_open (9e9a) puts the title up: the objects cleared, the title music, the intro
+ * picture (3ae5: sprite 89h until a key or 1000 ticks), the cockpit, the header, the ship in
+ * slot 2, then the credits over it (af73: until a key or 750 ticks). Both waits return
+ * EP_WAIT_TIME and go on through ep_station_key (ffh: no key, the clock looked at).
+ *
+ * ep_title_frame (9f21..9ffa) is a pass: one ship turns in front of a red disc and the title
+ * list cycles: it closes in by 80 a frame down to the type's closest distance, holds for 120
+ * frames, backs off by 100 a frame to 5000 and is replaced by the next type. The disc is a
+ * jittered circle, so the title steps the main RNG. The commands are read as in flight; space
+ * starts the game (EP_CMD_START: ep_start_game). The flip (301a: two ticks after the last
+ * one) is the caller's.
  */
 #ifndef EP_TITLE_H
 #define EP_TITLE_H
 
-#include "ep_circle.h"
 #include "ep_game.h"
 
 #include <stdint.h>
 
 #define EP_TITLE_SLOT 2
 
-typedef struct {
-    ep_game g;         /* rng, space, clock, flip; g.render has the ship */
-    uint8_t ship_type; /* ds:b1bb */
-    uint16_t hold;     /* ds:b25f: frames at the closest point */
-    uint8_t list_pos;  /* ds:b261 - b263 */
-    uint8_t flash;     /* ds:1b3e: flashing colour step, 0..5 */
-    /* output of the last frame */
-    ep_circle_buf disc;
-} ep_title;
+int ep_title_open(ep_game *g);
 
-/* The state title_loop sets up before its first frame (9ec8..9f19); rng and clock are the
- * caller's (they depend on what ran before). */
-void ep_title_init(ep_title *t);
+/* the waits of ep_title_open, through ep_station_key */
+int ep_title_key(ep_game *g, uint8_t key);
 
-/* One pass of the loop (9f21..9ffa). Returns 1 when space was pressed (start the game). */
-int ep_title_frame(ep_title *t, int space);
+int ep_title_frame(ep_game *g);
 
 #endif
