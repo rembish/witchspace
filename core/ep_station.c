@@ -1815,6 +1815,64 @@ int ep_station_ask(ep_game *g, uint16_t title_text, int what)
     return EP_CMD_SCREEN;
 }
 
+/* ---- a new game ---- */
+
+static uint8_t rol8(uint8_t v, int n) { return (uint8_t)(v << n | v >> (8 - n)); }
+
+void ep_new_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths)
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b;
+    memcpy(c, g->cmdr_saved.b, EP_COMMANDER_SIZE);
+    ep_sync_from_commander(g);
+    f->hyperspace = 0;
+    f->energy = 0x3ff;
+    f->fore_shield = 0xff;
+    f->aft_shield = 0xff;
+    f->sun_size = 0x0c;
+    f->altitude = 0xff;
+    f->dead = 0;
+    f->mission5_count = 0;
+    c[EP_CMDR_JUMPS_COUNTED] = 0;
+    f->mission = 0;
+    f->warn_time = 0;
+    f->missile_alert = 0;
+    f->mission5_phase = 0;
+    f->leak_countdown = 0;
+    f->leak = 0;
+    f->approach = 0;
+    f->approach_size = 0;
+    f->convoy_leader_dead = 0;
+    f->station_angry = 0;
+    f->convoy_left = 0;
+    f->station_hit = 0;
+    f->force_misjump = 0;
+    f->message_time = 0;
+    f->target_note = 0;
+    c[EP_CMDR_CONVOY_DUE] = 0;
+    f->convoy_countdown = 0;
+    f->laser_temp = 0;
+    f->energy_drain = 0;
+    uint8_t x = (uint8_t)(rol8(minute, 2) ^ rol8(hour, 4) ^ hundredths ^ second); /* 7260 */
+    uint16_t cx = (uint16_t)(((x << 2) + 0x1388) << 1);
+    uint16_t price = (uint16_t)(cx * 5);
+    c[0xdc] = (uint8_t)price; /* ds:83b7: the Tribble offer */
+    c[0xdd] = (uint8_t)(price >> 8);
+    f->tribbles = 0;
+}
+
+int ep_start_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths)
+{
+    ep_flight *f = &g->f;
+    ep_event_add(g, EP_EV_MUSIC, 1); /* 4d55, 4ac0: the title music stops */
+    ep_new_game(g, hour, minute, second, hundredths);
+    g->space.in_flight = 1;
+    f->screen_shown = 0xff;
+    f->screen = 1;
+    f->launching = 0;
+    return ep_status_screen(g);
+}
+
 /* what a pass does after the commands (also when the pause menu closes) */
 static int idle_after(ep_game *g, int r)
 {

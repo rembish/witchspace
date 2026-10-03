@@ -34,4 +34,11 @@ int ep_ds_header_text(const ep_game *g, uint16_t addr, uint8_t *out, int max);
 /* the word at ds:addr */
 uint16_t ep_ds_word(const ep_game *g, uint16_t addr);
 
+/* Some flight and mission state lives inside the commander block (ds:83a0..83b5) and also
+ * has its own field in ep_flight. After the block is written whole (a new game, a load) the
+ * fields are refreshed from it; before it is read whole (a save, its checksum) it takes the
+ * fields' values. */
+void ep_sync_from_commander(ep_game *g);
+void ep_sync_to_commander(ep_game *g);
+
 #endif

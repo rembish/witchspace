@@ -112,6 +112,15 @@ int main(int argc, char **argv)
             for (int k = 0; k < g.circles.n; k++)
                 printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
             printf("end\n");
+        } else if (!strcmp(argv[1], "start_game")) { /* the time at ds:ff30 (h, m, s, 1/100), keys at ff10 */
+            int w = ep_start_game(&g, ds[0xff30], ds[0xff31], ds[0xff32], ds[0xff33]), k = 0;
+            while (w != EP_WAIT_NONE) {
+                uint8_t key = k < 8 ? ds[0xff10 + k] : 'Y';
+                k++;
+                w = ep_station_key(&g, key);
+            }
+            print_prims(&g.render);
+            printf("end\n");
         } else if (!strcmp(argv[1], "pause_session")) { /* Esc, then 12 keys: a pass or a question each */
             int r = ep_pause_open(&g);
             for (int k = 0; r == EP_CMD_PAUSE && k < 12; k++) {

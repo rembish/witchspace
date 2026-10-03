@@ -96,6 +96,14 @@ void ep_box_close(ep_game *g);
 enum { EP_ASK_ABANDON = 1, EP_ASK_EXIT };
 int ep_station_ask(ep_game *g, uint16_t title, int what);
 
+/* 71c1: a new game from the saved commander (Jameson, or the one loaded), the flight and
+ * the missions reset; the Tribble offer's price from the time of day (int 21h 2ch) */
+void ep_new_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths);
+
+/* a004..a024: the game starts (after the title): the music stops, a new game, the status
+ * screen at the station (EP_WAIT_* as ep_status_screen) */
+int ep_start_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths);
+
 /* where the screens idle */
 enum {
     EP_IDLE_NONE = 0,

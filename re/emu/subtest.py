@@ -19,7 +19,7 @@ import tempfile
 from corpus import load
 from eliteemu import CS, DS, REGS, SS, Elite
 from unicorn import UC_HOOK_CODE
-from unicorn.x86_const import UC_X86_REG_SP
+from unicorn.x86_const import UC_X86_REG_IP, UC_X86_REG_SP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ARGS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in ("--fuzz", "--show")]
@@ -93,7 +93,8 @@ ROUTINES = {
     "equip_screen": (0x924A, {}, {0x92D3: "end"}),
     "chart_session": (0x5AC0, {}, {0xA040: "end"}),
     "data_screen": (0x8880, {}, {0x8AFA: "end"}),
-    "pause_session": (0x0425, {}, {0x9E80: "end", 0x00BA: "end"}),  # a040: no chart in witchspace, back to the view
+    "pause_session": (0x0425, {}, {0x9E80: "end", 0x00BA: "end"}),
+    "start_game": (0xA004, {}, {0x8DAC: "end"}),  # a040: no chart in witchspace, back to the view
     "equip_session": (0x924A, {}, {}),
 }
 
@@ -374,6 +375,24 @@ def market_world(img, rng):
     for j in range(3):
         w(0x92E0 + 2 * j, rng.getrandbits(16), 2)
     w(0x8367, rng.choice([0, 1, 99999, 1234567]), 4)
+
+
+def start_world(img, rng):
+    """Any time of day; a saved commander a little different from the current one."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    for j, top in enumerate((24, 60, 60, 100)):
+        w(0xFF30 + j, rng.randrange(top))
+    b = 0x83BE  # fields of the saved commander (its texts stay valid)
+    w(b + 0x7B, rng.choice([0, 0x46, 0xFF]))                       # fuel
+    for k in range(14):
+        w(b + 0x7C + k, rng.choice([0, 0, 1]))                     # equipment
+    w(b + 0x8C, rng.choice([0, 1000, 99999, 0x10000]), 4)        # cash
+    w(b + 0x90, rng.choice([0, 5, 0x28, 0xFF]))                    # legal status
+    w(b + 0xC5, rng.choice([0, 0, 1, 3, 4]))                       # mission
+    w(b + 0xD5, rng.choice([0, 0, 1]))                             # mission phase
+    w(b + 0x3A, rng.randrange(8))                                  # galaxy
+    w(0x83BE + 0x93, rng.choice([0, 1, 9, 0x14]), 2)  # its kills (836e) and the current ones
+    w(0x83BE + 0x91, rng.choice([0, 1, 9, 0x14, 0x15]), 2)
 
 
 def pause_world(img, rng):
@@ -755,6 +774,7 @@ FUZZ = {
     "equip_screen": [(0, trading), (0, equip_world)],
     "chart_session": [(0, chart_world)],
     "pause_session": [(0, pause_world)],
+    "start_game": [(0, start_world), (0, arrival_dialogs)],
     "data_screen": [(0, chart_world), (0x031D, [0, 1]), (0xAE60, [0, 0, 3]), (0x831E, [0, 1])],
     "equip_session": [(0, trading), (0, equip_world), (0, equip_keys)],
     "collisions": [(0, something_close), (0, docking_approach), (0x83AA, [0, 0, 1]), (0xAE23, [0, 0, 0, 1]),
@@ -902,14 +922,24 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game"):
         def sprite_or_icon(e, r):
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":  # the bar's (0312)
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
             else:
                 prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}")
         e.hook(0x3411, sprite_or_icon)
-    if NAME == "status":  # scripted keys for the waits (ds:ff10, then Y); no palette cycling
+    if NAME == "start_game":  # the music stops; the time of day from ds:ff30
+        e.hook(0x4D55, lambda e, r: sounds.append("event 6:1"))
+        e.hook(0x4AC0, lambda e, r: None)
+
+        def clock(mu, ad, sz, u):
+            t = image[DS * 16 + 0xFF30:DS * 16 + 0xFF34]
+            mu.reg_write(REGS["cx"], t[0] << 8 | t[1])
+            mu.reg_write(REGS["dx"], t[2] << 8 | t[3])
+            mu.reg_write(UC_X86_REG_IP, 0x7264)
+        e.mu.hook_add(UC_HOOK_CODE, clock, begin=CS * 16 + 0x7260, end=CS * 16 + 0x7260)
+    if NAME in ("status", "start_game"):  # scripted keys for the waits (ds:ff10, then Y); no palette cycling
         keys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF18])
 
         def key(e, r):
@@ -983,7 +1013,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line

@@ -317,3 +317,43 @@ uint16_t ep_ds_word(const ep_game *g, uint16_t addr)
 {
     return (uint16_t)(ep_ds_byte(g, addr) | ep_ds_byte(g, (uint16_t)(addr + 1)) << 8);
 }
+
+static int inside_commander(const field *f)
+{
+    return f->off != offsetof(ep_game, cmdr) && f->off != offsetof(ep_game, cmdr_saved) && f->ds >= 0x82db &&
+           f->ds + f->size <= 0x82db + EP_COMMANDER_SIZE;
+}
+
+void ep_sync_from_commander(ep_game *g)
+{
+    for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++) {
+        const field *f = &fields[i];
+        if (!inside_commander(f)) continue;
+        uint8_t *p = (uint8_t *)g + f->off;
+        const uint8_t *src = g->cmdr.b + (f->ds - 0x82db);
+        if (f->raw) {
+            memcpy(p, src, f->size);
+        } else {
+            uint32_t v = 0;
+            for (int k = f->size - 1; k >= 0; k--) v = v << 8 | src[k];
+            memcpy(p, &v, f->size);
+        }
+    }
+}
+
+void ep_sync_to_commander(ep_game *g)
+{
+    for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++) {
+        const field *f = &fields[i];
+        if (!inside_commander(f)) continue;
+        const uint8_t *p = (const uint8_t *)g + f->off;
+        uint8_t *dst = g->cmdr.b + (f->ds - 0x82db);
+        if (f->raw) {
+            memcpy(dst, p, f->size);
+        } else {
+            uint32_t v = 0;
+            memcpy(&v, p, f->size);
+            for (int k = 0; k < f->size; k++) dst[k] = (uint8_t)(v >> (8 * k));
+        }
+    }
+}
