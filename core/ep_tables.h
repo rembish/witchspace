@@ -47,6 +47,8 @@ extern const char *const ep_ship_names[30];
 extern const uint8_t ep_ring_start[30];
 extern const uint8_t ep_glyph_width[0x5b];
 /* a byte of the data segment's static text regions as loaded (0 elsewhere) */
+#define EP_SPRITES 139
+extern const uint8_t ep_sprite_width[EP_SPRITES];
 #define EP_DS_INITIAL 0xbe34
 extern const uint8_t ep_ds_initial[EP_DS_INITIAL];
 uint8_t ep_ds_static(uint16_t addr);
