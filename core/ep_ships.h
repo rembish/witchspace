@@ -27,6 +27,8 @@ ep_object *ep_debris_slot(ep_game *g);
 /* 80ae, else 80cb: a slot for something new; with none free, the first off the scanner, else
  * one of 4..19 at random is removed */
 ep_object *ep_claim_slot(ep_game *g);
+/* the same, saying whether a ship was taken at random (80e2: DI then points at it) */
+ep_object *ep_claim_slot_how(ep_game *g, int *taken);
 
 /* 81c7: a debris particle's frame; 0 when it is gone */
 int ep_particle_update(ep_object *o);

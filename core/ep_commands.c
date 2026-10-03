@@ -155,10 +155,19 @@ static uint16_t get16(const ep_object *o, int off) { return (uint16_t)(o->b[off]
 void ep_launch_missile(ep_game *g)
 {
     ep_space *s = &g->space;
-    ep_object *m = ep_claim_slot(g);
-    /* 81b7 copies the 64 bytes DI points at, stale here: slot 20 as the collision loop leaves
-     * it (Tribble sprites on screen move DI elsewhere: not reproduced) */
-    if (m != &s->obj[20]) memcpy(m->b, s->obj[20].b, sizeof m->b);
+    int taken;
+    ep_object *m = ep_claim_slot_how(g, &taken);
+    /* 8103, 81b7: the new slot gets the 64 bytes DI points at, as the code before the commands
+     * left it. MCGA: the frame's flip (3081..30c2) leaves ds:d828, memory nothing writes (0).
+     * EGA, VGA: the flip leaves DI alone: slot 20 as the collision loop stops (or, with
+     * Tribble sprites on screen, their table: not reproduced). A slot taken at random is
+     * copied onto itself. */
+    if (!taken) {
+        if (g->f.video == 2)
+            memset(m->b, 0, sizeof m->b);
+        else if (m != &s->obj[20])
+            memcpy(m->b, s->obj[20].b, sizeof m->b);
+    }
     ep_ship_init(m, 0);
     m->b[0x33] = 2;
     for (int k = 0; k < 3; k++) s->rot[k] = ep_rot_from_angle((uint16_t)(0u - s->player_angle[k]));

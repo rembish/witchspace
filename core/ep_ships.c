@@ -248,8 +248,9 @@ ep_object *ep_free_ship_slot(ep_game *g)
 
 /* 80ae, else 80cb: a slot for something new; with none free, the first one off the scanner,
  * else one of 4..19 at random is removed */
-ep_object *ep_claim_slot(ep_game *g)
+ep_object *ep_claim_slot_how(ep_game *g, int *taken)
 {
+    *taken = 0;
     ep_object *s = ep_free_ship_slot(g);
     if (s) return s;
     int n = (uint8_t)(g->space.ship_slots - 3);
@@ -257,7 +258,14 @@ ep_object *ep_claim_slot(ep_game *g)
         if (!(g->space.obj[i].b[EP_OBJ_FLAGS1E] & 2)) return &g->space.obj[i];
     s = &g->space.obj[4 + (ep_flight_random(g) >> 8 & 0xf)];
     s->b[EP_OBJ_FLAGS] &= 0xfe;
+    *taken = 1; /* 80f4: DI is set to it too */
     return s;
+}
+
+ep_object *ep_claim_slot(ep_game *g)
+{
+    int taken;
+    return ep_claim_slot_how(g, &taken);
 }
 
 /* 8183: a free debris slot, else the oldest (the last of equals) */
