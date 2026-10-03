@@ -18,6 +18,9 @@ void ep_energy_drain(ep_game *g);
 /* 4f4b: the laser fitted in the current view (0..3), or -1 */
 int ep_view_laser(const ep_game *g);
 
+/* 1038: the joystick's roll (AL) and pitch (AH), +-23, from in.joy_* and its centre */
+uint16_t ep_joystick_steering(ep_game *g);
+
 /* a183: firing the laser */
 void ep_laser_fire(ep_game *g);
 

@@ -217,6 +217,9 @@ typedef struct {
     uint8_t missile_blink;          /* ds:6405: frames of the armed missile's blinking */
     uint8_t define_set;             /* defining keys: 1 all seven (0674), 2 the speed's two (0709) */
     uint8_t define_k, define_armed; /* which, and the keys released (05db) */
+    uint8_t list_delay;             /* ds:0ca8: ticks before the joystick moves a list again */
+    uint16_t list_tick;             /* ds:0ca9 */
+    int16_t list_mickeys;           /* ds:0cab: the mouse's way along a list */
     uint8_t station_ecm;            /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;                 /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;                /* ds:b138: ships may not fire this frame */
@@ -250,9 +253,12 @@ typedef struct {
     uint8_t e0, num_lock;                /* ds:0d30, 0d31: toggled by E0h, 45h */
     uint16_t joy_centre_x, joy_centre_y; /* ds:09cd, 09cf: the joystick as centred */
     /* the devices as the frontend has them (the original reads the hardware) */
-    uint8_t joy_present;   /* a joystick at port 201h */
-    uint16_t joy_x, joy_y; /* its position as 0ffb counts it (the centre about 1000) */
-    uint8_t mouse_present; /* a mouse driver (int 33h) */
+    uint8_t joy_present;        /* a joystick at port 201h */
+    uint16_t joy_x, joy_y;      /* its position as 0ffb counts it (the centre about 1000) */
+    uint8_t joy_buttons;        /* port 201h: bits 4, 5 the buttons, 0 when pressed */
+    uint8_t mouse_present;      /* a mouse driver (int 33h) */
+    int16_t mouse_dx, mouse_dy; /* mickeys moved since the game last asked (int 33h, 0bh) */
+    uint8_t mouse_buttons;      /* bit 0 left, bit 1 right, held (int 33h, 05h) */
 } ep_input;
 
 /* Commander files, the frontend's (DOS 8.3 names in capitals: "JAMESON.CDR") */

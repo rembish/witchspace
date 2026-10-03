@@ -99,14 +99,18 @@ static uint8_t bound_key(const ep_game *g, uint16_t binding)
     return a >= 0x20d && a < 0x28d ? g->in.key[a - 0x20d] : ep_ds_byte(g, a);
 }
 
-/* 0edf: the fire control (keyboard only so far) */
+/* 0edf: the fire control: the key; a joystick's buttons (port 201h, 0 when pressed); a mouse's
+ * buttons, or keys 7dh, 7eh */
 static int fire_pressed(ep_game *g)
 {
-    if (g->in.control != 0) {
-        ep_event_add(g, EP_EV_UNPORTED, 0x0ef0); /* joystick, mouse */
-        return 0;
+    const ep_input *in = &g->in;
+    if (in->control == 0) return !(bound_key(g, in->fire) & 0x80);
+    if (in->control == 1) {
+        uint8_t b = in->joy_present ? in->joy_buttons : 0xff;
+        return !(b & 0x20) || !(b & 0x10);
     }
-    return !(bound_key(g, g->in.fire) & 0x80);
+    if (!in->key[0x7e] || !in->key[0x7d]) return 1;
+    return (in->mouse_buttons & 3) != 0;
 }
 
 void ep_laser_fire(ep_game *g)
@@ -186,13 +190,78 @@ static int8_t steer_axis(const ep_flight *f, int8_t in, int8_t *acc)
 }
 
 /* 0f27: steering from the keyboard (joystick and mouse are not reconstructed yet) */
+/* 1038: one axis of the joystick: its way from the centre times 256 over the centre, halved,
+ * at most 127, an eighth of that less a dead zone of 4; -1 if the division faults (the
+ * original then returns with the dividend's low word, *fault) */
+static int joy_axis(uint16_t v, uint16_t centre, uint8_t *out, uint16_t *fault)
+{
+    uint16_t d = (uint16_t)(v - centre);
+    int neg = (int16_t)d < 0;
+    if (neg) d = (uint16_t)(0u - d);
+    uint32_t n = (uint32_t)(d >> 8 & 0xff) << 16 | (uint16_t)(d << 8);
+    if (!centre || n / centre > 0xffff) {
+        *fault = (uint16_t)(d << 8);
+        return -1;
+    }
+    uint16_t q = (uint16_t)(n / centre) >> 1;
+    uint8_t a = q >= 0x80 ? 0x7f : (uint8_t)q;
+    a = (uint8_t)(a >> 3);
+    a = a >= 4 ? (uint8_t)(a - 4) : 0;
+    *out = neg ? (uint8_t)(0u - a) : a;
+    return 0;
+}
+
+static int8_t clamp23(int8_t v) { return v < -0x17 ? -0x17 : v > 0x17 ? 0x17 : v; }
+
+/* 1038: the joystick (0ffb counts it; no joystick counts 0, 0): AL roll, AH pitch, +-23 */
+uint16_t ep_joystick_steering(ep_game *g)
+{
+    const ep_input *in = &g->in;
+    uint16_t x = in->joy_present ? in->joy_x : 0, y = in->joy_present ? in->joy_y : 0, fault;
+    uint8_t ax, ay;
+    if (joy_axis(x, in->joy_centre_x, &ax, &fault) < 0) return fault; /* 10e9 */
+    if (joy_axis(y, in->joy_centre_y, &ay, &fault) < 0) return fault;
+    int8_t r = clamp23((int8_t)ax), p = clamp23((int8_t)(0u - ay));
+    return (uint16_t)((uint8_t)p << 8 | (uint8_t)r);
+}
+
+/* int 33h, 0bh: the mickeys since the last time */
+static void mickeys(ep_game *g, int16_t *x, int16_t *y)
+{
+    *x = g->in.mouse_dx;
+    *y = g->in.mouse_dy;
+    g->in.mouse_dx = g->in.mouse_dy = 0;
+}
+
+/* 1164: an eighth of the mickeys, at most 63 */
+static int8_t mouse_axis(int16_t v)
+{
+    uint16_t a = (uint16_t)(v < 0 ? 0u - (uint16_t)v : (uint16_t)v) >> 3;
+    uint8_t b = a >= 0x40 ? 0x3f : (uint8_t)a;
+    return (int8_t)(v < 0 ? (uint8_t)(0u - b) : b);
+}
+
+/* 11f0: one from nothing is nothing */
+static int8_t mouse_snap(int8_t v) { return v == 1 || v == -1 ? 0 : v; }
+
+static uint16_t mouse_steering(ep_game *g)
+{
+    int16_t mx, my;
+    mickeys(g, &mx, &my);
+    int8_t r = mouse_axis(mx), p = mouse_axis(my);
+    p = (int8_t)(0u - (uint8_t)p);
+    r = (int8_t)(r >> 1);
+    p = (int8_t)(p >> 1);
+    r = clamp23((int8_t)(r + (int8_t)g->f.steer));
+    p = clamp23((int8_t)(p + (int8_t)(g->f.steer >> 8)));
+    return (uint16_t)((uint8_t)mouse_snap(p) << 8 | (uint8_t)mouse_snap(r));
+}
+
 uint16_t ep_steering(ep_game *g)
 {
     ep_flight *f = &g->f;
-    if (g->in.control != 0) {
-        ep_event_add(g, EP_EV_UNPORTED, 0x0fee);
-        return (uint16_t)((uint8_t)f->pitch << 8 | (uint8_t)f->roll);
-    }
+    if (g->in.control != 0) /* 0fee */
+        return g->in.control == 1 ? ep_joystick_steering(g) : mouse_steering(g);
     int8_t x, y;
     arrows(g, &x, &y);
     int8_t r = steer_axis(f, x, &f->roll);

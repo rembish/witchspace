@@ -624,11 +624,43 @@ void ep_list_open(ep_game *g, uint16_t colours, uint16_t selected, uint8_t rows,
     ep_list_poll(g, 1);
 }
 
+/* 0cac: the joystick or the mouse moves the list's cursor as the arrows do (ds:03f1) */
+static void list_device(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    if (g->in.control == 1) {
+        if (f->list_delay) { /* a move every nine ticks at most */
+            if (f->list_tick != (uint16_t)g->clock) {
+                f->list_tick = (uint16_t)g->clock;
+                f->list_delay--;
+            }
+            return;
+        }
+        int8_t p = (int8_t)(ep_joystick_steering(g) >> 8);
+        if (p <= -5) {
+            f->last_cmd_key = 0x50;
+            f->list_delay = 9;
+        } else if (p >= 5) {
+            f->last_cmd_key = 0x48;
+            f->list_delay = 9;
+        }
+    } else if (g->in.control == 2) {
+        f->list_mickeys = (int16_t)(f->list_mickeys + g->in.mouse_dy); /* int 33h, 0bh */
+        g->in.mouse_dx = g->in.mouse_dy = 0;
+        if (f->list_mickeys >= 0x19) {
+            f->list_mickeys = (int16_t)(f->list_mickeys - 0x19);
+            f->last_cmd_key = 0x50;
+        } else if (f->list_mickeys <= -0x19) {
+            f->list_mickeys = (int16_t)(f->list_mickeys + 0x19);
+            f->last_cmd_key = 0x48;
+        }
+    }
+}
+
 uint8_t ep_list_poll(ep_game *g, int mode)
 {
     uint8_t *m = g->f.menu;
-    if (g->in.control == 1 || g->in.control == 2)
-        ep_event_add(g, EP_EV_UNPORTED, 0x0cac); /* joystick, mouse */
+    list_device(g); /* 0cac */
     if (mode == 2) {
         menu_set_word(g, 4, list_item(g, m[1]));
         list_row(g, m[1], menu_word(g, 4));
