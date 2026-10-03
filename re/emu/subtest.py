@@ -38,7 +38,7 @@ SCRATCH = [(0x0002, 0x002C), (0x54CC, 0x54E1), (0x6405, 0x6405), (0x63F2, 0x6401
            (0x01F8, 0x01F9), (0x1074, 0x108E), (0x1091, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
            (0x76D6, 0x76D7), (0x45E8, 0x45E9), (0x45EB, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
 
-EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
+EV_SOUND, EV_SURFACE, EV_UNPORTED, EV_FLIP = 1, 2, 3, 9
 
 # Sound routines that wrap 4c98 (some skip the sound depending on audio state, which the core
 # does not keep): logged with the sound number they pass.
@@ -1052,12 +1052,20 @@ def run_original(image, addr, regs, exits=None):
     for stub in UNPORTED_FOR.get(NAME, UNPORTED):
         e.hook(stub, lambda e, r, stub=stub: sounds.append(f"event {EV_UNPORTED}:{stub}"))
     e.hook(0x487E, lambda e, r: None)  # compass: drawing only
+
+    def view_clear(e, r):  # 3130 as the core emits it
+        prims.extend(["rect 0:8,9,304,124", "10:0,96,160", "10:51,296,157"])
+
+    def flip(e, r):  # 301a: the frame wait done, the flip noted
+        e.mu.mem_write(DS * 16 + 0x267C, bytes(e.mu.mem_read(DS * 16 + 0x45E0, 4)))
+        sounds.append(f"event {EV_FLIP}:0")
     e.hook(0x4D6C, lambda e, r: sounds.append(f"event 6:{r['ax'] & 0xFF}"))  # the music driver switched
     for at, kind in ((0x397C, 7), (0x3981, 8)):  # the screen under a box or the top line kept, put back
         e.hook(at, lambda e, r, kind=kind: sounds.append(f"event {kind}:{1 if r['ax'] == 0x18 else 2}"))
-    if NAME in ("arrive", "countdowns", "commands"):  # the frame wait, view clearing, crosshair: frontend's
-        for stub in (0x301A, 0x3130, 0x4F34):
-            e.hook(stub, lambda e, r: None)
+    if NAME in ("arrive", "countdowns", "commands"):  # the crosshair: frontend's
+        e.hook(0x4F34, lambda e, r: None)
+        e.hook(0x3130, view_clear)
+        e.hook(0x301A, flip)
     if NAME == "key_bar":  # icon redraws
         def icon(e, r):  # only the bar's own (from 0312); the Esc menu's marks are the frontend's
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
@@ -1092,8 +1100,8 @@ def run_original(image, addr, regs, exits=None):
                 left.append("frame 1" if stub == 0x6864 else done), mu.emu_stop()),
                 begin=CS * 16 + stub, end=CS * 16 + stub)
     if NAME in ("frame", "loop", "launch", "dock"):
-        for stub in (0x301A, 0x3130):
-            e.hook(stub, lambda e, r: None)
+        e.hook(0x3130, view_clear)
+        e.hook(0x301A, flip)
     if NAME in ("frame", "loop"):  # the original's DL at the AI, passed to the core
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
                       begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
@@ -1196,8 +1204,10 @@ def run_original(image, addr, regs, exits=None):
             return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
         e.hook(0x0276, title_key)
         e.hook(0x4D21, lambda e, r: sounds.append("event 6:2"))
-        for stub in (0x30DC, 0x3821, 0x3941, 0x3956, 0x3B3E, 0x3130, 0x301A):
+        for stub in (0x30DC, 0x3821, 0x3941, 0x3956, 0x3B3E):
             e.hook(stub, lambda e, r: None)
+        e.hook(0x3130, view_clear)
+        e.hook(0x301A, flip)
 
     if NAME == "title_session":  # a key at each pass (9f21), 12 passes
         tkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
@@ -1210,8 +1220,9 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([tkeys.pop(0)]))
         e.mu.hook_add(UC_HOOK_CODE, title_pass, begin=CS * 16 + 0x9F21, end=CS * 16 + 0x9F21)
         e.hook(0x4D21, lambda e, r: sounds.append("event 6:2"))
-        for stub in (0x3130, 0x301A, 0x028D):
-            e.hook(stub, lambda e, r: None)
+        e.hook(0x028D, lambda e, r: None)
+        e.hook(0x3130, view_clear)
+        e.hook(0x301A, flip)
         for stub in (0x0674, 0x0736, 0x0779):  # not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
                 sounds.append(f"event {EV_UNPORTED}:{stub}"), left.append("end"), mu.emu_stop()),
