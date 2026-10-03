@@ -83,3 +83,14 @@ ds:927f goods_base_price
 ds:92a1 goods_tech_adj
 ds:92e0 market_rng
 ds:8bef equipment_records
+3362 grf_image_header
+33a6 grf_unpack
+33d4 grf_read_byte
+37e4 set_ega_palette  # 16 attribute registers from ds:si
+3821 set_dac  # 768 bytes from ds:si
+384f set_video_mode  # E/V/M menu
+3921 cycle_flash_colour
+ds:10bc video_class  # 0 EGA, 1 VGA16, 2 MCGA
+ds:1122 ega_palette
+ds:1144 vga_dac
+ds:1ee9 colour_map

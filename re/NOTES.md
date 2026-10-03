@@ -176,3 +176,26 @@ quantities are random.
   Not ported yet.
 - Checked: `re/emu/markettest.py`: every government × economy × tech byte, 200 arrivals,
   and the selling price of all 65536 buying prices.
+
+## ELITE.GRF (bitmaps) and palettes
+
+- `load_grf` (`31f6`): 32-byte header, one 8-byte entry per video class (`ds:10bc` >> 1):
+  paragraphs to allocate, 32-bit file offset, image count. Class 0 (EGA, VGA 16 colours):
+  offset `20h`; class 1 (MCGA): offset `1976bh`; 139 images each, same order and sizes.
+  Pointers to the images go to the table at `[ds:2650]` (far pointers, 4 bytes each).
+- Images (`3362` header, `33a6` body, byte reader `33d4` with a 256-byte buffer): 3-byte
+  header, then PackBits-style RLE (n ≥ 0: n + 1 literals, n < 0: next byte 1 − n times).
+  16 colours: width in bytes, plane mask (bit 7 = an extra plane, the transparency mask
+  **[verify]**), height; one plane after the other. MCGA: width (15 bits, bit 15 a flag,
+  probably transparency), height, a byte per pixel.
+- Image 138 is the full-screen "Hanger 18" picture; most others are icons, digits and
+  dashboard parts (80×61, 64×64, 24×16 …).
+- Video mode (`384f`, keys E/V/M → `ds:10bc` 0/1/2): EGA mode 0Dh with attribute registers
+  `ds:1122` (index 6 is `06h`, dark yellow, not the usual brown); VGA mode 0Dh with
+  attributes `ds:1133` and DAC `ds:1144`; MCGA mode 13h with the full 256-entry DAC
+  `ds:1144`. Game colour → pixel value table `ds:1ee9` (256 words) is copied from `ds:1b3f`
+  (16 colours) or `ds:1cf3` (MCGA); MCGA also patches code words listed at `ds:1b1a`.
+  `3921` cycles one entry (flashing colours), `3c50` loads DAC ranges.
+- `re/tools/grf.py dump` writes all images as PNG with these palettes. The 16-colour set
+  looks right; the MCGA title picture has wrong colours in places, so that screen must load
+  its own palette **[verify]**.
