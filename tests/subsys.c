@@ -169,7 +169,7 @@ int main(int argc, char **argv)
             printf("end\n");
         } else if (!strcmp(argv[1], "chart_session")) { /* F4, then 12 passes: a key and arrows each */
             int up = ep_chart_screen(&g) == EP_CMD_SCREEN;
-            const uint8_t *keys[4] = { &g.in.up, &g.in.down, &g.in.left, &g.in.right };
+            const uint16_t *keys[4] = { &g.in.up, &g.in.down, &g.in.left, &g.in.right };
             for (int k = 0; up && k < 12; k++) {
                 if (g.f.station_step) { /* typing a name: the key goes to the text */
                     ep_station_key(&g, ds[0xff10 + k]);
@@ -216,6 +216,28 @@ int main(int argc, char **argv)
             if (g.f.leave) printf("leave %d\n", g.f.leave);
         } else if (!strcmp(argv[1], "key_event")) {
             for (int k = 0; k < 8; k++) ep_key_event(&g, ds[0xff10 + k]);
+        } else if (!strcmp(argv[1], "define_keys") || !strcmp(argv[1], "joystick") ||
+                   !strcmp(argv[1], "mouse")) {
+            g.in.joy_present = g.in.mouse_present = ds[0xff40];
+            g.in.joy_x = (uint16_t)(ds[0xff41] | ds[0xff42] << 8);
+            g.in.joy_y = (uint16_t)(ds[0xff43] | ds[0xff44] << 8);
+            int w = argv[1][0] == 'd'   ? ep_define_keys(&g)
+                    : argv[1][0] == 'j' ? ep_joystick(&g)
+                                        : ep_mouse(&g);
+            for (int k = 0; w != EP_WAIT_NONE && k < 16; k++) {
+                uint8_t key = ds[0xff10 + k];
+                if (w == EP_WAIT_SCAN) { /* the keys released, then a press */
+                    if (!g.f.define_armed) ep_station_key(&g, 0xff);
+                    g.in.last_scan = (uint16_t)(0x20d + (key & 0x7f));
+                    w = ep_station_key(&g, 0xff);
+                } else {
+                    w = ep_station_key(&g, key);
+                }
+            }
+            if (w == EP_WAIT_SCAN && !g.f.define_armed)
+                ep_station_key(&g, 0xff); /* armed when the keys ran out */
+            print_prims(&g.render);
+            printf("end\n");
         } else if (!strcmp(argv[1], "timer")) { /* 24 ticks; what the speaker was last set to */
             g.speaker = 0xffff;
             g.speaker_on = 0xff;

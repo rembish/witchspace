@@ -5,6 +5,7 @@
 #include "ep_title.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static int failed;
 
@@ -34,9 +35,26 @@ static void title_waits(void)
     CHECK(ep_station_key(&g, 0xff) == EP_WAIT_NONE && g.f.station_step == 0 && g.f.bar_quiet == 0);
 }
 
+/* 05e5: a key still held from before is not taken: the keys must all be up first */
+static void define_waits_for_release(void)
+{
+    static ep_game g;
+    memset(g.in.key, 0x80, sizeof g.in.key);
+    g.in.up = (uint16_t)(0xffff - 0x20d); /* nothing bound: no question first */
+    ep_key_event(&g, 0x1c);               /* Enter, held */
+    CHECK(ep_define_keys(&g) == EP_WAIT_SCAN);
+    CHECK(ep_station_key(&g, 0xff) == EP_WAIT_SCAN && !g.f.define_armed);
+    ep_key_event(&g, 0x9c); /* released */
+    CHECK(ep_station_key(&g, 0xff) == EP_WAIT_SCAN && g.f.define_armed && g.in.last_scan == 0xffff);
+    ep_key_event(&g, 0x48); /* up arrow: the first key, "up" */
+    ep_key_event(&g, 0xc8);
+    CHECK(ep_station_key(&g, 0xff) == EP_WAIT_SCAN && g.in.up == 0x48 && g.f.define_k == 1);
+}
+
 int main(void)
 {
     title_waits();
+    define_waits_for_release();
     if (!failed) printf("flow: ok\n");
     return failed;
 }

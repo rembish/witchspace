@@ -95,6 +95,9 @@ ROUTINES = {
     "title_open": (0x9E9A, {}, {0x9F21: "end"}),
     "protection_pick": (0x32B8, {}, {}),
     "timer": (0x4A50, {}, {}),
+    "define_keys": (0x0674, {}, {}),
+    "joystick": (0x0736, {}, {}),
+    "mouse": (0x0779, {}, {}),
     "key_event": (0x0215, {}, {}),
     "title_session": (0x9F21, {}, {0xA004: "start", **{a: "end" for a in (  # a screen up
         0x0480, 0x0DF6, 0x0945, 0x08E4, 0x0AAC, 0x0AEF, 0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0xA040)}}),
@@ -582,6 +585,26 @@ def key_bytes(img, rng):
         img[DS * 16 + 0xFF10 + k] = sc | (0x80 if sc != 0xE0 and rng.random() < 0.4 else 0)
 
 
+def controls_world(img, rng):
+    """Keys up; the bindings set or not; a joystick or mouse there or not; keys to answer and
+    scancodes to bind (some twice: taken only once)."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    for k in range(0x80):
+        w(0x020D + k, 0x80)
+    if rng.random() < 0.4:
+        for a in range(0xB251, 0xB25F, 2):
+            w(a, 0xFFFF, 2)
+    w(0xFF40, rng.choice([0, 1, 1]))  # a joystick, a mouse
+    w(0xFF41, rng.randint(200, 1800), 2)
+    w(0xFF43, rng.randint(200, 1800), 2)
+    keys = []
+    while len(keys) < 16:
+        keys.append(rng.choice([ord("Y"), ord("y"), ord("N"), ord("x"), 0x20, 0x20, 0xFF,
+                                rng.randrange(1, 0x59), rng.randrange(1, 0x59), 0x48, 0x50]))
+    for j in range(16):
+        w(0xFF10 + j, keys[j])
+
+
 def speaker_world(img, rng):
     """The speaker part way through a sequence, a note, a pattern, a rest or a loop."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -987,6 +1010,9 @@ FUZZ = {
     "chart_session": [(0, chart_world)],
     "pause_session": [(0, pause_world)],
     "timer": [(0, speaker_world)],
+    "define_keys": [(0, controls_world)],
+    "joystick": [(0, controls_world)],
+    "mouse": [(0, controls_world)],
     "key_event": [(0, key_bytes)],
     "title_open": [(0, title_world)],
     "protection_pick": [(0x0205, 8)],  # any generator state
@@ -1222,6 +1248,37 @@ def run_original(image, addr, regs, exits=None):
             mu.reg_write(UC_X86_REG_IP, ret)
         for at in (0x2F2D, 0x2F64, 0x37D1):  # 2f12, 2f4d, 37bd
             e.mu.hook_add(UC_HOOK_CODE, second_page, begin=CS * 16 + at, end=CS * 16 + at)
+    if NAME in ("define_keys", "joystick", "mouse"):  # answers at 0276, presses for 05f9, no hardware
+        ckeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF20])
+
+        def answer(e, r):
+            if not ckeys:
+                left.append("end")
+                e.mu.emu_stop()
+                return
+            k = ckeys.pop(0)
+            if k == 0xFF:
+                return {"flags": r["flags"] & ~1}
+            e.mu.mem_write(DS * 16 + 0x0D2F, b"\xff")
+            return {"ax": (r["ax"] & 0xFF00) | k, "flags": r["flags"] | 1}
+        e.hook(0x0276, answer)
+
+        def press(mu, ad, sz, u):  # 05f9: armed, or the key taken already: the next press
+            p = e.r16(0x0D2D)
+            if p != 0xFFFF and p not in [e.r16(a) for a in range(0xB251, 0xB25F, 2)]:
+                return
+            if not ckeys:
+                left.append("end")
+                mu.emu_stop()
+                return
+            mu.mem_write(DS * 16 + 0x0D2D, (0x20D + (ckeys.pop(0) & 0x7F)).to_bytes(2, "little"))
+        e.mu.hook_add(UC_HOOK_CODE, press, begin=CS * 16 + 0x05F9, end=CS * 16 + 0x05F9)
+        there = image[DS * 16 + 0xFF40]
+        jx, jy = (int.from_bytes(image[DS * 16 + a:DS * 16 + a + 2], "little") for a in (0xFF41, 0xFF43))
+        e.hook(0x0FFB, lambda e, r: {"bx": jx if there else 0, "cx": jy if there else 0,
+                                     "flags": (r["flags"] & ~1) if there else (r["flags"] | 1)})
+        e.hook(0x0BCA, lambda e, r: {"ax": 0xFFFF if there else 0,
+                                     "flags": (r["flags"] & ~0x40) if there else (r["flags"] | 0x40)})
     if NAME == "title_open":  # keys at 0276 (ffh: none); one page drawn; no hardware
         tkeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
 
@@ -1312,7 +1369,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "dashboard", "launch", "dock"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "dashboard", "launch", "dock", "define_keys", "joystick", "mouse"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
@@ -1345,7 +1402,8 @@ def run_original(image, addr, regs, exits=None):
             raise
     if NAME == "pause_session" and not left:
         left.append("end")
-    if NAME in ("chart_session", "save_session", "load_session", "title_open", "title_session") and not left:
+    if NAME in ("chart_session", "save_session", "load_session", "title_open", "title_session", "define_keys",
+                "joystick", "mouse") and not left:
         left.append("end")
     if NAME == "commands" and not left:
         left.append("cmd 0")
