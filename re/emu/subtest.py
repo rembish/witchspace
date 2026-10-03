@@ -390,8 +390,15 @@ def chart_world(img, rng):
         w(a, rng.randrange(0x80))
     for a in (0x8316, 0x8317):
         w(a, rng.randrange(0x100 if a == 0x8316 else 0x80))
+    keys = []  # single keys, or a find: F9, some letters, Enter or Esc (Esc elsewhere is the menu)
+    while len(keys) < 12:
+        if rng.random() < 0.3:
+            keys += [0x9F] + [rng.choice([ord("L"), ord("A"), ord("V"), ord("E"), ord("Z"), 8, ord("l"), 0xFF])
+                              for _ in range(rng.randrange(5))] + [rng.choice([0x0D, 0x0D, 0x1B])]
+        else:
+            keys.append(rng.choice([0xFF, 0xFF, 0x9E, 0xA0, 0x9A, ord("L"), 0x0D]))
     for j in range(12):
-        w(0xFF10 + j, rng.choice([0xFF, 0xFF, 0x9E, 0xA0, 0x9A]))
+        w(0xFF10 + j, keys[j])
         w(0xFF20 + j, rng.choice([0, 0, 1, 2, 4, 8, 5, 10]))
 
 
@@ -847,7 +854,7 @@ def run_original(image, addr, regs, exits=None):
         for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA):  # reconstructed screens: up to their idle loop
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
                           begin=CS * 16 + at, end=CS * 16 + at)
-        for stub in (0x6189, 0x07AA, 0x08AB, 0x0674,
+        for stub in (0x07AA, 0x08AB, 0x0674,
                      0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5,
                      0x0425, 0xA23B):  # screens not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
@@ -909,6 +916,15 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([ckeys.pop(0)]))
         for at in (0x5C80, 0x595A):
             e.mu.hook_add(UC_HOOK_CODE, chart_pass, begin=CS * 16 + at, end=CS * 16 + at)
+
+        def typing(mu, ad, sz, u):  # each turn of the text's loop takes the next key
+            if not ckeys:
+                left.append("end")
+                mu.emu_stop()
+                return
+            carrows.pop(0)
+            mu.mem_write(DS * 16 + 0x0D2F, bytes([ckeys.pop(0)]))
+        e.mu.hook_add(UC_HOOK_CODE, typing, begin=CS * 16 + 0x0DF6, end=CS * 16 + 0x0DF6)
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (mu.reg_read(REGS["ax"]) < 0x130 and mu.reg_read(REGS["bx"]) < 0x7C)
                       and prims.append(f"8:{mu.reg_read(REGS['cx']) & 0xFF},{mu.reg_read(REGS['ax'])},{mu.reg_read(REGS['bx'])}"),
                       begin=CS * 16 + 0x291B, end=CS * 16 + 0x291B)  # pixels

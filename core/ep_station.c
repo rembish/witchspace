@@ -223,7 +223,8 @@ enum {
     ST_M3_DONE,    /* 9c25 */
     ST_M456_DONE,  /* 9c75, 9cb5, 9cf3 */
     ST_MOUNT_BUY,  /* 9502: the mount for a laser bought */
-    ST_MOUNT_SELL  /* 968f: the mount of a laser sold */
+    ST_MOUNT_SELL, /* 968f: the mount of a laser sold */
+    ST_FIND_TEXT   /* 61b1: the name to find */
 };
 
 static int wait(ep_game *g, uint8_t step, int kind)
@@ -429,6 +430,7 @@ int ep_status_screen(ep_game *g)
     return arrival(g);
 }
 
+static int find_key(ep_game *g, uint8_t key);
 static int mount_key(ep_game *g, uint8_t key);
 
 int ep_station_key(ep_game *g, uint8_t key)
@@ -498,6 +500,7 @@ int ep_station_key(ep_game *g, uint8_t key)
         break;
     case ST_MOUNT_BUY:
     case ST_MOUNT_SELL: return mount_key(g, key);
+    case ST_FIND_TEXT: return find_key(g, key);
     case ST_NONE: return EP_WAIT_NONE;
     default: break;
     }
@@ -1614,6 +1617,155 @@ void ep_data_screen(ep_game *g)
     for (int j = 0; j < 8; j++) line(g, 0x0c, arrows[j][0], arrows[j][1], arrows[j][2], arrows[j][3]);
     line(g, 0x0c, 0x101, 0x41, 0x105, 0x3d);
     f->idle = EP_IDLE_PLAIN;
+}
+
+/* ---- typing a text (0d9d..0ed4) ---- */
+
+static uint16_t entry_w(ep_game *g, uint16_t addr)
+{
+    return (uint16_t)(g->f.entry[addr - 0x9a2] | g->f.entry[addr - 0x9a1] << 8);
+}
+
+static uint8_t *entry_b(ep_game *g, uint16_t addr) { return &g->f.entry[addr - 0x9a2]; }
+
+/* 0ebd: the cursor after the text */
+static void entry_cursor(ep_game *g, uint8_t colour)
+{
+    ep_render_rect(&g->render, colour, (int16_t)(entry_w(g, 0x9c8) + 1), (int16_t)(entry_w(g, 0x9c6) + 6), 7,
+                   2);
+}
+
+/* 0dda: the text and where it ends */
+static void entry_text(ep_game *g)
+{
+    uint8_t t[16];
+    int n = 0;
+    while (n < 15 && (t[n] = *entry_b(g, (uint16_t)(0x9a4 + n))) != 0) n++;
+    t[n++] = 0;
+    uint16_t x = entry_w(g, 0x9c4);
+    uint16_t end = (uint16_t)(x + ep_text_width(t));
+    *entry_b(g, 0x9c8) = (uint8_t)end;
+    *entry_b(g, 0x9c9) = (uint8_t)(end >> 8);
+    ep_pen(&g->render, (int16_t)x, (int16_t)entry_w(g, 0x9c6), *entry_b(g, 0x9ca));
+    ep_text(&g->render, t, n, 0);
+}
+
+/* 0db6: the box cleared and the text drawn */
+static void entry_draw(ep_game *g)
+{
+    g->in.last_key = 0xff; /* 0287 */
+    ep_render_rect(&g->render, *entry_b(g, 0x9cb), (int16_t)entry_w(g, 0x9c4), (int16_t)entry_w(g, 0x9c6),
+                   (int16_t)((*entry_b(g, 0x9a2) + 1) * 8), 8);
+    entry_text(g);
+}
+
+/* 0d9d (fresh) or 0daa (keep: the text is there already) */
+static void entry_open(ep_game *g, uint8_t max, int16_t x, int16_t y, uint16_t colours, int keep)
+{
+    if (!keep) {
+        *entry_b(g, 0x9a2) = max;
+        *entry_b(g, 0x9a3) = 0;
+        *entry_b(g, 0x9a4) = 0;
+    }
+    entry_b(g, 0x9c4)[0] = (uint8_t)x;
+    entry_b(g, 0x9c4)[1] = (uint8_t)((uint16_t)x >> 8);
+    entry_b(g, 0x9c6)[0] = (uint8_t)y;
+    entry_b(g, 0x9c6)[1] = (uint8_t)((uint16_t)y >> 8);
+    entry_b(g, 0x9ca)[0] = (uint8_t)colours;
+    entry_b(g, 0x9ca)[1] = (uint8_t)(colours >> 8);
+    entry_draw(g);
+}
+
+/* 0df6..0e38 for one key (ffh none): 1 accepted (the text at ds:09a4), -1 Esc, 0 typing on */
+static int entry_key(ep_game *g, uint8_t key)
+{
+    uint8_t bit = (uint8_t)((uint8_t)g->clock >> 4 & 1); /* 0e9e: the cursor blinks */
+    if (bit != *entry_b(g, 0x9cc)) {
+        *entry_b(g, 0x9cc) = bit;
+        entry_cursor(g, bit ? *entry_b(g, 0x9cb) : *entry_b(g, 0x9ca));
+    }
+    if (key == 0xff) return 0;
+    g->in.last_key = 0xff;
+    uint8_t *count = entry_b(g, 0x9a3);
+    if (key == 0x1b) {
+        ep_render_rect(&g->render, *entry_b(g, 0x9cb), (int16_t)entry_w(g, 0x9c4), (int16_t)entry_w(g, 0x9c6),
+                       (int16_t)((*entry_b(g, 0x9a2) + 1) * 8), 8);
+        return -1;
+    }
+    if (key == 0x0d) {
+        entry_cursor(g, *entry_b(g, 0x9cb));
+        return *count ? 1 : 0;
+    }
+    if (key == 8) {
+        if (!*count) return 0;
+        (*count)--;
+        *entry_b(g, (uint16_t)(0x9a4 + *count)) = 0;
+        entry_draw(g);
+        return 0;
+    }
+    if (key < 0x20 || key > 0x7a) return 0;
+    if (!(key == '-' || (key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z'))) return 0; /* 0e87 */
+    if (*count == *entry_b(g, 0x9a2)) return 0;
+    (*count)++;
+    *entry_b(g, (uint16_t)(0x9a3 + *count)) = key;
+    *entry_b(g, (uint16_t)(0x9a4 + *count)) = 0;
+    entry_cursor(g, *entry_b(g, 0x9cb));
+    entry_text(g);
+    return 0;
+}
+
+int ep_chart_find_name(ep_game *g)
+{
+    ep_render_rect(&g->render, 0, 0x24, 0x8d, 0xc8, 0x14);
+    g->seed = ep_galaxy_seed(g->cmdr.b[EP_CMDR_GALAXY]);
+    text_header(g, 0x556b);
+    entry_open(g, 8, 0xa5, 0x8d, 0x0f, 0);
+    g->f.station_step = ST_FIND_TEXT;
+    return EP_WAIT_TEXT;
+}
+
+static int find_key(ep_game *g, uint8_t key)
+{
+    int r = entry_key(g, key);
+    if (!r) return EP_WAIT_TEXT;
+    g->f.station_step = ST_NONE;
+    if (r < 0) {
+        ep_chart_find(g);
+        return EP_WAIT_NONE;
+    }
+    uint8_t *c = g->cmdr.b;
+    const uint8_t *typed = entry_b(g, 0x9a4);
+    int len = 0;
+    while (typed[len]) len++;
+    g->f.find_text[0] = 0x09a4;
+    g->f.find_text[1] = (uint16_t)(0x09a4 + len);
+    int cmp = len == 8 ? 8 : len + 1; /* the NUL too, unless all eight letters */
+    for (int n = 0; n < 256; n++) {
+        uint8_t *name = &c[EP_CMDR_SELECTED + EP_SYSREC_NAME];
+        ep_planet_name(&g->seed, name); /* 6130 */
+        if (memcmp(name, typed, (size_t)cmp)) continue;
+        g->seed = ep_system_seed(c[EP_CMDR_GALAXY], n);
+        int16_t dx = (int16_t)((g->seed.w[1] >> 8) - c[EP_CMDR_CHART_CENTRE]);
+        int16_t dy = (int16_t)((g->seed.w[0] >> 9) - c[EP_CMDR_CHART_CENTRE + 1]);
+        if (c[EP_CMDR_ZOOM] >= 1 && ((dx < 0 ? -dx : dx) >= 0x14 || (dy < 0 ? -dy : dy) >= 0x11))
+            break;                  /* off the map */
+        if (c[EP_CMDR_ZOOM] == 1) { /* 5e95 */
+            for (int k = 0; k < 2; k++) {
+                int16_t d = k ? dy : dx;
+                c[EP_CMDR_CURSOR + k] = (uint8_t)(3 * d + (d >> 1) + (k ? 0x40 : 0x50));
+            }
+        } else {
+            c[EP_CMDR_CURSOR] = (uint8_t)(g->seed.w[1] >> 8);
+            c[EP_CMDR_CURSOR + 1] = (uint8_t)(g->seed.w[0] >> 9);
+        }
+        ep_chart_find(g);
+        return EP_WAIT_NONE;
+    }
+    *entry_b(g, (uint16_t)(0x9a4 + len)) = 0; /* 61f0: not on the map */
+    text_header(g, 0x55e8);
+    text_on(g, 0x09a4);
+    text_on(g, 0x55f7);
+    return EP_WAIT_NONE;
 }
 
 int ep_station_idle(ep_game *g)

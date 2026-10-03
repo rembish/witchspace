@@ -155,6 +155,8 @@ typedef struct {
     uint8_t species_icon;       /* ds:ae1b */
     uint8_t desc_save[8];       /* ds:5a2b */
     uint8_t desc_caps;          /* ds:5a34 */
+    uint8_t entry[0x2b];        /* ds:09a2: a text being typed: max, count, text, x, y, end, colours, blink */
+    uint16_t find_text[2];      /* ds:5567: the typed name and where it ends */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

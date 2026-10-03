@@ -15,7 +15,9 @@ enum {
     EP_WAIT_NONE = 0, /* the screen is up, idling */
     EP_WAIT_KEY,      /* any key goes on */
     EP_WAIT_YN,       /* Y/y or N/n (other keys are ignored) */
-    EP_WAIT_LIST      /* a list: arrows move, Enter (0dh) picks */
+    EP_WAIT_LIST,     /* a list: arrows move, Enter (0dh) picks */
+    EP_WAIT_TEXT      /* a text: '-', digits, capitals; backspace, Enter, Esc (ffh: no key, the
+                         cursor blinks with the clock) */
 };
 
 /* 8bea up to its idle loop (8dac): on arrival the promotion, the Tribble offer and the
@@ -82,6 +84,9 @@ void ep_chart_home(ep_game *g);
 /* 8880: DATA ON the selected system: distance, economy, government, tech level, population,
  * species, productivity, radius, the description and a picture */
 void ep_data_screen(ep_game *g);
+
+/* 6189: FIND: Which System ? (a name typed, the cursor onto it) */
+int ep_chart_find_name(ep_game *g);
 
 /* where the screens idle */
 enum {

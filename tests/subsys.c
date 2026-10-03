@@ -99,6 +99,10 @@ int main(int argc, char **argv)
             int up = ep_chart_screen(&g) == EP_CMD_SCREEN;
             const uint8_t *keys[4] = { &g.in.up, &g.in.down, &g.in.left, &g.in.right };
             for (int k = 0; up && k < 12; k++) {
+                if (g.f.station_step) { /* typing a name: the key goes to the text */
+                    ep_station_key(&g, ds[0xff10 + k]);
+                    continue;
+                }
                 uint8_t arrows = ds[0xff20 + k];
                 for (int j = 0; j < 4; j++) g.in.key[*keys[j] & 0x7f] = (arrows >> j & 1) ? 0 : 0x80;
                 g.in.last_key = ds[0xff10 + k];
