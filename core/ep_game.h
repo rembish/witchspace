@@ -19,6 +19,10 @@
 /* EP_EV_WAIT: the original stops for this many timer ticks (a sound playing out) */
 /* EP_EV_MUSIC: the music driver switched (arg: ds:45e7, 1 = sound off or the music stops (4d55);
  * 2 = the title music starts (4d21))
+ * EP_EV_FLIP: a frame is complete (301a): show it, then go on two timer ticks after the last
+ * flip. A call may hold several frames (the tunnel, the hyperspace rings): the frontend shows
+ * them one by one at that pace; they take no keys (each clears it), so keys pressed meanwhile
+ * are dropped.
  * EP_EV_KEEP / EP_EV_PUT_BACK: the screen under a box (arg 1, 397c at 18,c 112x75) or the top
  * line (arg 2, at 8,0 130x9) is kept, then put back (3981) */
 enum {
@@ -29,7 +33,8 @@ enum {
     EP_EV_WAIT,
     EP_EV_MUSIC,
     EP_EV_KEEP,
-    EP_EV_PUT_BACK
+    EP_EV_PUT_BACK,
+    EP_EV_FLIP
 };
 
 typedef struct {

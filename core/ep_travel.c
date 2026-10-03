@@ -206,14 +206,15 @@ void ep_jump_missions(ep_game *g)
         }
 }
 
-/* 74e3: 50 frames of rings (the view cleared, the message, the crosshair and the frame wait
- * are the frontend's) */
+/* 74e3: 50 frames of rings (the crosshair, 4f34, is the frontend's) */
 static void ring_frames(ep_game *g)
 {
     for (int n = 0; n < 50; n++) {
         if (++g->f.flash == 6) g->f.flash = 0; /* 3921 */
+        ep_view_clear(g);
         ep_message_tick(g);
         ep_rings_frame(g);
+        ep_view_flip(g);
         g->in.last_key = 0xff; /* 0287 */
     }
 }
@@ -302,13 +303,18 @@ void ep_tunnel_frame(ep_game *g, int k)
 {
     ep_flight *f = &g->f;
     if (++f->flash == 6) f->flash = 0; /* 3921 */
+    if (f->docked)                     /* 6923: inside, the view is the station's colour */
+        ep_render_rect(&g->render, 0x1b, 8, 9, 0x130, 0x7c);
+    else
+        ep_view_clear(g);
     if (!f->docked) {
         int drawn[EP_OBJECTS];
         ep_dust_frame(g);
         ep_world_update(g, drawn);
         ep_player_move(g);
     }
-    /* 6988, 6941: the walls (the frontend's), 301a: the frame wait */
+    /* 6988, 6941: the walls (the frontend's) */
+    ep_view_flip(g);
     g->in.last_key = 0xff;                                               /* 0287 */
     if (k == 0 && !f->docked && f->sound_device != 2 && !f->sound_off) { /* 4e5a: the launch */
         ep_event_add(g, EP_EV_SOUND, 0x11);

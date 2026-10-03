@@ -64,10 +64,12 @@ static void title_setup(ep_game *g)
     f->space_pressed = 0;
     /* af73: the credits */
     f->bar_quiet++;
+    ep_view_clear(g); /* 3130 */
     ep_key_bar(g);
     uint8_t t[512];
     int n = ep_ds_header_text(g, 0xb13a, t, sizeof t);
     ep_text_header(&g->render, t, n, 1);
+    ep_view_flip(g); /* 301a */
     f->note_ticks = 0x2ee;
     g->in.last_key = 0xff; /* 0287 */
 }
@@ -101,6 +103,7 @@ int ep_title_frame(ep_game *g)
     ep_key_bar(g);
     if (f->leave == 2) return EP_CMD_QUIT;
     if (f->sound_device == 2 && (f->sound_mode & 1)) ep_event_add(g, EP_EV_MUSIC, 2); /* 4d8e */
+    ep_view_clear(g);                                                                 /* 3130 */
     /* 9f2a: the red disc, jittered (ds:108f = 1) */
     int n0 = g->circles.n;
     ep_draw_circle(&g->rng, 0xc8, 0x3c, 0x19, 1, 0, f->video == 2, &g->circles);
@@ -136,6 +139,7 @@ int ep_title_frame(ep_game *g)
     if (++f->flash == 6) f->flash = 0; /* 3921: the flashing colour */
     int drawn[EP_OBJECTS];
     ep_world_update(g, drawn); /* 4154 */
+    ep_view_flip(g);           /* 301a */
     int r = ep_commands(g);
     if (r != EP_CMD_STAY) return r;
     return f->space_pressed ? EP_CMD_START : EP_CMD_STAY;

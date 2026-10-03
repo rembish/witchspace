@@ -9,8 +9,8 @@
  * list cycles: it closes in by 80 a frame down to the type's closest distance, holds for 120
  * frames, backs off by 100 a frame to 5000 and is replaced by the next type. The disc is a
  * jittered circle, so the title steps the main RNG. The commands are read as in flight; space
- * starts the game (EP_CMD_START: ep_start_game). The flip (301a: two ticks after the last
- * one) is the caller's.
+ * starts the game (EP_CMD_START: ep_start_game). The frame wait before the flip (301a: two
+ * ticks after the last one) is the caller's.
  */
 #ifndef EP_TITLE_H
 #define EP_TITLE_H

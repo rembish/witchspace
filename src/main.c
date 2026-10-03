@@ -112,9 +112,8 @@ int main(int argc, char **argv)
             g.render.nprim = g.render.ntext = 0;
             g.circles.n = 0;
             g.nevents = 0;
-            ep_title_frame(&g);
             if (g.clock < g.flip + 2) g.clock = g.flip + 2;
-            g.flip = g.clock;
+            ep_title_frame(&g);
         }
         if (g.flip + 2 <= ticks) g.flip = g.clock = ticks; /* far behind (window dragged): skip */
 

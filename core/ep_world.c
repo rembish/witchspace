@@ -24,6 +24,19 @@ void ep_event_add(ep_game *g, uint8_t kind, uint16_t arg)
     }
 }
 
+void ep_view_clear(ep_game *g)
+{
+    ep_render_rect(&g->render, 0, 8, 9, 0x130, 0x7c);
+    ep_render_sprite(&g->render, 0x00, 0x60, 0xa0);
+    ep_render_sprite(&g->render, 0x33, 0x128, 0x9d);
+}
+
+void ep_view_flip(ep_game *g)
+{
+    g->flip = g->clock;
+    ep_event_add(g, EP_EV_FLIP, 0);
+}
+
 void ep_output_begin(ep_game *g)
 {
     g->render.nprim = 0;

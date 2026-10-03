@@ -15,6 +15,7 @@ void ep_frame_before_ai(ep_game *g)
 {
     if (++g->f.flash == 6) g->f.flash = 0; /* 3921 */
     ep_missile_lock(g);
+    ep_view_clear(g); /* 3130 */
     ep_dashboard_tick(g);
     ep_dust_frame(g);
     int drawn[EP_OBJECTS];
@@ -33,6 +34,7 @@ void ep_frame_from_ai(ep_game *g)
     ep_controls(g);
     ep_collisions(g);
     ep_tribbles_tick(g);
+    ep_view_flip(g); /* 301a */
 }
 
 /* 6b71: (0, 0, 40) turned the way the ship flies (the view, then the attitude) */

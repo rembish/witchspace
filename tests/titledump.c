@@ -34,9 +34,8 @@ int main(void)
         g.render.ntext = 0;
         g.circles.n = 0;
         g.nevents = 0;
+        if (g.clock < g.flip + 2) g.clock = g.flip + 2; /* 301a waits two ticks after the last flip */
         ep_title_frame(&g);
-        if (g.clock < g.flip + 2) g.clock = g.flip + 2; /* 301a: two ticks after the last flip */
-        g.flip = g.clock;
         printf("%u %u %u %u %u %u %u %u %lu %lu ", g.rng.w[0], g.rng.w[1], g.rng.w[2], g.rng.w[3],
                g.f.title_ship, g.f.title_hold, g.f.title_list - 0xb263, g.f.flash, (unsigned long)g.clock,
                (unsigned long)g.flip);
