@@ -113,7 +113,15 @@ frame from a040 back to a040, or out to docking, a screen or the title), `frame`
 - A bar slot can only hold `ff` (redraw marker) before 0299 runs, never at 03c0.
 - The player's missile copies the 64 bytes at DI (stale): slot 20 where the collision loop
   stops, unless Tribble sprites moved DI (not reproduced).
-- DL at the AI is approximated (10h after the crosshair; otherwise the drawing code's).
-- The docking computer divides by zero closer than one step to its docking point (the
-  divide-error resume is stale); its roll match stores the 11-bit sign-extended angle.
+- DL at the AI is approximated: 10h after the crosshair (the MCGA blit leaves the sprite's
+  width, 16), otherwise the value the drawing code last left. The harness must let the blit
+  (3411) run, or DL stays 3fh from 4f44.
+- The docking computer divides by zero closer than one step to its docking point (a969:
+  m < speed gives BX = 0). The divide error resumes at the stale `ds:01f8`, usually the
+  compass's (48c9/48e7): the compass's tail runs with stray registers, draws a sprite and
+  returns past the rest of the step. The core divides by 1 instead. Its roll match stores the
+  11-bit sign-extended angle.
+- `find_nearest` (5fe1) keeps the caller's BP when no system lies in the chart's window: on
+  the find and home commands (60a3) it is mostly 140h (the glyph routine's row stride),
+  sometimes 30a8h/3088h/3108h. The core picks system 0.
 
