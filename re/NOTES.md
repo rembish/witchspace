@@ -105,3 +105,22 @@ Same scheme as the original Elite, with Elite Plus's own formulas for the system
   | description seeds `8351/8353` | `w0^w1`, `w0^w1^w2` |
 - Chart position (`5e95` → `ds:8318/8319`): x = w1hi, y = w0hi / 2 (galaxy chart).
 - Checked: `re/emu/galaxytest.py` compares all 8 × 256 systems with `core/ep_galaxy.c`.
+
+## Copy protection (not ported)
+
+"Please type in the word at the following location in the Elite+ Novella 'Imprint'" — page,
+paragraph, line, word.
+
+- Picked once at start-up at the end of `load_grf` (`31f6`, from `entry`): `32b8` makes
+  **one RNG step**, mixes the new state into a count, walks the 3-byte records at
+  `ds:5070` (wrapping at a 0 byte), and unpacks the chosen record into page `ds:0a83`
+  (6 bits), paragraph `0a91`, line `0a99`, word `0aa1` (3 bits each) and a 9-bit expected
+  hash at `ds:09d9`. All of these stores use obfuscated `[di±disp]` addresses.
+- Asked in `init_screens` (`1415`): digits converted in place, prompt at `ds:09db`, word
+  typed by `0d9d`. Hash of the typed letters: `h = (2h + (c − 'A')) & 1ff`.
+- Effect: a `ret` (`c3 00`) is written over the first instruction of the menu routine at
+  `03ad` (reached from `032a 0332 0363 0367 039b`). In this copy the store is
+  unconditional (`mov bp,[09d9]` is immediately overwritten by `mov bp,00c3`, then four
+  `nop`s where the comparison presumably was), so any answer passes. **[verify]** what `03ad`
+  does when it is not patched, i.e. what a wrong answer costs.
+- The port leaves the protection out but keeps the RNG step, and treats `03ad` as `ret`.

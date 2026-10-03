@@ -44,3 +44,10 @@ ds:834d sys_productivity
 ds:834f sys_radius
 ds:8351 sys_desc_seed
 ds:b1bb title_ship_type
+31f6 load_grf  # reads ELITE.GRF, then picks the protection question (one RNG step)
+32b8 pick_protection_question
+0d9d input_word
+03ad protection_target  # first word overwritten with c3 00 (ret) after the protection prompt
+ds:09d9 protection_hash
+ds:0a83 protection_page
+ds:5070 protection_records
