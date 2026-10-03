@@ -129,3 +129,9 @@ ds:01f8 div_error_resume
 433c planet_to_camera
 7e82 remove_object
 6d26 set_rot_slot
+2ab9 draw_circle
+2cf4 outline_span
+14b0 span_jitter  # main RNG step per span
+1507 span_clip
+1514 draw_span
+4694 apparent_size

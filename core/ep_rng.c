@@ -3,7 +3,7 @@
 
 ep_rng ep_rng_init(void)
 {
-    ep_rng r = {{0x1234, 0xdfab, 0x5678, 0xf2e7}};
+    ep_rng r = { { 0x1234, 0xdfab, 0x5678, 0xf2e7 } };
     return r;
 }
 

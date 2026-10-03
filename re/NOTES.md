@@ -268,3 +268,25 @@ the mode 13h screen with the DAC.
   per frame in slot 2 (`ds:775e`) in front of a planet. MCGA palette cycling once per
   retrace in `3b3e` (colours from a1h, `ds:1444`); the title picture has its own palette
   (`ds:1744`, loaded at `3b7f`), which is why `grf.py` shows it with wrong colours.
+
+## Circles (planets, sun) and the RNG in rendering
+
+- `draw_circle` (`2ab9`): bx = x, cx = y (3D view pixels, 304 × 124), dx = r. Rejected if
+  r ∉ 1..1efh or the circle is entirely off the view (`2a8f`, `2aa4`). Colour via
+  `ds:1ee9` → `ds:108a`/`108e`. Midpoint circle into a table of 2r spans on the stack
+  (`2b1d`: four write pointers `109a/109c/109e/10a0` filling top, middle and bottom), then
+  rows from `y − (r − r/8)`: off-view rows only advance; of the others, the row where
+  `(count & 7) = 3` is dropped (7/8 aspect, it does not advance); spans clipped to 0..303
+  and passed to `[107e]`.
+- `[107e]` = `1514` (plain span) or, when the detail mask `ds:108f` ≠ 0, `14b0`: one **main
+  RNG step**, the old A words masked jitter the span (`x −= hi & m`, `w += (hi & m) + (lo &
+  m)`), clipped again (`1507`), then `1514` (width 0 draws one pixel). Planets set the mask
+  to 1, 3 or 7 by apparent size (`4581`), so every planet span drawn steps the game's RNG:
+  the core reproduces the span count exactly.
+- Outline mode (`ds:1091`, `2c70`): first row, then per row the left and right edge steps
+  from the row above, then the last row (not if only one row), each through `2cf4` (one row
+  up, view range, no clipping: off-view segments are dropped).
+- Main RNG (`ds:0205..020b`, `core/ep_rng.c`): A = `0205:0207`, B = `0209:020b`; step
+  `A ← A + B`, `B ← swap(A_old)` (`0209` = old low, `020b` = old high).
+- Checked: `re/emu/circletest.py` (random circles on and off the view, all masks, outline
+  mode, random RNG states): spans and the RNG state afterwards.
