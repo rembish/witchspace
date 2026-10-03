@@ -277,10 +277,16 @@ int main(int argc, char **argv)
             printf("end\n");
         } else if (!strcmp(argv[1], "launch")) {
             ep_launch(&g);
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
             printf("end\n");
         } else if (!strcmp(argv[1], "dock")) { /* 6864 alone: the tunnel, docking or not */
             ep_tunnel_start(&g);
             for (int k = 0; k < 20; k++) ep_tunnel_frame(&g, k);
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "loop")) {
             g.test_dl_force = 1;
             g.test_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
