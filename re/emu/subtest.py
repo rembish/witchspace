@@ -100,7 +100,8 @@ ROUTINES = {
     "mouse": (0x0779, {}, {}),
     "key_event": (0x0215, {}, {}),
     "title_session": (0x9F21, {}, {0xA004: "start", **{a: "end" for a in (  # a screen up
-        0x0480, 0x0DF6, 0x0945, 0x08E4, 0x0AAC, 0x0AEF, 0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0xA040)}}),
+        0x0480, 0x0DF6, 0x0945, 0x08E4, 0x0AAC, 0x0AEF, 0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0xA040,
+        0x0694, 0x05E5, 0x0ED5)}}),
 }
 
 
@@ -1173,8 +1174,7 @@ def run_original(image, addr, regs, exits=None):
         sounds.append(f"event {EV_FLIP}:0")
     for at, kind in ((0x397C, 7), (0x3981, 8)):  # the screen under a box or the top line kept, put back
         e.hook(at, lambda e, r, kind=kind: sounds.append(f"event {kind}:{1 if r['ax'] == 0x18 else 2}"))
-    if NAME in ("arrive", "countdowns", "commands"):  # the crosshair: frontend's
-        e.hook(0x4F34, lambda e, r: None)
+    if NAME in ("arrive", "countdowns", "commands"):
         e.hook(0x3130, view_clear)
         e.hook(0x301A, flip)
     if NAME == "key_bar":  # icon redraws
@@ -1200,18 +1200,14 @@ def run_original(image, addr, regs, exits=None):
                     sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
             e.hook(0x37BD, cmd_icon)
         done = "cmd 2" if NAME == "commands" else "frame 2"
-        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0x0DF6, 0x0AAC, 0x0AEF, 0x08E4):  # screens up
+        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A, 0x8AFA, 0x0DF6, 0x0AAC, 0x0AEF, 0x08E4,
+                   0x0694, 0x05E5, 0x0ED5):  # screens up
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
                           begin=CS * 16 + at, end=CS * 16 + at)
         paused = "cmd 3" if NAME == "commands" else "frame 4"
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(paused), mu.emu_stop()),
                       begin=CS * 16 + 0x0480, end=CS * 16 + 0x0480)  # the pause menu is up
         intr_handlers.append(fake_dos({}, []))  # no commander files
-        for stub in (0x0674, 0x0736, 0x0779):  # not reconstructed yet
-            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
-                sounds.append(f"event {EV_UNPORTED}:{stub}"),
-                left.append("frame 1" if stub == 0x6864 else done), mu.emu_stop()),
-                begin=CS * 16 + stub, end=CS * 16 + stub)
     if NAME in ("frame", "loop", "launch", "dock"):
         e.hook(0x3130, view_clear)
         e.hook(0x301A, flip)
@@ -1229,7 +1225,7 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "message", "dashboard", "update_objects", "launch", "dock"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "message", "dashboard", "update_objects", "launch", "dock", "arrive", "countdowns", "loop"):
         def sprite_or_icon(e, r):
             sp = SS * 16 + e.mu.reg_read(UC_X86_REG_SP)
             if e.mu.mem_read(sp, 2) == b"\x15\x03" or e.mu.mem_read(sp, 2) == b"\xce\x37" and e.mu.mem_read(sp + 8, 2) == b"\x15\x03":  # the bar's (0312, through 37bd on EGA/VGA)
@@ -1355,10 +1351,6 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x028D, lambda e, r: None)
         e.hook(0x3130, view_clear)
         e.hook(0x301A, flip)
-        for stub in (0x0674, 0x0736, 0x0779):  # not reconstructed yet
-            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
-                sounds.append(f"event {EV_UNPORTED}:{stub}"), left.append("end"), mu.emu_stop()),
-                begin=CS * 16 + stub, end=CS * 16 + stub)
     if NAME == "chart_session":  # a key and the arrows held at each pass (5c80, 595a), 12 passes
         ckeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
         carrows = list(image[DS * 16 + 0xFF20:DS * 16 + 0xFF2C])
@@ -1412,7 +1404,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "dashboard", "launch", "dock", "define_keys", "joystick", "mouse"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "dashboard", "launch", "dock", "define_keys", "joystick", "mouse", "arrive", "countdowns", "loop"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
@@ -1455,8 +1447,6 @@ def run_original(image, addr, regs, exits=None):
         left.append("cmd 0")
     if NAME == "tunnel" and not left:
         left.append("end 0")
-    if NAME in ("buy", "sell", "equip", "arrive", "countdowns"):  # the screens' drawing is the frontend's
-        prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds + written
 
 
@@ -1484,7 +1474,7 @@ def main():
         open(inf, "wb").write(before)
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
         got, got_prims = open(outf, "rb").read(), out.splitlines()
-        if NAME in ("loop", "commands"):  # drawing is checked per subsystem and in "frame"; here state and events
+        if NAME in ("commands",):  # drawing is checked per screen; here state and events
             want_prims = [l for l in want_prims if l.startswith(("event", "frame", "cmd"))]
             got_prims = [l for l in got_prims if l.startswith(("event", "frame", "cmd"))]
         diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]]

@@ -170,6 +170,9 @@ int main(int argc, char **argv)
             printf("cmd %d\n", ep_commands(&g));
         } else if (!strcmp(argv[1], "countdowns")) {
             ep_countdowns(&g);
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "market_session")) { /* the screen, then 12 passes, a key each */
             ep_market_screen(&g);
             for (int k = 0; k < 12; k++) {
@@ -323,7 +326,11 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[1], "loop")) {
             g.test_dl_force = 1;
             g.test_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
-            printf("frame %d\n", ep_flight_frame(&g));
+            int r = ep_flight_frame(&g);
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
+            printf("frame %d\n", r);
         } else if (!strcmp(argv[1], "frame")) {
             ep_key_bar(&g);
             ep_frame_before_ai(&g);
@@ -334,6 +341,9 @@ int main(int argc, char **argv)
                 printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "arrive")) {
             ep_arrive(&g);
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
         } else if (!strcmp(argv[1], "jump_missions")) {
             ep_jump_missions(&g);
         } else if (!strcmp(argv[1], "witchspace")) {
