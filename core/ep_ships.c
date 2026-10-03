@@ -245,8 +245,22 @@ ep_object *ep_free_ship_slot(ep_game *g)
     return NULL;
 }
 
+/* 80ae, else 80cb: a slot for something new; with none free, the first one off the scanner,
+ * else one of 4..19 at random is removed */
+ep_object *ep_claim_slot(ep_game *g)
+{
+    ep_object *s = ep_free_ship_slot(g);
+    if (s) return s;
+    int n = (uint8_t)(g->space.ship_slots - 3);
+    for (int i = 3; i < 3 + n && i < EP_OBJECTS; i++)
+        if (!(g->space.obj[i].b[EP_OBJ_FLAGS1E] & 2)) return &g->space.obj[i];
+    s = &g->space.obj[4 + (ep_flight_random(g) >> 8 & 0xf)];
+    s->b[EP_OBJ_FLAGS] &= 0xfe;
+    return s;
+}
+
 /* 8183: a free debris slot, else the oldest (the last of equals) */
-static ep_object *debris_slot(ep_game *g)
+ep_object *ep_debris_slot(ep_game *g)
 {
     int n = g->space.debris_slots;
     for (int i = 20; i < 20 + n && i < EP_OBJECTS; i++)
@@ -309,7 +323,7 @@ void ep_explode(ep_game *g, ep_object *o)
     f->exploding_station = type_of(o) <= 1;
     int mining = f->mining == 1;
     for (int n = o->b[0x2d]; n > 0; n--) {
-        ep_object *p = debris_slot(g);
+        ep_object *p = ep_debris_slot(g);
         if (!p) break;
         memcpy(p->b, o->b, sizeof p->b);
         p->b[0x17] = 0;

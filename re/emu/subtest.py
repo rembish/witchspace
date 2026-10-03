@@ -76,6 +76,7 @@ ROUTINES = {
     "select_system": (0x5EE8, {}, {}),
     "arrive": (0x72D8, {}, {}),
     "frame": (0xA040, {}, {0xA073: "end"}),
+    "loop": (0xA040, {"di": 0x7BDE}, {0xA012: "frame 1", 0x9E80: "frame 3"}),
     "key_bar": (0x0299, {}, {}),
     "commands": (0x03C0, {"di": 0x7BDE}, {0xA040: "cmd 1"}),  # DI as the frame leaves it
     "countdowns": (0xA0ED, {}, {}),
@@ -247,7 +248,7 @@ def jump_world(img, rng):
             w(0x85DD + 3 * k, rng.choice([0, 6, 0x13, 0x14, 0x80, 0x95, 0x96]))
     if rng.random() < 0.3:  # the flight generator about to misjump
         for j in range(3):
-            w(0x830F + 2 * j, rng.randrange(4), 2)
+            w(0x830F + 2 * j, rng.randrange(1, 4), 2)  # never all zero (it would stay 0)
 
 
 def bar_world(img, rng):
@@ -289,7 +290,46 @@ def command_world(img, rng):
     w(0xB0E1, 0x76DE + 0x40 * rng.randint(2, 19), 2)  # a locked missile has a target
     if rng.random() < 0.3:
         for j in range(3):
-            w(0x830F + 2 * j, rng.randrange(4), 2)
+            w(0x830F + 2 * j, rng.randrange(1, 4), 2)  # never all zero (it would stay 0)
+
+
+def autopilot_world(img, rng):
+    """The docking computer in any of its states, the station around."""
+    if rng.random() < 0.3:
+        return
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0xAF14, 1)
+    w(0xAF17, rng.randrange(13))
+    w(0xAF5B, rng.choice([0, 1]))
+    w(0xAF59, rng.randrange(0x800), 2)
+    w(0xAF56, rng.choice([0, 4, 8, 0x14, 0x30, 2]), 2)
+    b = 0x76DE + 0x80
+    w(b, (rng.choice([0, 1]) << 1) | 1)
+    r = rng.choice([300, 700, 2000, 5000, 9000])
+    for k in range(3):
+        v = rng.randint(-r, r) if k < 2 else rng.choice([rng.randint(-r, r), -rng.randint(0x200, 0x400), -0x28A, -0x289, -0x3E8])
+        w(b + 4 + 2 * k, v, 2)
+        w(b + 1 + k, 0xFF if v < 0 else 0)
+    w(b + 0x0E, rng.randrange(0x800), 2)
+    w(0x76DC, rng.randrange(0x800), 2)
+    step = img[DS * 16 + 0xAF17]
+    sp = rng.choice([4, 8, 0x14, 0x30])
+    if step == 4 and rng.random() < 0.7:  # within a step or two of the docking point
+        w(0xAF56, sp, 2)
+        off = [rng.randint(-8, 8), rng.randint(-8, 8), rng.randint(0x34, 0x70)]  # beyond a step at any speed
+        for k in range(3):
+            v = off[k] - (0x7D0 if k == 2 else 0)
+            w(b + 4 + 2 * k, v, 2)
+            w(b + 1 + k, 0xFF if v < 0 else 0)
+    if step == 8 and rng.random() < 0.7:  # around the slot
+        v = -rng.choice([0x288, 0x289, 0x28A, 0x28B, 0x3E7, 0x3E8, 0x500])
+        w(b + 8, v, 2)
+        w(b + 3, 0xFF)
+    if step in (2, 6, 9, 0xA, 0xB) and rng.random() < 0.7:  # rolls nearly matched
+        roll = rng.randrange(0x800)
+        w(0x76DC, roll, 2)
+        w(0xAF59, roll + rng.randint(-0x15, 0x15), 2)
+        w(b + 0x0E, roll + rng.choice([0, 0x400]) + rng.randint(-0x0C, 0x0C), 2)
 
 
 def arrival_world(img, rng):
@@ -325,7 +365,7 @@ def tribble_world(img, rng):
             w(0x8379 + 2 * k, rng.choice([0, 1, 5]))
     if rng.random() < 0.4:  # the main generator about to give small numbers
         for j in range(4):
-            w(0x0205 + 2 * j, rng.randrange(0x30), 2)
+            w(0x0205 + 2 * j, rng.randrange(1, 0x30), 2)
 
 
 def docking_approach(img, rng):
@@ -496,7 +536,7 @@ def ai_handlers(img, rng):
                 w(b3 + 1 + j, 0xFF if v < 0 else 0)
     if rng.random() < 0.35:  # a generator about to give small numbers: every chance gate opens
         for j in range(3):
-            w(0x830F + 2 * j, rng.randrange(4), 2)
+            w(0x830F + 2 * j, rng.randrange(1, 4), 2)  # never all zero (it would stay 0)
     w(0x836B, rng.choice([0, 4, 5, 9, 10, 39, 40, 0xFB, 0xFF]))
     w(0x836C, rng.choice([0, 2, 3, 0xFF]))
     w(0x83AA, rng.choice([0, 0, 1]))
@@ -544,6 +584,9 @@ FUZZ = {
     "commands": [(0, bar_world), (0, command_world), (0, ship_in_sights)],
     "countdowns": [(0, jump_world), (0xAE60, [0, 0, 1, 2, 10, 11]), (0xAE61, [1, 1, 2, 10]), (0xAE25, [0, 1, 5]),
                    (0xB3D5, [0, 0, 1, 2, 7, 15, 0x28]), (0x54C8, [0x100, 0x2FE, 0x2FF, 0x3FF]), (0, ai_world)],
+    "loop": [(0, ai_handlers), (0, autopilot_world), (0, dust_world), (0, ship_in_sights), (0, bar_world), (0, command_world),
+             (0x76BD, [0, 0, 0, 1]), (0xB126, [0, 0, 1, 2, 0x3C]), (0x839C, [0, 3]), (0x7613, [0, 0, 0, 1]),
+             (0xAE23, [0, 0, 1, 2])],
     "frame": [(0, ai_handlers), (0, dust_world), (0, ship_in_sights), (0, tribble_world), (0, dashboard_world),
               (0x54CA, [0, 0, 1, 2]), (0x020D + 0x39, [0, 0, 0x80]), (0x8365, [0, 1, 0xF]), (0x020D + 0x48, [0, 0x80]),
               (0x020D + 0x50, [0, 0x80])],
@@ -571,7 +614,7 @@ FUZZ = {
                    (0x54C4, [0, 10, 0x80, 0xFF]), (0x54C8, [0, 0x10, 0x200, 0x3FF])],
     "enemy_fire": [(0, attacker), (0x7612, [1, 1, 1, 0]), (0x7681, [0, 0x80]), (0x54C4, [0, 5, 14, 15, 16, 0xFF]),
                    (0x54C5, [0, 5, 14, 15, 16, 0xFF]), (0x54C8, [0, 1, 0x10, 0x3FF])],
-    "controls": [(0x020D + 0x48, [0, 0x80, 0x80]), (0x020D + 0x50, [0, 0x80, 0x80]),
+    "controls": [(0, autopilot_world), (0x020D + 0x48, [0, 0x80, 0x80]), (0x020D + 0x50, [0, 0x80, 0x80]),
                  (0x020D + 0x4B, [0, 0x80, 0x80]), (0x020D + 0x4D, [0, 0x80, 0x80]),
                  (0x020D + 0x34, [0, 0x80, 0x80]), (0x020D + 0x33, [0, 0x80, 0x80]),
                  (0x09D1, [0, 1, 2, 0x16, 0x17, 0xE9, 0xEA, 0xFF, 0x0B, 0xF5]),
@@ -647,15 +690,27 @@ def run_original(image, addr, regs, exits=None):
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
         e.hook(0x37BD, icon)
-    if NAME == "commands":
-        e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
+    if NAME == "loop":  # back at the top of the loop: the frame is over
+        visits = []
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (visits.append(1), len(visits) > 1 and (
+            left.append("frame 0"), mu.emu_stop())), begin=CS * 16 + 0xA040, end=CS * 16 + 0xA040)
+    if NAME in ("loop", "frame"):  # bar icons
+        def bar_icon(e, r):
+            if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":
+                sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
+        e.hook(0x37BD, bar_icon)
+    if NAME in ("commands", "loop"):
+        if NAME == "commands":
+            e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
+        done = "cmd 2" if NAME == "commands" else "frame 2"
         for stub in (0x9048, 0x8BEA, 0x5AC0, 0x96DE, 0x8880, 0x5DC2, 0x6189, 0x5D9F, 0x924A, 0x07AA, 0x08AB, 0x0674,
                      0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5, 0x9781, 0x932F, 0x9563,
-                     0x0425, 0xA23B):  # screens not reconstructed yet
+                     0x0425, 0xA23B) + ((0x6864,) if NAME == "loop" else ()):  # not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
-                sounds.append(f"event {EV_UNPORTED}:{stub}"), left.append("cmd 2"), mu.emu_stop()),
+                sounds.append(f"event {EV_UNPORTED}:{stub}"),
+                left.append("frame 1" if stub == 0x6864 else done), mu.emu_stop()),
                 begin=CS * 16 + stub, end=CS * 16 + stub)
-    if NAME == "frame":
+    if NAME in ("frame", "loop"):
         for stub in (0x301A, 0x3130):
             e.hook(stub, lambda e, r: None)
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
@@ -705,7 +760,7 @@ def main():
             image = fuzz(image, rng)
         before = image[DS * 16:DS * 16 + 0x10000]
         want, want_prims = run_original(image, addr, regs, exits)
-        if NAME == "frame":  # the C side gets the original's DL at the AI
+        if NAME in ("frame", "loop"):  # the C side gets the original's DL at the AI
             before = before[:0xFF00] + bytes([FRAME_DL[0]]) + before[0xFF01:]
             want = want[:0xFF00] + bytes([FRAME_DL[0]]) + want[0xFF01:]
             want_prims = [l for l in want_prims if l != "end"]
@@ -713,9 +768,9 @@ def main():
         open(inf, "wb").write(before)
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
         got, got_prims = open(outf, "rb").read(), out.splitlines()
-        if NAME == "frame":  # drawing is checked per subsystem; here the state and the events
-            want_prims = [l for l in want_prims if l.startswith("event")]
-            got_prims = [l for l in got_prims if l.startswith("event")]
+        if NAME in ("frame", "loop"):  # drawing is checked per subsystem; here the state and the events
+            want_prims = [l for l in want_prims if l.startswith(("event", "frame"))]
+            got_prims = [l for l in got_prims if l.startswith(("event", "frame"))]
         diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]]
         for i in range(0x10000):
             if not mask[i] and want[i] != before[i] and not any(a <= i <= b for a, b in SCRATCH):

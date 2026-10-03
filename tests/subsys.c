@@ -84,7 +84,12 @@ int main(int argc, char **argv)
             printf("cmd %d\n", ep_commands(&g));
         } else if (!strcmp(argv[1], "countdowns")) {
             ep_countdowns(&g);
+        } else if (!strcmp(argv[1], "loop")) {
+            g.test_dl_force = 1;
+            g.test_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
+            printf("frame %d\n", ep_flight_frame(&g));
         } else if (!strcmp(argv[1], "frame")) {
+            ep_key_bar(&g);
             ep_frame_before_ai(&g);
             g.f.reg_dl = ds[0xff00]; /* the original's DL at 77e0, passed in a spare byte */
             ep_frame_from_ai(&g);

@@ -2,6 +2,7 @@
 #include "ep_flight.h"
 
 #include "ep_combat.h"
+#include "ep_dust.h"
 
 /* 7129: the warnings, checked in turn from the one after the last shown */
 static void warnings(ep_game *g)
@@ -235,6 +236,8 @@ void ep_player_move(ep_game *g)
     }
 }
 
+static void autopilot(ep_game *g);
+
 void ep_controls(ep_game *g)
 {
     ep_flight *f = &g->f;
@@ -246,7 +249,7 @@ void ep_controls(ep_game *g)
     }
     uint16_t ax;
     if (f->autopilot) {
-        ep_event_add(g, EP_EV_UNPORTED, 0xa7de); /* docking computer */
+        autopilot(g);
         ax = f->autopilot_in;
     } else {
         uint8_t sp = (uint8_t)f->speed;
@@ -339,6 +342,212 @@ static uint16_t magnitude(int16_t x, int16_t y, int16_t z)
         d = (uint16_t)(d - odd);
     }
     return (uint16_t)(n << shift);
+}
+
+/* 67eb: two angles (2048 a turn) within tol of each other */
+static int angle_close(uint16_t a, uint16_t c, uint16_t tol)
+{
+    int16_t d = (int16_t)(((a & 0x7ff) - (c & 0x7ff)) & 0x7ff);
+    if (d & 0x400) d = (int16_t)(d | (int16_t)0xf800);
+    return ep_abs16((uint16_t)d) < tol;
+}
+
+/* |angle| of an 11-bit signed angle */
+static uint16_t angle_abs(uint16_t a)
+{
+    if (a & 0x400) a = (uint16_t)(0u - (uint16_t)(a | 0xf800));
+    return a;
+}
+
+static void ap_steer(ep_game *g, uint16_t v)
+{
+    g->f.autopilot_in = v;
+    g->f.steer = v;
+}
+
+/* the station (slot 2), the docking point 2000 in front of its slot when `ahead`, as the
+ * player sees it (6e01 with the rotation slots as they are) */
+static void station_seen(ep_game *g, int ahead, int16_t p[3])
+{
+    const ep_object *o = &g->space.obj[2];
+    for (int k = 0; k < 3; k++)
+        p[k] = (int16_t)(o->b[EP_OBJ_POS + 2 * k] | o->b[EP_OBJ_POS + 2 * k + 1] << 8);
+    if (ahead) p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
+    ep_rotate_by_player(&g->space, p);
+}
+
+/* abbe, then the roll that puts the station straight above or below (a815, a9c6) */
+static void ap_choose_roll(ep_game *g, int ahead)
+{
+    ep_space *s = &g->space;
+    for (int k = 0; k < 3; k++) s->rot[k] = ep_rot_from_angle(s->player_angle[k]);
+    int16_t p[3];
+    station_seen(g, ahead, p);
+    uint16_t t = ep_atan2((int16_t)(p[0] >> 2), (int16_t)(p[1] >> 2));
+    if (angle_abs(t) >= 0x200) t = (uint16_t)(t + 0x400);
+    g->f.ap_roll = (uint16_t)((t + s->player_angle[2]) & 0x7ff);
+}
+
+/* a861, aa0e: roll onto ap_roll */
+static int ap_roll_to(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint16_t *roll = &g->space.player_angle[2];
+    if (angle_close(*roll, f->ap_roll, 0x13)) {
+        uint16_t c = f->ap_roll & 0x7ff; /* as 67eb leaves cx: sign-extended from 11 bits */
+        *roll = (c & 0x400) ? (uint16_t)(c | 0xf800) : c;
+        ap_steer(g, 0);
+        return 1;
+    }
+    uint8_t al = 0xf7;
+    if ((uint16_t)(f->ap_roll - *roll) & 0x400) al = 9;
+    ap_steer(g, al);
+    return 0;
+}
+
+/* a8a6, aa53: pitch until the point is straight ahead; 1 once it is */
+static int ap_pitch_to(ep_game *g, int ahead, uint16_t tol, uint8_t rate)
+{
+    if (!ahead) /* abbe */
+        for (int k = 0; k < 3; k++) g->space.rot[k] = ep_rot_from_angle(g->space.player_angle[k]);
+    int16_t p[3];
+    station_seen(g, ahead, p);
+    uint16_t t = ep_atan2((int16_t)(p[1] >> 2), (int16_t)(p[2] >> 2));
+    if (!angle_close(t, 0, tol)) {
+        uint8_t al = (t & 0x400) ? (uint8_t)-rate : rate;
+        ap_steer(g, (uint16_t)(al << 8));
+        return 0;
+    }
+    ap_steer(g, (uint16_t)((uint8_t)((int16_t)t >> 1) << 8));
+    return 1;
+}
+
+static void ap_speed_up_or_down(ep_flight *f, int up)
+{
+    if (up) {
+        f->speed = (uint16_t)(f->speed + 4);
+        if (f->speed >= 0x31) f->speed = 0x30;
+    } else {
+        f->speed = (uint16_t)(f->speed - 4);
+        if (!f->speed) f->speed = 4;
+    }
+}
+
+/* a7de: the docking computer: stop, roll and pitch to face the point in front of the slot
+ * (twice), fly there, line up on the slot (twice), fly in matching the station's roll */
+static void autopilot(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_object *st = &g->space.obj[2];
+    ap_steer(g, 0);
+    switch (f->autopilot_step) {
+    case 0:
+        if (f->speed) {
+            f->speed = (uint16_t)(f->speed - 4);
+            f->moved = 1;
+            return;
+        }
+        f->autopilot_step = 1;
+        f->ap_passes = 0;
+        return;
+    case 1:
+        ap_choose_roll(g, 1);
+        f->autopilot_step = 2;
+        return;
+    case 2:
+        if (ap_roll_to(g)) f->autopilot_step = 3;
+        return;
+    case 3:
+        if (!ap_pitch_to(g, 1, 0x0f, 6)) return;
+        if (f->ap_passes != 1) {
+            f->ap_passes++;
+            f->autopilot_step = 1;
+            return;
+        }
+        f->autopilot_step = 4;
+        f->speed = 4;
+        f->moved = 1;
+        return;
+    case 4: {
+        int16_t p[3];
+        for (int k = 0; k < 3; k++)
+            p[k] = (int16_t)(st->b[EP_OBJ_POS + 2 * k] | st->b[EP_OBJ_POS + 2 * k + 1] << 8);
+        p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
+        uint16_t m = magnitude(p[0], p[1], p[2]);
+        ap_speed_up_or_down(f, m >= 0x15e);
+        uint16_t q = f->speed ? (uint16_t)(m / f->speed) : 0;
+        if (q == 1) { /* there: the last step exactly onto the point */
+            f->speed = 0;
+            f->moved = 1;
+            for (int k = 0; k < 3; k++) f->velocity[k] = p[k];
+            ep_player_move(g);
+            f->autopilot_step = 5;
+            f->ap_passes = 0;
+            return;
+        }
+        if (!q) q = 1; /* a divide error in the original (closer than one step) */
+        for (int k = 0; k < 3; k++) f->velocity[k] = (int16_t)(p[k] / (int16_t)q);
+        ep_player_move(g);
+        return;
+    }
+    case 5:
+        ap_choose_roll(g, 0);
+        f->autopilot_step = 6;
+        return;
+    case 6:
+        if (ap_roll_to(g)) f->autopilot_step = 7;
+        return;
+    case 7:
+        if (!ap_pitch_to(g, 0, 9, 3)) return;
+        if (f->ap_passes != 1) {
+            f->ap_passes++;
+            f->autopilot_step = 5;
+            return;
+        }
+        f->autopilot_step = 8;
+        f->speed = 4;
+        f->moved = 1;
+        return;
+    case 8: {
+        uint16_t z = (uint16_t)(0u - (uint16_t)(st->b[EP_OBJ_POS + 4] | st->b[EP_OBJ_POS + 5] << 8));
+        if (z < 0x28a) { /* at the slot: look ahead, match the roll */
+            f->autopilot_step = 9;
+            if (g->space.extra_angle) {
+                g->space.extra_angle = 0;
+                ep_event_add(g, EP_EV_SOUND, 4); /* 4e15 */
+            }
+            ep_dust_reset(g);
+            f->ap_flag = 1;
+            return;
+        }
+        ap_speed_up_or_down(f, z >= 0x3e8);
+        f->velocity[0] = 0;
+        f->velocity[1] = 0;
+        f->velocity[2] = (int16_t)(uint16_t)(0u - f->speed);
+        ep_player_move(g);
+        f->moved = 1;
+        return;
+    }
+    case 9: {
+        ep_player_move(g);
+        uint16_t sr = (uint16_t)(st->b[0x0e] | st->b[0x0f] << 8);
+        if (angle_close(sr, g->space.player_angle[2], 0x0b))
+            f->autopilot_step = 0x0a;
+        else if (angle_close(sr, (uint16_t)(g->space.player_angle[2] + 0x400), 0x0b))
+            f->autopilot_step = 0x0b;
+        return;
+    }
+    case 0x0a:
+    case 0x0b: {
+        ep_player_move(g);
+        uint16_t sr = (uint16_t)(st->b[0x0e] | st->b[0x0f] << 8);
+        if (f->autopilot_step == 0x0b) sr = (uint16_t)(sr + 0x400);
+        int16_t d = (int16_t)((sr & 0x7ff) - (g->space.player_angle[2] & 0x7ff));
+        ap_steer(g, (uint8_t)-(uint8_t)(d >> 1));
+        return;
+    }
+    default: return;
+    }
 }
 
 /* 6a45: near the station (slot 2): bit 0 of ds:7680; the other bits keep what the original

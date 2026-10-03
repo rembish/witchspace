@@ -113,20 +113,6 @@ void ep_key_bar(ep_game *g)
 
 /* ---- slots and launches ---- */
 
-/* 80ae, else 80cb: a slot for something new; with none free, the first one off the scanner,
- * else one of 4..19 at random is removed */
-static ep_object *claim_slot(ep_game *g)
-{
-    ep_object *s = ep_free_ship_slot(g);
-    if (s) return s;
-    int n = (uint8_t)(g->space.ship_slots - 3);
-    for (int i = 3; i < 3 + n && i < EP_OBJECTS; i++)
-        if (!(g->space.obj[i].b[EP_OBJ_FLAGS1E] & 2)) return &g->space.obj[i];
-    s = &g->space.obj[4 + (ep_flight_random(g) >> 8 & 0xf)];
-    s->b[EP_OBJ_FLAGS] &= 0xfe;
-    return s;
-}
-
 static void set16(ep_object *o, int off, uint16_t v)
 {
     o->b[off] = (uint8_t)v;
@@ -138,7 +124,7 @@ static uint16_t get16(const ep_object *o, int off) { return (uint16_t)(o->b[off]
 void ep_launch_missile(ep_game *g)
 {
     ep_space *s = &g->space;
-    ep_object *m = claim_slot(g);
+    ep_object *m = ep_claim_slot(g);
     /* 81b7 copies the 64 bytes DI points at, stale here: slot 20 as the collision loop leaves
      * it (Tribble sprites on screen move DI elsewhere: not reproduced) */
     if (m != &s->obj[20]) memcpy(m->b, s->obj[20].b, sizeof m->b);
@@ -172,7 +158,7 @@ void ep_escape_capsule(ep_game *g)
     ep_flight *f = &g->f;
     f->hyper_countdown = 0;
     f->no_crash = 0x64;
-    ep_object *hulk = claim_slot(g);
+    ep_object *hulk = ep_claim_slot(g);
     memset(hulk->b, 0, sizeof hulk->b); /* 6bbe */
     ep_ship_init(hulk, 9);              /* 7b9f: the Cobra left behind */
     hulk->b[0x33] = 0;

@@ -21,6 +21,13 @@ void ep_ship_move(ep_object *o);
 /* 80ae: the first free ship slot (3 .. ds:7fde - 1), or NULL */
 ep_object *ep_free_ship_slot(ep_game *g);
 
+/* 8183: a free debris slot (20..), else the oldest */
+ep_object *ep_debris_slot(ep_game *g);
+
+/* 80ae, else 80cb: a slot for something new; with none free, the first off the scanner, else
+ * one of 4..19 at random is removed */
+ep_object *ep_claim_slot(ep_game *g);
+
 /* 81c7: a debris particle's frame; 0 when it is gone */
 int ep_particle_update(ep_object *o);
 

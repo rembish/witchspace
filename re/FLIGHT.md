@@ -99,3 +99,21 @@ step() = main generator, returning the old A (hi, lo).
   `a510` anti-ECM (`b139`), `a314` hyperspace (needs fuel: `(fuel·10)/36` ≥ distance; cost
   `82d6` = distance·36/10), `a293` galactic hyperdrive. Return to flight (`03c0` handlers)
   skips the rest of that frame.
+
+## Ported: the whole flight loop
+
+`core/ep_frame.c` (`ep_flight_frame`, a040..a0c9), `core/ep_commands.c` (key bar 0299,
+commands 03c0, countdowns a0ed, escape capsule 6aeb, player missile 80fb, energy bomb 6ab2),
+the docking computer (a7de, in `ep_controls`) and the death (6bc9). Checked: `loop` (one
+frame from a040 back to a040, or out to docking, a screen or the title), `frame`,
+`key_bar`, `commands`, `countdowns`, `controls`. Findings:
+- `ds:8711` is "a screen other than the space view is up", not "docked".
+- `ds:b126` is the death countdown (60 frames, then the title).
+- The escape capsule sets `ae23` = 100: after 100 frames the tunnel ends at the station.
+- A bar slot can only hold `ff` (redraw marker) before 0299 runs, never at 03c0.
+- The player's missile copies the 64 bytes at DI (stale): slot 20 where the collision loop
+  stops, unless Tribble sprites moved DI (not reproduced).
+- DL at the AI is approximated (10h after the crosshair; otherwise the drawing code's).
+- The docking computer divides by zero closer than one step to its docking point (the
+  divide-error resume is stale); its roll match stores the 11-bit sign-extended angle.
+

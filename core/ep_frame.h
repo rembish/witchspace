@@ -17,7 +17,20 @@ void ep_frame_before_ai(ep_game *g);
 /* a064..a06d: AI, controls, collisions, Tribbles */
 void ep_frame_from_ai(ep_game *g);
 
-/* both halves (a040..a070, up to the docking test) */
-void ep_flight_frame(ep_game *g);
+/* 6bc9: the player's ship blows up: debris (and a canister with cargo aboard) flying the
+ * way the ship was going */
+void ep_death(ep_game *g);
+
+/* what became of the frame */
+enum {
+    EP_FRAME_NEXT = 0, /* go on flying (the next frame starts at a040) */
+    EP_FRAME_DOCKED,   /* docking succeeded (7613) or the escape capsule arrived: the station */
+    EP_FRAME_SCREEN,   /* a command opened a screen not reconstructed yet */
+    EP_FRAME_OVER      /* the death sequence is over: back to the title */
+};
+
+/* a040..a0c9: one frame of the flight loop: the key bar, both halves, then the laser, the
+ * commands, the jump drive, the countdowns, the tunnel, the energy drain and the death */
+int ep_flight_frame(ep_game *g);
 
 #endif

@@ -122,6 +122,9 @@ typedef struct {
     uint8_t escape_countdown;   /* ds:b3d5: frames to the escape capsule launch */
     uint8_t escape_digit;       /* ds:b0c1: its count as shown */
     uint8_t autopilot_step;     /* ds:af17 */
+    int16_t death_vel[3];       /* ds:76b7: the way the ship was flying when it blew up, x 40 */
+    uint16_t ap_roll;           /* ds:af59: the roll the docking computer turns to */
+    uint8_t ap_passes;          /* ds:af5b: lining-up passes done (two each) */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -139,7 +142,7 @@ typedef struct {
     uint8_t mission5_count;     /* ds:839e */
     uint8_t mission5_flag;      /* ds:839f */
     uint8_t aft_shield;         /* ds:54c5 */
-    uint8_t scoop_lock;         /* ds:b126 */
+    uint8_t scoop_lock;         /* ds:b126: frames left of the death sequence (nothing works) */
     uint8_t video;              /* ds:10bc: 0 EGA, 1 VGA, 2 MCGA */
 } ep_flight;
 
@@ -163,6 +166,8 @@ typedef struct {
     ep_render render;     /* its vertex buffer (ds:28e6) carries over between ships */
     ep_flight f;
     ep_input in;
+    /* tests: DL at the AI from the original (the core only approximates it) */
+    uint8_t test_dl_force, test_dl;
     /* output of the last update */
     ep_circle_buf circles; /* planet and sun spans */
     ep_event event[EP_MAX_EVENTS];
