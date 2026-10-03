@@ -149,6 +149,35 @@ def something_close(img, rng):
         img[DS * 16 + 0x76D8 + 2 * k:DS * 16 + 0x76DA + 2 * k] = a.to_bytes(2, "little")
 
 
+def scoop_world(img, rng):
+    """Fuel scoops fitted (mostly) and something under the ship, in or near the scoop box."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    if rng.random() < 0.2:
+        return
+    w(0x835C, rng.choice([1, 1, 1, 0]))
+    w(0xB126, rng.choice([0, 0, 0, 3]))
+    w(0x8358, rng.choice([0, 1]))
+    w(0x839C, rng.choice([0, 5, 19, 20, 34, 35, 40]))
+    for k in (9, 12, 13, 14, 15, 16):
+        w(0x8379 + 2 * k, rng.choice([0, 3, 0xF9, 0xFA, 0xFB, 0xFE]))
+    if img[DS * 16 + 0xAF14]:  # not under the docking computer (its divide-by-zero is approximated)
+        return
+    slot = rng.randint(2, 19)
+    base = DS * 16 + 0x76DE + 0x40 * slot
+    t = rng.choice([0x11, 0x11, 0x0B, 0x0B, 0x15, 0x07, 0x14, rng.randrange(30)])
+    img[base] = (t << 1) | 1
+    for k, v in enumerate((rng.randint(-160, 160), rng.choice([rng.randint(20, 240), 30, 29, 229, 230]),
+                           rng.randint(-160, 160))):
+        img[base + 4 + 2 * k:base + 6 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
+        img[base + 1 + k] = 0xFF if v < 0 else 0
+    img[base + 0x1E] = rng.choice([0, 0x10, 0x40, 0x50])
+    if rng.random() < 0.7 and NAME == "frame":  # level, looking ahead (not in the loop, where a key may
+        # turn the docking computer on)
+        for k in range(3):
+            w(0x76D8 + 2 * k, 0, 2)
+        w(0xB0DE, 0, 2)
+
+
 def dashboard_world(img, rng):
     """Gauges around the condition thresholds and the station around the safe-zone radius."""
     if rng.random() < 0.25:
@@ -904,10 +933,10 @@ FUZZ = {
     "dock": [(0x7613, [0, 1, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world), (0, ai_world)],
     "loop": [(0, ai_handlers), (0, autopilot_world), (0, dust_world), (0, ship_in_sights), (0, bar_world), (0, command_world),
              (0x76BD, [0, 0, 0, 1]), (0xB126, [0, 0, 1, 2, 0x3C]), (0x839C, [0, 3]), (0x7613, [0, 0, 0, 1]),
-             (0xAE23, [0, 0, 1, 2])],
+             (0xAE23, [0, 0, 1, 2]), (0, scoop_world)],
     "frame": [(0, ai_handlers), (0, dust_world), (0, ship_in_sights), (0, tribble_world), (0, dashboard_world),
               (0x54CA, [0, 0, 1, 2]), (0x020D + 0x39, [0, 0, 0x80]), (0x8365, [0, 1, 0xF]), (0x020D + 0x48, [0, 0x80]),
-              (0x020D + 0x50, [0, 0x80])],
+              (0x020D + 0x50, [0, 0x80]), (0, scoop_world)],
     "jump_missions": [(0, jump_world)],
     "witchspace": [(0, jump_world), (0x8316, 1), (0x8317, 1)],
     "rings": [(0, jump_world)],
