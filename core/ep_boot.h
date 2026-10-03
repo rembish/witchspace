@@ -1,10 +1,12 @@
 /* Elite Plus start-up, reconstructed from ELITE.EXE (entry 0000..00b7).
  *
- * ep_boot gives the state the title starts from (9e80): the data segment as the executable
- * loads it, the RNG seeded from the time of day (2Ch: hundredths ^ seconds ^ minutes steps,
- * 0 meaning 256), the video mode and sound device chosen, the copy protection's question
- * picked (32b8, one RNG step: a 3-byte record of ds:5070 gives page, paragraph, line, word and
- * the hash of the word), and the commander copied as the one to go back to (71b0).
+ * ep_boot gives the state the title starts from (9e80), keeping the frontend's io, wait and
+ * protection (set them first: with an AdLib the music is read through io): the data segment
+ * as the executable loads it, the RNG seeded from the time of day (2Ch: hundredths ^ seconds
+ * ^ minutes steps, 0 meaning 256), the video mode and sound device chosen, the song read
+ * (31a: ADBLUE.MID, or a Roland's BLUTEST.MID), the copy protection's question picked (32b8,
+ * one RNG step: a 3-byte record of ds:5070 gives page, paragraph, line, word and the hash of
+ * the word), and the commander copied as the one to go back to (71b0).
  *
  * The question itself (1415) is opt-in: with g->protection off it is never asked and the
  * game runs as if it was answered right. ep_protection_ask puts it up (EP_WAIT_TEXT, through

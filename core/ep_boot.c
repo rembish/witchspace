@@ -1,6 +1,7 @@
 /* Elite Plus start-up, reconstructed from ELITE.EXE (see ep_boot.h). */
 #include "ep_boot.h"
 
+#include "ep_adlib.h"
 #include "ep_dsmap.h"
 #include "ep_tables.h"
 
@@ -43,16 +44,28 @@ void ep_boot(ep_game *g, uint8_t video, uint8_t sound, uint8_t minute, uint8_t s
     static uint8_t ds[EP_DS_SIZE];
     memset(ds, 0, sizeof ds);
     memcpy(ds, ep_ds_initial, sizeof ep_ds_initial);
+    const ep_io *io = g->io; /* the frontend's settings stay */
+    ep_wait_fn wait = g->wait;
+    void *frontend = g->frontend;
+    uint8_t protection = g->protection;
     memset(g, 0, sizeof *g);
     ep_ds_load(g, ds);
+    g->io = io;
+    g->wait = wait;
+    g->frontend = frontend;
+    g->protection = protection;
     g->rng = ep_rng_init(); /* 0047 */
     ep_rng_seed(&g->rng, (uint8_t)(hundredths ^ second ^ minute));
     g->f.sound_mode = 5;                       /* 49b4 */
     memset(g->in.key, 0x80, sizeof g->in.key); /* 01bc: every key up */
     g->f.video = video;
     g->f.sound_device = sound;
-    ep_protection_pick(g);   /* 31f6 */
-    g->cmdr_saved = g->cmdr; /* 71b0 */
+    g->pit = 0x5555; /* 49b4: the game's timer interrupt */
+    g->int8 = EP_INT8_GAME;
+    if (sound != 2) g->adlib.drv[0xb5b7 - EP_ADLIB_DS] = sound == 1; /* 4ecf: an AdLib */
+    ep_protection_pick(g);                                           /* 31f6 */
+    if (sound != 2) ep_adlib_init(g);                                /* 4f03 */
+    g->cmdr_saved = g->cmdr;                                         /* 71b0 */
     /* 141b: the location's numbers as text in the question */
     ep_flight *f = &g->f;
     uint8_t n = f->prot_page[0], tens = 0x20;

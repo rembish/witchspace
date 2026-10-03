@@ -126,6 +126,8 @@ static const field fields[] = {
     F(0x8de6, f.tribble_text, 1),
     F(0x88e0, f.screen_redraw, 0),
     F(0x0991, f.menu_kept, 1),
+    F(EP_ADLIB_DS, adlib.drv, 1),
+    F(0xbe40, adlib.song, 1),
     F(0x54cc, f.dash, 1),
     F(0x6405, f.missile_blink, 0),
     F(0x45dc, f.snd_noise, 0),

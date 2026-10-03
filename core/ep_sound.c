@@ -1,6 +1,7 @@
 /* Elite Plus sound, reconstructed from ELITE.EXE (see ep_sound.h). */
 #include "ep_sound.h"
 
+#include "ep_adlib.h"
 #include "ep_tables.h"
 
 /* the sequences' data (ds:4803..): static but for the note 4e1a puts into sequence 9 */
@@ -94,21 +95,34 @@ void ep_music_start(ep_game *g)
 {
     ep_event_add(g, EP_EV_MUSIC, 2);
     g->f.music_on = 1;
-    if (speaker(g)) ep_sound(g, 0x81);
+    if (speaker(g)) {
+        ep_sound(g, 0x81);
+        return;
+    }
+    if (g->f.sound_device == 1) ep_adlib_game_timer(g); /* 1819 */
+    ep_adlib_stop(g);                                   /* 0045 */
+    g->adlib.drv[0xb5b8 - EP_ADLIB_DS] = 0;
+    if (!g->f.sound_off) ep_adlib_music(g); /* 0000 */
 }
 
 void ep_music_stop(ep_game *g)
 {
     ep_event_add(g, EP_EV_MUSIC, 1);
     g->f.music_on = 0;
-    if (speaker(g)) ep_sound(g, 0);
+    if (speaker(g))
+        ep_sound(g, 0);
+    else
+        ep_adlib_stop(g); /* 0045 */
 }
 
 void ep_music_switch(ep_game *g, uint8_t off)
 {
     ep_event_add(g, EP_EV_MUSIC, off);
     if (speaker(g) || !g->f.music_on) return;
-    if (!off) ep_music_start(g); /* the music again where it was on */
+    if (off)
+        ep_adlib_stop(g); /* 0045 */
+    else
+        ep_music_start(g); /* the music again where it was on */
 }
 
 void ep_music_again(ep_game *g)

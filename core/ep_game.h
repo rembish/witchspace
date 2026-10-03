@@ -272,6 +272,25 @@ typedef struct {
 
 typedef struct ep_game ep_game;
 
+/* the AdLib music driver's state (ep_adlib.h) */
+#define EP_ADLIB_DS      0xb5b7 /* its data: ds:b5b7..bccf */
+#define EP_ADLIB_DS_SIZE 0x719
+typedef struct {
+    uint8_t drv[EP_ADLIB_DS_SIZE];
+    uint16_t countdown; /* cs:0da7: ticks to the next event */
+    uint8_t busy;       /* cs:0da9 */
+    uint16_t divisor;   /* cs:0daa: the timer's */
+    uint16_t clock_acc; /* cs:0dac/0dae: toward the game's clock, 5555h a tick */
+    uint16_t clock_acc_hi;
+    uint16_t bios_acc;    /* cs:0db0 */
+    uint8_t left_bl;      /* BL as the frequency routine leaves it */
+    uint8_t caller_cl;    /* CL the game had when it stopped the music */
+    uint8_t song[0x2a50]; /* ADBLUE.MID, read by 003b to segment 16e4 (ds:be40), up to 1989h */
+} ep_adlib;
+
+enum { EP_INT8_GAME = 0, EP_INT8_MUSIC }; /* the timer interrupt installed */
+#define EP_MAX_OPL 8192
+
 /* Where the original busy-waits on the timer (301a: the frame shown two ticks after the last;
  * 4e88: a sound playing out), the core calls this: the frontend lets time pass, calling
  * ep_timer_tick each tick, until g->clock >= until; with show set it first shows the output so
@@ -293,8 +312,13 @@ struct ep_game {
     uint32_t clock;          /* ds:45e0: timer ticks */
     uint32_t flip;           /* ds:267c: tick count at the last frame flip */
     uint16_t speaker;        /* the PC speaker's PIT divisor (1193182 / Hz), as the sequencer set it */
-    uint8_t speaker_on;      /* port 61h: the speaker sounding */
-    ep_render render;        /* its vertex buffer (ds:28e6) carries over between ships */
+    uint16_t pit;            /* the timer's divisor (5555h for the game's own interrupt) */
+    uint8_t int8;            /* EP_INT8_* */
+    ep_adlib adlib;
+    uint8_t opl[EP_MAX_OPL][2]; /* writes to the AdLib's chip (register, value), for the frontend */
+    int nopl;
+    uint8_t speaker_on; /* port 61h: the speaker sounding */
+    ep_render render;   /* its vertex buffer (ds:28e6) carries over between ships */
     ep_flight f;
     ep_input in;
     /* output of the last update */
