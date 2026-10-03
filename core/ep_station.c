@@ -8,6 +8,7 @@
 #include "ep_combat.h"
 #include "ep_commands.h"
 #include "ep_render.h"
+#include "ep_market.h"
 #include "ep_trade.h"
 
 /* 2e6d at (x, y): the text at ds:addr */
@@ -403,6 +404,7 @@ view:
     f->station_step = ST_NONE;
     ep_status_view(g);
     f->screen_redraw = 0;
+    f->idle = EP_IDLE_STATUS;
     return EP_WAIT_NONE;
 }
 
@@ -485,4 +487,333 @@ int ep_station_key(ep_game *g, uint8_t key)
     default: break;
     }
     return arrival(g);
+}
+
+/* ---- the list (0bea..0d9a) ---- */
+
+static uint16_t menu_word(const ep_game *g, int k)
+{
+    return (uint16_t)(g->f.menu[k] | g->f.menu[k + 1] << 8);
+}
+
+static void menu_set_word(ep_game *g, int k, uint16_t v)
+{
+    g->f.menu[k] = (uint8_t)v;
+    g->f.menu[k + 1] = (uint8_t)(v >> 8);
+}
+
+/* 0d27: the k-th text of the list */
+static uint16_t list_item(const ep_game *g, uint8_t k)
+{
+    uint16_t at = menu_word(g, 2);
+    while (k) {
+        uint8_t c = ep_ds_byte(g, at++);
+        if (c == 0)
+            k--;
+        else if (c == 1)
+            at++;
+        else if (c == 2)
+            at = (uint16_t)(at + 4);
+    }
+    return at;
+}
+
+/* 0d49: a row, highlighted when it is the cursor's */
+static void list_row(ep_game *g, uint8_t row, uint16_t item)
+{
+    const uint8_t *m = g->f.menu;
+    int cur = item == menu_word(g, 4);
+    int16_t x = (int16_t)menu_word(g, 6), y = (int16_t)(menu_word(g, 8) + row * 8),
+            w = (int16_t)menu_word(g, 10);
+    ep_render_rect(&g->render, cur ? m[15] : m[13], x, y, w, 8);
+    uint8_t t[256];
+    int n = ep_ds_text(g, item, t, sizeof t);
+    if (!m[16])
+        ep_pen(&g->render, (int16_t)(x + 2), y, cur ? m[14] : m[12]);
+    else /* 2fc0 */
+        ep_pen(&g->render, (int16_t)(x + (w >> 1) - (ep_text_width(t) >> 1)), y, cur ? m[14] : m[12]);
+    ep_text(&g->render, t, n, 0);
+}
+
+void ep_list_open(ep_game *g, uint16_t colours, uint16_t selected, uint8_t rows, uint8_t cursor,
+                  uint16_t items, int16_t x, int16_t y, int16_t w)
+{
+    uint8_t *m = g->f.menu;
+    menu_set_word(g, 12, colours);
+    menu_set_word(g, 14, selected);
+    m[0] = rows & 0x7f;
+    m[16] = (uint8_t)(rows >> 7);
+    m[1] = cursor;
+    menu_set_word(g, 2, items);
+    menu_set_word(g, 6, (uint16_t)x);
+    menu_set_word(g, 8, (uint16_t)y);
+    menu_set_word(g, 10, (uint16_t)w);
+    menu_set_word(g, 4, list_item(g, cursor));
+    g->f.last_cmd_key = 0xff;
+    ep_list_poll(g, 1);
+}
+
+uint8_t ep_list_poll(ep_game *g, int mode)
+{
+    uint8_t *m = g->f.menu;
+    if (g->in.control == 1 || g->in.control == 2)
+        ep_event_add(g, EP_EV_UNPORTED, 0x0cac); /* joystick, mouse */
+    if (mode == 2) {
+        menu_set_word(g, 4, list_item(g, m[1]));
+        list_row(g, m[1], menu_word(g, 4));
+    } else if (mode == 1) {
+        for (int r = m[0]; r > 0; r--) list_row(g, (uint8_t)(r - 1), list_item(g, (uint8_t)(r - 1)));
+    }
+    uint8_t key = g->f.last_cmd_key;
+    g->f.last_cmd_key = 0xff;
+    uint8_t row = m[1];
+    if (key == 0x48 && row) {
+        row--;
+        key = 0xff;
+    }
+    if (key == 0x50 && row != (uint8_t)(m[0] - 1)) {
+        row++;
+        key = 0xff;
+    }
+    if (row != m[1]) {
+        uint16_t old = menu_word(g, 4);
+        uint8_t was = m[1];
+        menu_set_word(g, 4, list_item(g, row));
+        m[1] = row;
+        list_row(g, was, old);
+        list_row(g, row, menu_word(g, 4));
+    }
+    return key;
+}
+
+/* ---- the market ---- */
+
+void ep_market_prices(ep_game *g)
+{
+    const uint8_t *cur = &g->cmdr.b[EP_CMDR_CURRENT];
+    for (int k = 0; k < 17; k++) {
+        uint16_t buy =
+            ep_goods_price(k, cur[EP_SYSREC_GOVERNMENT], cur[EP_SYSREC_ECONOMY], cur[EP_SYSREC_TECH]);
+        g->f.prices[2 * k] = buy;
+        g->f.prices[2 * k + 1] = ep_sell_price(buy);
+    }
+}
+
+/* 8e89: a price in tenths as "123.4", from its first digit shown (up to 3 zeros blanked;
+ * the last digit moves behind the point) */
+static int price_text(uint8_t *out, uint16_t v)
+{
+    uint8_t d[5];
+    int k = digits(d, v, 3), n = 0;
+    for (int i = k; i < 4; i++) out[n++] = d[i];
+    out[n++] = '.';
+    out[n++] = d[4];
+    out[n] = 0;
+    return n;
+}
+
+/* 6f91 + 6fbc(4): a quantity, from its first digit shown */
+static int count_text(uint8_t *out, uint16_t v)
+{
+    uint8_t d[5];
+    int k = digits(d, v, 4), n = 0;
+    for (int i = k; i < 5; i++) out[n++] = d[i];
+    out[n] = 0;
+    return n;
+}
+
+static uint16_t market_random(ep_game *g) /* 9880 */
+{
+    uint16_t *w = g->market_rng;
+    uint16_t old0 = w[0], old1 = w[1], old2 = w[2];
+    w[0] = old1;
+    w[1] = old2;
+    uint16_t r = (uint16_t)(old0 + old1);
+    w[2] = (uint16_t)(old2 + r);
+    return r;
+}
+
+void ep_market_rows(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    ep_market_prices(g);
+    uint8_t *o = f->rows;
+    int at = 0;
+#define PUT(b)     (at < (int)sizeof f->rows ? (void)(o[at++] = (uint8_t)(b)) : (void)0)
+#define MOVE(x, y) (PUT(2), PUT(x), PUT((x) >> 8), PUT(y), PUT((y) >> 8))
+    uint16_t names = 0xabe0, units = 0xac82, y = 0x1d;
+    uint8_t *cargo = &g->cmdr.b[EP_CMDR_CARGO];
+    for (int k = 0; k < 17; k++) {
+        int last = k == 16;
+        uint8_t c;
+        while ((c = ep_ds_byte(g, names++)) != 0) PUT(c);
+        MOVE(0x5c, y);
+        uint16_t u = units;
+        do PUT(ep_ds_byte(g, u++));
+        while (ep_ds_byte(g, u) != ' ');
+        PUT(1);
+        PUT(0x0b);
+        uint8_t t[12];
+        int n = price_text(t, f->prices[2 * k]);
+        MOVE((uint16_t)(0x98 - ep_text_width(t)), y);
+        if (!last)
+            for (int i = 0; i < n; i++) PUT(t[i]);
+        n = price_text(t, f->prices[2 * k + 1]);
+        MOVE((uint16_t)(0xc5 - ep_text_width(t)), y);
+        for (int i = 0; i < n; i++) PUT(t[i]);
+        uint8_t offer = cargo[2 * k + 1];
+        if (!g->cmdr.b[EP_CMDR_MARKET_DRAWN]) { /* 8f5a: what is on offer, once per arrival */
+            uint16_t r = market_random(g);
+            int8_t q = (int8_t)((r & 0x1f) - 7);
+            offer = q < 0 ? 0 : (uint8_t)(q ^ (r >> 8 & 3));
+        }
+        cargo[2 * k + 1] = offer;
+        if (!last) {
+            if (!offer) {
+                MOVE(0xdf, y);
+                PUT('-');
+            } else {
+                n = count_text(t, offer);
+                MOVE((uint16_t)(0xe7 - ep_text_width(t)), y);
+                for (int i = 0; i < n; i++) PUT(t[i]);
+                u = units;
+                do PUT(ep_ds_byte(g, u++));
+                while (ep_ds_byte(g, u) != ' ');
+            }
+        }
+        PUT(1);
+        PUT(0x0e);
+        if (!cargo[2 * k]) {
+            MOVE(0x121, y);
+            PUT('-');
+        } else {
+            n = count_text(t, cargo[2 * k]);
+            MOVE((uint16_t)(0x129 - ep_text_width(t)), y);
+            for (int i = 0; i < n; i++) PUT(t[i]);
+            u = units;
+            do PUT(ep_ds_byte(g, u++));
+            while (ep_ds_byte(g, u) != ' ');
+        }
+        PUT(0);
+        while (ep_ds_byte(g, units) != ' ') units++;
+        units++;
+        y = (uint16_t)(y + 8);
+    }
+#undef MOVE
+#undef PUT
+    g->cmdr.b[EP_CMDR_MARKET_DRAWN] = 1;
+}
+
+/* 90d7: the cash line under the list */
+static void cash_line(ep_game *g)
+{
+    ep_render_rect(&g->render, 0, 0x10, 0xab, 0x120, 8);
+    text_at(g, 0x10, 0xab, 0x0e, 0x8e32);
+    g->f.list_busy = 0;
+    uint16_t a = 0x82fb;
+    while (ep_ds_byte(g, a) == ' ') a++;
+    text_at(g, 0x37, 0xab, 0x0f, a);
+    g->f.list_row = 0xff;
+}
+
+void ep_market_screen(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    f->note_ticks = 0;
+    f->screen_bits = 0;
+    f->screen_flag = 0;
+    frame(g);
+    /* the system's name and MARKET PRICES (built at ds:a410) */
+    int n = 0;
+    uint8_t c;
+    uint16_t a = 0x831f;
+    do f->rows[n++] = c = ep_ds_byte(g, a++);
+    while (c);
+    f->rows[n - 1] = ' ';
+    a = 0xad1d;
+    do f->rows[n++] = c = ep_ds_byte(g, a++);
+    while (c);
+    title(g, 0xa0, 0, 0x0f, f->rows, n);
+    ep_market_rows(g);
+    text_header(g, 0xacb4);
+    if (f->screen != 1) { /* in flight: just the prices */
+        f->screen = 2;
+        ep_list_open(g, 0x000a, 0x000a, 0x11, 0, 0xa410, 8, 0x1d, 0x130);
+        f->idle = EP_IDLE_PLAIN;
+        return;
+    }
+    ep_list_open(g, 0x000a, 0x040f, 0x11, 0, 0xa410, 8, 0x1d, 0x130);
+    cash_line(g); /* 90d7 (no note is up: 9048 cleared the time) */
+    f->idle = EP_IDLE_MARKET;
+}
+
+/* a note on the cash line for 100 ticks (974e) */
+static void note(ep_game *g, uint16_t text)
+{
+    ep_render_rect(&g->render, 0, 0x10, 0xab, 0x120, 8);
+    uint8_t t[64];
+    int n = ep_ds_text(g, text, t, sizeof t);
+    ep_pen(&g->render, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0xab, 0x0c);
+    ep_text(&g->render, t, n, 0);
+    g->f.note_ticks = 0x64;
+    g->f.list_busy = 1;
+}
+
+static void market_done(ep_game *g)
+{
+    ep_market_rows(g);
+    ep_list_poll(g, 2);
+    g->f.note_ticks = 0;
+    g->f.list_busy = 1;
+}
+
+void ep_market_buy(ep_game *g)
+{
+    uint16_t r = ep_trade_buy(g, g->f.list_row == 0xff ? -1 : g->f.list_row);
+    if (r == EP_TRADE_NOTHING) return;
+    if (r != EP_TRADE_OK) {
+        note(g, r);
+        return;
+    }
+    market_done(g);
+}
+
+void ep_market_sell(ep_game *g)
+{
+    if (ep_trade_sell(g, g->f.list_row == 0xff ? -1 : g->f.list_row) != EP_TRADE_OK) return;
+    market_done(g);
+}
+
+int ep_station_idle(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    int r;
+    switch (f->idle) {
+    case EP_IDLE_STATUS: /* 8dac */
+        f->screen_redraw = 0;
+        ep_key_bar(g);
+        r = ep_commands(g);
+        if (r == EP_CMD_STAY && f->screen_redraw) ep_status_screen(g);
+        return r;
+    case EP_IDLE_MARKET: { /* 9124 .. 915f, up to the next 9124 */
+        ep_key_bar(g);
+        r = ep_commands(g);
+        if (r != EP_CMD_STAY) return r;
+        ep_list_poll(g, 0);
+        uint8_t row = f->menu[1];
+        f->list_row = row;
+        const uint8_t *c = &g->cmdr.b[EP_CMDR_CARGO + 2 * row];
+        f->screen_bits = (uint8_t)((c[0] ? 2 : 0) | (c[1] && row != 0x10 ? 1 : 0));
+        if (f->list_busy && !f->note_ticks) cash_line(g); /* 90d7 */
+        return r;
+    }
+    default: /* the bar and the commands */ ep_key_bar(g); return ep_commands(g);
+    }
+}
+
+void ep_timer_tick(ep_game *g)
+{
+    if (g->f.paused) return;
+    g->clock++;
+    if (g->f.note_ticks) g->f.note_ticks--;
 }

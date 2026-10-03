@@ -32,10 +32,10 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary; and sound state (the core
 # reports sounds as events).
-SCRATCH = [(0x54CC, 0x54E1), (0x6405, 0x6405), (0x45E4, 0x45E5), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0xA500, 0xA7FF), (0x8D00, 0x8D4E), (0x92F9, 0x92F9), (0xA3A0, 0xA4FF), (0xACA8, 0xACB3), (0xAD2B, 0xAD2D),
-           (0x031D, 0x031E), (0x03F1, 0x03F2), (0x0980, 0x0990),
+SCRATCH = [(0x54CC, 0x54E1), (0x6405, 0x6405), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0x8D00, 0x8D09), (0x92F9, 0x92F9), (0xA3A0, 0xA40F), (0xACA8, 0xACB3), (0xAD2C, 0xAD2C),
+           (0x031D, 0x031E), (0x03F2, 0x03F2),
            (0x01F8, 0x01F9), (0x1074, 0x108E), (0x1091, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
-           (0x76D6, 0x76D7), (0x45E6, 0x45E6), (0x45E8, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
+           (0x76D6, 0x76D7), (0x45E8, 0x45FF), (0x4FE0, 0x4FE0), (0x1F15, 0x1F16)]  # 1f15: the flash colour (3921)
 
 EV_SOUND, EV_SURFACE, EV_UNPORTED = 1, 2, 3
 
@@ -78,6 +78,8 @@ ROUTINES = {
     "frame": (0xA040, {}, {0xA073: "end"}),
     "launch": (0xA027, {}, {0xA040: "end"}),
     "status": (0xA012, {}, {0x8DAC: "end"}),
+    "market": (0x9048, {}, {0x9124: "end", 0x90B7: "end"}),
+    "market_session": (0x9048, {}, {}),
     "dock": (0x6864, {}, {}),
     "loop": (0xA040, {"di": 0x7BDE}, {0xA021: "frame 1", 0x9E80: "frame 3"}),
     "key_bar": (0x0299, {}, {}),
@@ -88,8 +90,6 @@ ROUTINES = {
     "rings": (0x7499, {}, {}),
     "new_system": (0x666B, {}, {}),
     "explode": (0x7EA8, {}, {}),
-    "buy": (0x96DE, {}, {}),
-    "sell": (0x9781, {}, {}),
     "equip": (0x932F, {}, {0x94BF: "choose mount"}),
 }
 
@@ -353,6 +353,29 @@ def status_world(img, rng):
         w(0x8357 + k, rng.choice([0, 0, 1] if k else [0, 1, 4]))
     w(0x8365, rng.randrange(16))
     w(0x8366, rng.getrandbits(8))
+
+
+def market_world(img, rng):
+    """Docked or in flight, the market drawn already or not, any cargo, any economy."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0x02F9, rng.choice([1, 1, 0, 2]))
+    w(0x839D, rng.choice([0, 1]))
+    for k in range(17):
+        w(0x8379 + 2 * k, rng.choice([0, 0, 1, 7, 20, 200]))
+        w(0x837A + 2 * k, rng.choice([0, 0, 1, 9, 30, 0xFA]))
+    w(0x832C, rng.randrange(8))
+    w(0x832D, rng.randrange(8))
+    w(0x832E, rng.choice([0, 4, 9, 12, 15]))
+    for j in range(3):
+        w(0x92E0 + 2 * j, rng.getrandbits(16), 2)
+    w(0x8367, rng.choice([0, 1, 99999, 1234567]), 4)
+
+
+def market_keys(img, rng):
+    """Docked, and 12 keys: arrows, buy (F9 or 9), sell (F10 or 0), nothing."""
+    img[DS * 16 + 0x02F9] = 1
+    for j in range(12):
+        img[DS * 16 + 0xFF10 + j] = rng.choice([0xFF, 0x48, 0x50, 0x50, 0x9F, 0x9F, 0xA0, ord("9"), ord("0")])
 
 
 def arrival_dialogs(img, rng):
@@ -631,6 +654,8 @@ FUZZ = {
     "countdowns": [(0, jump_world), (0xAE60, [0, 0, 1, 2, 10, 11]), (0xAE61, [1, 1, 2, 10]), (0xAE25, [0, 1, 5]),
                    (0xB3D5, [0, 0, 1, 2, 7, 15, 0x28]), (0x54C8, [0x100, 0x2FE, 0x2FF, 0x3FF]), (0, ai_world)],
     "status": [(0, status_world), (0, arrival_dialogs)],
+    "market": [(0, market_world)],
+    "market_session": [(0, trading), (0, market_world), (0, market_keys)],
     "launch": [(0, arrival_world), (0x8711, [0, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world)],
     "dock": [(0x7613, [0, 1, 1]), (0x4801, [0, 1, 2]), (0x45E7, [0, 1]), (0, dust_world), (0, ai_world)],
     "loop": [(0, ai_handlers), (0, autopilot_world), (0, dust_world), (0, ship_in_sights), (0, bar_world), (0, command_world),
@@ -765,8 +790,11 @@ def run_original(image, addr, regs, exits=None):
         if NAME == "commands":
             e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
         done = "cmd 2" if NAME == "commands" else "frame 2"
-        for stub in (0x9048, 0x8BEA, 0x5AC0, 0x96DE, 0x8880, 0x5DC2, 0x6189, 0x5D9F, 0x924A, 0x07AA, 0x08AB, 0x0674,
-                     0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5, 0x9781, 0x932F, 0x9563,
+        for at in (0x8DAC, 0x9124, 0x90B7):  # screens that are reconstructed: up to their idle loop
+            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
+                          begin=CS * 16 + at, end=CS * 16 + at)
+        for stub in (0x5AC0, 0x8880, 0x5DC2, 0x6189, 0x5D9F, 0x924A, 0x07AA, 0x08AB, 0x0674,
+                     0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5, 0x932F, 0x9563,
                      0x0425, 0xA23B):  # screens not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
                 sounds.append(f"event {EV_UNPORTED}:{stub}"),
@@ -784,11 +812,10 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x028D, lambda e, r: None)  # the mouse driver
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: FRAME_DL.__setitem__(0, mu.reg_read(REGS["dx"]) & 0xFF),
                       begin=CS * 16 + 0x77E0, end=CS * 16 + 0x77E0)
-    if NAME in ("buy", "sell"):
-        e.call(0x97D8)
-    elif NAME == "equip":
+    if NAME == "equip":
         e.call(0x9161)
-    e.hook(0x2FC0, lambda e, r: left.append(f"result {r['si']}"))
+    if NAME == "equip":  # the result note, as the core returns it
+        e.hook(0x2FC0, lambda e, r: left.append(f"result {r['si']}"))
     def pixel(e, r):
         x = (r["ax"] + (r["ax"] >> 2) - 8) & 0xFFFF
         if x < 0x130 and r["bx"] < 0x7C:
@@ -798,7 +825,7 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status"):
+    if NAME in ("tribbles", "status", "market", "market_session"):
         def sprite_or_icon(e, r):
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":  # the bar's (0312)
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
@@ -815,7 +842,18 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x0276, key)
         e.hook(0x3BB1, lambda e, r: None)
         e.hook(0x3821, lambda e, r: None)  # the palette (waits for the retrace)
-    if NAME in ("status",):  # filled rectangles
+    if NAME == "market_session":  # a scripted key at the start of each pass (9124), 12 passes
+        keys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
+
+        def pass_start(mu, ad, sz, u):
+            if not keys:
+                left.append("end")
+                mu.emu_stop()
+                return
+            mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
+        for at in (0x9124, 0x90B7):  # docked, in flight
+            e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
+    if NAME in ("status", "market", "market_session"):  # filled rectangles
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line

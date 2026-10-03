@@ -134,6 +134,15 @@ typedef struct {
     uint8_t reward_digit;       /* ds:9972: the thousands of mission 1's reward, in its text */
     uint8_t station_step;       /* where a screen waits for a key (the original's place in the code) */
     uint8_t station_rating;     /* the promotion shown: Elite gets the ending picture */
+    uint8_t menu[0x11];         /* ds:0980: the list on screen: rows, cursor, texts, x, y, width, colours */
+    uint8_t last_cmd_key;       /* ds:03f1: the last key the commands saw (the list reads arrows there) */
+    uint16_t prices[34];        /* ds:8d0a: buying and selling price of each commodity */
+    uint8_t rows[0x3f0];        /* ds:a410: the texts of the list's rows */
+    uint8_t list_row;           /* ds:ad2b: the row picked (ff none) */
+    uint8_t list_busy;          /* ds:ad2d: a command acted on the list */
+    uint16_t note_ticks;        /* ds:45e4: timer ticks a note (an error) stays up */
+    uint8_t paused;             /* ds:45e6: the timer stands still */
+    uint8_t idle;               /* which screen's idle loop runs (EP_IDLE_*), and where in it */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
@@ -170,6 +179,7 @@ typedef struct {
     ep_space space;          /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */
     ep_rng rng;              /* ds:0205 */
     ep_seed seed;            /* ds:5503: the current system's seed (galaxy generator) */
+    uint16_t market_rng[3];  /* ds:92e0: the quantities' generator */
     uint8_t dist_text[5];    /* ds:5562: the selected system's distance as digits */
     uint32_t clock;          /* ds:45e0: timer ticks */
     uint32_t flip;           /* ds:267c: tick count at the last frame flip */

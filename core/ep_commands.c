@@ -8,6 +8,7 @@
 #include "ep_dust.h"
 #include "ep_flight.h"
 #include "ep_ships.h"
+#include "ep_station.h"
 #include "ep_tables.h"
 #include "ep_trade.h"
 #include "ep_travel.h"
@@ -529,6 +530,10 @@ static int run(ep_game *g, uint8_t id)
         return EP_CMD_STAY;
     case 0x0e: return hyperspace(g);
     case 0x0f: return galactic_jump(g);
+    case 0x02: ep_market_screen(g); return EP_CMD_SCREEN;
+    case 0x03: ep_status_screen(g); return EP_CMD_SCREEN;
+    case 0x0c: ep_market_buy(g); return EP_CMD_STAY;
+    case 0x20: ep_market_sell(g); return EP_CMD_STAY;
     case 0x23: masking(g); return EP_CMD_STAY;
     case 0x24: anti_ecm(g); return EP_CMD_STAY;
     default: ep_event_add(g, EP_EV_UNPORTED, id < 37 ? handler[id] : id); return EP_CMD_SCREEN;
@@ -541,6 +546,7 @@ int ep_commands(ep_game *g)
         uint8_t key = g->in.last_key; /* 0276 */
         if (key == 0xff) return EP_CMD_STAY;
         g->in.last_key = 0xff;
+        g->f.last_cmd_key = key; /* 03c6 */
         int slot;
         if (key == 0x20) {
             g->f.space_pressed = 1;

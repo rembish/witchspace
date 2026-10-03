@@ -97,6 +97,18 @@ int main(int argc, char **argv)
             printf("cmd %d\n", ep_commands(&g));
         } else if (!strcmp(argv[1], "countdowns")) {
             ep_countdowns(&g);
+        } else if (!strcmp(argv[1], "market_session")) { /* the screen, then 12 passes, a key each */
+            ep_market_screen(&g);
+            for (int k = 0; k < 12; k++) {
+                g.in.last_key = ds[0xff10 + k];
+                ep_station_idle(&g);
+            }
+            print_prims(&g.render);
+            printf("end\n");
+        } else if (!strcmp(argv[1], "market")) {
+            ep_market_screen(&g);
+            print_prims(&g.render);
+            printf("end\n");
         } else if (!strcmp(argv[1], "status")) {
             ep_enter_station(&g);
             int w = ep_status_screen(&g), k = 0;

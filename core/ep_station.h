@@ -34,4 +34,37 @@ void ep_status_picture(ep_game *g);
 /* 8dbc: the rating's text for a kill count */
 uint16_t ep_rating_text(const ep_game *g, uint16_t kills);
 
+/* the list on screen (0bea): colours (text low byte, back high), rows (bit 7: centred),
+ * the cursor, the texts at ds:items, position and width; all rows drawn */
+void ep_list_open(ep_game *g, uint16_t colours, uint16_t selected, uint8_t rows, uint8_t cursor,
+                  uint16_t items, int16_t x, int16_t y, int16_t w);
+
+/* 0c24: mode 1 draws every row, 2 the cursor's; then the arrow keys (48h up, 50h down)
+ * the commands saw move the cursor; returns the key unless it moved the cursor (ffh) */
+uint8_t ep_list_poll(ep_game *g, int mode);
+
+/* 97d8: each commodity's buying and selling price here (ds:8d0a) */
+void ep_market_prices(ep_game *g);
+
+/* 8ea2: the market's rows (prices, quantities on offer, what is in the hold); the first
+ * time after arriving the quantities are drawn */
+void ep_market_rows(ep_game *g);
+
+/* 9048: MARKET PRICES; at the station a list to buy from and sell to */
+void ep_market_screen(ep_game *g);
+
+/* 96de, 9781: buy or sell one of the commodity under the cursor */
+void ep_market_buy(ep_game *g);
+void ep_market_sell(ep_game *g);
+
+/* where the screens idle */
+enum { EP_IDLE_NONE = 0, EP_IDLE_STATUS, EP_IDLE_PLAIN, EP_IDLE_MARKET };
+
+/* one pass of the current screen's idle loop: the bar, the commands, the screen's own
+ * work; returns the commands' EP_CMD_* (a new screen to show: EP_CMD_SCREEN) */
+int ep_station_idle(ep_game *g);
+
+/* 4a50: one timer tick: the clock, and a note's time up */
+void ep_timer_tick(ep_game *g);
+
 #endif
