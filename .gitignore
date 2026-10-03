@@ -17,3 +17,4 @@ __pycache__/
 # Art decoded from your own original files (never committed)
 assets-local/
 re/ghidra/entries.txt
+re/emu/corpus/
