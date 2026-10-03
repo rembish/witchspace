@@ -67,6 +67,8 @@ int main(int argc, char **argv)
                 printf("choose mount\n");
             else if (r > EP_TRADE_CHOOSE_MOUNT)
                 printf("result %u\n", r);
+        } else if (!strcmp(argv[1], "dashboard")) {
+            ep_dashboard_tick(&g);
         } else if (!strcmp(argv[1], "ai")) {
             ep_ai_frame(&g);
         } else if (!strcmp(argv[1], "explode")) {

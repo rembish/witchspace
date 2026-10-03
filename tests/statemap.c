@@ -109,6 +109,8 @@ static const field fields[] = {
     F(0x7681, f.hit_from_behind, 0),
     F(0x54c4, f.fore_shield, 0),
     F(0x54c5, f.aft_shield, 0),
+    F(0x54cb, f.status, 0),
+    F(0x54c0, f.ecm_shown, 0),
     F(0x8730, f.class_count, 1),
     F(0xb138, f.ai_hold, 0),
     F(0x76b6, f.danger_gov, 0),

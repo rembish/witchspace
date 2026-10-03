@@ -84,6 +84,8 @@ typedef struct {
     uint16_t attacker;          /* ds:7610: data address of its slot */
     uint8_t hit_from_behind;    /* ds:7681: bit 7, the aft shield takes it */
     uint8_t fore_shield;        /* ds:54c4 */
+    uint8_t status;             /* ds:54cb: condition 0 red, 1 green, 2 yellow, 3 (between) */
+    uint8_t ecm_shown;          /* ds:54c0: the ECM was just used (icon) */
     uint8_t class_count[9];     /* ds:8730: objects but debris, then per AI class 0..7 */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */
     uint8_t danger_gov;         /* ds:76b6: the government for spawning (0 in witchspace) */

@@ -29,4 +29,8 @@ int ep_tunnel_tick(ep_game *g);
  * attitude angles), the velocity, and moving everything by it */
 void ep_controls(ep_game *g);
 
+/* 549f, the dashboard's state: the condition (585c), cooling, recharging and equipment loss
+ * (579d), the station zone (6a45), the ECM icon flag; the gauges are the frontend's */
+void ep_dashboard_tick(ep_game *g);
+
 #endif

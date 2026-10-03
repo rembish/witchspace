@@ -32,7 +32,7 @@ TOOL = ARGS[2] if len(ARGS) > 2 else os.path.join(HERE, "..", "..", "build", "ep
 # Scratch space the original reuses within a routine (not state): INT 0 resume address, draw
 # parameters, matrices and model temporaries, rotation temporary; and sound state (the core
 # reports sounds as events).
-SCRATCH = [(0x45E4, 0x45E5), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0xA500, 0xA7FF), (0x8D00, 0x8D4E), (0x92F9, 0x92F9), (0xA3A0, 0xA4FF), (0xACA8, 0xACB3), (0xAD2B, 0xAD2D),
+SCRATCH = [(0x54CC, 0x54E1), (0x6405, 0x6405), (0x45E4, 0x45E5), (0x92D4, 0x92DE), (0x92FA, 0x92FA), (0xA500, 0xA7FF), (0x8D00, 0x8D4E), (0x92F9, 0x92F9), (0xA3A0, 0xA4FF), (0xACA8, 0xACB3), (0xAD2B, 0xAD2D),
            (0x031D, 0x031E), (0x03F1, 0x03F2), (0x0980, 0x0990),
            (0x01F8, 0x01F9), (0x1074, 0x10BB), (0x10BD, 0x10C9), (0x28D0, 0x28E5), (0x2B66, 0x2BF5), (0x2CB1, 0x2CB2),
            (0x76D6, 0x76D7), (0x45E6, 0x45FF), (0x4FE0, 0x4FE0)]
@@ -66,6 +66,7 @@ ROUTINES = {
     "collisions": (0x66D6, {}, {}),
     "enemy_fire": (0xAE50, {}, {}),
     "ai": (0x77E0, {}, {}),
+    "dashboard": (0x549F, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "buy": (0x96DE, {}, {}),
     "sell": (0x9781, {}, {}),
@@ -114,6 +115,30 @@ def something_close(img, rng):
     angles = [a0, near(rng.choice([0, 0x400])), near(rng.choice([roll, roll + 0x400]))]
     for k, a in enumerate(angles):
         img[DS * 16 + 0x76D8 + 2 * k:DS * 16 + 0x76DA + 2 * k] = a.to_bytes(2, "little")
+
+
+def dashboard_world(img, rng):
+    """Gauges around the condition thresholds and the station around the safe-zone radius."""
+    if rng.random() < 0.25:
+        return
+    w8 = lambda a, v: img.__setitem__(DS * 16 + a, v & 0xFF)
+    near = lambda c, d: rng.randint(c - d, c + d)
+    level = rng.randrange(3)
+    energy = near((0x100, 0x200, 0x300)[level], 2)
+    img[DS * 16 + 0x54C8:DS * 16 + 0x54CA] = max(0, min(energy, 0x3FF)).to_bytes(2, "little")
+    good = [rng.choice([0, 1, rng.randrange(0x7E)]) for _ in range(5)]
+    w8(0x54C1, rng.choice([near((0xE0, 0xC0, 0x80)[level], 1), rng.randrange(0x7F)]))
+    w8(0x54C3, rng.choice([near((0x20, 0x28, 0x80)[level], 1), 0xFE]))
+    w8(0x54C4, rng.choice([near(0x80, 1), 0, 0xFF, 0x80 + good[0]]))
+    w8(0x54C5, rng.choice([near(0x80, 1), 0, 0xFF, 0x80 + good[1]]))
+    base = DS * 16 + 0x76DE + 0x80
+    img[base] = (rng.choice([0, 1, 2]) << 1) | rng.choice([1, 1, 0x81, 0])
+    big = rng.random() < 0.2
+    for k in range(3):
+        v = rng.choice([near(0x32C8, 40), -near(0x32C8, 40), rng.randint(-0x3000, 0x3000), rng.randint(-200, 200),
+                        rng.randint(-0x7FFF, 0x7FFF)]) if k == rng.randrange(3) else rng.randint(-0x1000, 0x1000)
+        img[base + 4 + 2 * k:base + 6 + 2 * k] = (v & 0xFFFF).to_bytes(2, "little")
+        img[base + 1 + k] = rng.getrandbits(8) if big else (0xFF if v < 0 else 0)
 
 
 def docking_approach(img, rng):
@@ -225,6 +250,10 @@ FUZZ = {
                    (0x7680, [0, 1]), (0x83A4, [0, 0, 1, 5, 6, 0x23, 0x24, 0x40]), (0x805A, [0, 0, 3]),
                    (0x54CA, [0, 2]), (0xAF14, [0, 1]), (0x54B9, [0, 1]), (0x54BA, [0, 2]), (0x54BB, [0, 1, 2, 3])],
     "explode": [(0, exploding), (0xAE22, [0, 0, 1]), (0x83A9, [0, 0, 1, 2]), (0x7FDF, [16])],
+    "dashboard": [(0x54C8, [0, 0xFF, 0x100, 0x1FF, 0x200, 0x2FF, 0x300, 0x3FE, 0x3FF]), (0x54C1, [0, 0x7F, 0x80, 0xBF, 0xC0, 0xDF, 0xE0]),
+                  (0x54C3, [0x1F, 0x20, 0x27, 0x28, 0x7F, 0x80, 0xFF]), (0x54C4, [0, 1, 0x7F, 0x80, 0xFF]),
+                  (0x54C5, [0, 1, 0x7F, 0x80, 0xFF]), (0x54C2, [0, 1, 2, 0x80]), (0x835F, [0, 1]), (0xB126, [0, 0, 1]),
+                  (0xAE23, [0, 0, 1]), (0x54C0, [0, 1]), (0, something_close), (0, dashboard_world)],
     "ai": [(0, ai_world), (0xB0DD, [0, 0, 1]), (0x83A4, [0, 0, 0, 5]), (0x83A9, [0, 0, 0, 3]), (0x83B3, [0, 1]),
            (0x83A7, [0, 0, 1]), (0x83AA, [0, 0, 1]), (0x83B1, [0, 1]), (0x83AB, [0, 0, 1]), (0x7680, [0, 1]),
            (0x83A0, [0, 4, 5, 6]), (0x83A2, [0, 2, 3]), (0x83B0, [0, 1]), (0x839E, [0, 5, 0x0D]),
@@ -314,10 +343,9 @@ def run_original(image, addr, regs, exits=None):
             raise
     if NAME == "tunnel" and not left:
         left.append("end 0")
-    if NAME in ("buy", "sell", "equip"):  # the screens' drawing is the frontend's
+    if NAME in ("buy", "sell", "equip", "dashboard"):  # the screens' drawing is the frontend's
         prims, spans = [], []
     return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims + spans + left + sounds
-    return bytes(e.mu.mem_read(DS * 16, 0x10000)), prims
 
 
 def main():

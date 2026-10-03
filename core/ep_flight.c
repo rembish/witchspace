@@ -1,6 +1,8 @@
 /* Elite Plus flight loop subsystems, reconstructed from ELITE.EXE (see ep_flight.h). */
 #include "ep_flight.h"
 
+#include "ep_combat.h"
+
 /* 7129: the warnings, checked in turn from the one after the last shown */
 static void warnings(ep_game *g)
 {
@@ -309,4 +311,96 @@ void ep_controls(ep_game *g)
     if (f->autopilot == 1) return;
     velocity(g);
     move_objects(g);
+}
+
+/* 6a72: an approximate |(x, y, z)| (integer square root of the high bits of the sum of
+ * squares, scaled back) */
+static uint16_t magnitude(int16_t x, int16_t y, int16_t z)
+{
+    uint32_t s = (uint32_t)((int32_t)x * x) + (uint32_t)((int32_t)y * y) + (uint32_t)((int32_t)z * z);
+    uint16_t d;
+    int shift;
+    if (s >> 24) {
+        d = (uint16_t)(s >> 16);
+        shift = 8;
+    } else if ((s >> 16) & 0xff) {
+        d = (uint16_t)(s >> 8);
+        shift = 4;
+    } else {
+        d = (uint16_t)s;
+        shift = 0;
+    }
+    uint16_t odd = 0xffff;
+    uint8_t n = 0xff;
+    for (;;) {
+        odd = (uint16_t)(odd + 2);
+        n++;
+        if (d < odd) break;
+        d = (uint16_t)(d - odd);
+    }
+    return (uint16_t)(n << shift);
+}
+
+/* 6a45: near the station (slot 2): bit 0 of ds:7680; the other bits keep what the original
+ * computed on the way */
+static void station_zone(ep_game *g)
+{
+    const ep_object *o = &g->space.obj[2];
+    uint8_t t = (o->b[EP_OBJ_FLAGS] >> 1) & 0x1f;
+    if (!(o->b[EP_OBJ_FLAGS] & 1) || t > 1) {
+        g->f.safe_zone = 0;
+        return;
+    }
+    for (int k = 0; k < 3; k++) { /* 4217: the 24-bit position fits 16 bits */
+        uint8_t hi = o->b[EP_OBJ_POS_HI + k];
+        int neg = o->b[EP_OBJ_POS + 2 * k + 1] & 0x80;
+        if ((hi == 0 && !neg) || (hi == 0xff && neg)) continue;
+        uint8_t al = (hi == 0 || hi == 0xff) ? 0 : hi;
+        g->f.safe_zone = (uint8_t)(al << 1);
+        return;
+    }
+    uint16_t m = magnitude((int16_t)(o->b[4] | o->b[5] << 8), (int16_t)(o->b[6] | o->b[7] << 8),
+                           (int16_t)(o->b[8] | o->b[9] << 8));
+    g->f.safe_zone = (uint8_t)((uint8_t)(m << 1) | (m < 0x32c8));
+}
+
+void ep_dashboard_tick(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    /* 585c: condition */
+    uint8_t st = 0;
+    if (f->energy >= 0x100 && f->sun_size < 0xe0 && f->altitude >= 0x20) {
+        st = 2;
+        if (f->fore_shield && f->aft_shield && f->energy >= 0x200 && f->sun_size < 0xc0 &&
+            f->altitude >= 0x28) {
+            st = 3;
+            if (f->sun_size < 0x80 && f->altitude >= 0x80 && f->aft_shield >= 0x80 &&
+                f->fore_shield >= 0x80 && f->energy >= 0x300)
+                st = 1;
+        }
+    }
+    f->status = st;
+    /* 579d: cooling, recharging, losing equipment on low energy */
+    if (!f->scoop_lock && !f->no_crash) {
+        f->laser_temp = f->laser_temp >= 2 ? (uint8_t)(f->laser_temp - 2) : 0;
+        if (f->energy == 0x3ff) {
+            if (f->aft_shield != 0xff) f->aft_shield++;
+            if (f->fore_shield != 0xff) f->fore_shield++;
+        } else {
+            uint8_t unit = (uint8_t)((uint8_t)(g->cmdr.b[EP_CMDR_EQUIPMENT + 8] << 1) + 1);
+            f->energy = (uint16_t)(f->energy + (int8_t)unit);
+            if (f->energy >= 0x400) f->energy = 0x3ff;
+        }
+        if (f->energy < 0x100 && ep_flight_random(g) < 0x32) {
+            uint8_t k = (uint8_t)((ep_flight_random(g) & 0xff) / 20);
+            uint8_t *item = &g->cmdr.b[EP_CMDR_EQUIPMENT + k];
+            if (*item) {
+                (*item)--;
+                f->message = 0x54e2;
+                f->message_time = 0x28;
+            }
+        }
+    }
+    station_zone(g);
+    if (f->ecm_shown == 1) f->ecm_shown = 0;
 }
