@@ -250,6 +250,14 @@ static int back_to_flight(ep_game *g)
 {
     ep_flight *f = &g->f;
     if (f->other_screen) { /* 763e: the cockpit is redrawn */
+        static const struct {
+            uint8_t id;
+            int16_t x, y;
+        } cockpit[] = { { 0x0c, 0, 0x95 },    { 0x0d, 0, 0xa0 }, { 0x0e, 0xe0, 0xa0 },  { 0x0f, 0, 0xc1 },
+                        { 0x00, 0x60, 0xa0 }, { 0x30, 0, 0x85 }, { 0x31, 0x130, 0x85 }, { 0x6c, 0, 0 },
+                        { 0x82, 0, 9 },       { 0x83, 0x138, 9 } };
+        for (size_t k = 0; k < sizeof cockpit / sizeof cockpit[0]; k++)
+            ep_render_sprite(&g->render, cockpit[k].id, cockpit[k].x, cockpit[k].y);
         f->other_screen = 0;
         f->message_time = (uint16_t)(f->message_time & 0xff);
         f->message_shown = 0;
@@ -262,7 +270,7 @@ static int back_to_flight(ep_game *g)
 }
 
 /* a1cf: the next view: front, rear, left, right */
-static int next_view(ep_game *g)
+int ep_view_command(ep_game *g)
 {
     ep_flight *f = &g->f;
     f->screen_flag = 0;
@@ -517,7 +525,7 @@ static int run(ep_game *g, uint8_t id)
     };
     switch (id) {
     case 0x01: return dock_command(g);
-    case 0x05: return next_view(g);
+    case 0x05: return ep_view_command(g);
     case 0x06: ecm(g); return EP_CMD_STAY;
     case 0x07: arm_missile(g); return EP_CMD_STAY;
     case 0x08: fire_missile(g); return EP_CMD_STAY;
@@ -532,6 +540,9 @@ static int run(ep_game *g, uint8_t id)
     case 0x0f: return galactic_jump(g);
     case 0x02: ep_market_screen(g); return EP_CMD_SCREEN;
     case 0x03: ep_status_screen(g); return EP_CMD_SCREEN;
+    case 0x04: return ep_chart_screen(g);
+    case 0x10: ep_chart_find(g); return EP_CMD_STAY;
+    case 0x12: ep_chart_home(g); return EP_CMD_STAY;
     case 0x0c: ep_market_buy(g); return EP_CMD_STAY;
     case 0x13: ep_equipment_screen(g); return EP_CMD_SCREEN;
     case 0x21: ep_equipment_buy(g); return EP_CMD_STAY;

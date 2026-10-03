@@ -177,7 +177,7 @@ static int8_t steer_axis(const ep_flight *f, int8_t in, int8_t *acc)
 }
 
 /* 0f27: steering from the keyboard (joystick and mouse are not reconstructed yet) */
-static uint16_t steering(ep_game *g)
+uint16_t ep_steering(ep_game *g)
 {
     ep_flight *f = &g->f;
     if (g->in.control != 0) {
@@ -271,7 +271,7 @@ void ep_controls(ep_game *g)
             if (sp < 4) sp = 4;
         }
         f->speed = (uint16_t)((f->speed & 0xff00) | sp);
-        ax = steering(g);
+        ax = ep_steering(g);
         f->steer = ax;
         int8_t al = (int8_t)ax, ah = (int8_t)(ax >> 8); /* af49: inverted controls */
         if (f->opt_invert_pitch == 1) ah = (int8_t)-ah;

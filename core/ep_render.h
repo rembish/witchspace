@@ -12,8 +12,8 @@
 #include <stdint.h>
 
 #define EP_MAX_VERTS 64 /* the buffer at ds:28e6 has room for more than any model uses */
-#define EP_MAX_PRIMS 512
-#define EP_TEXT_POOL 4096 /* bytes of the strings of the text primitives */
+#define EP_MAX_PRIMS 8192
+#define EP_TEXT_POOL 16384 /* bytes of the strings of the text primitives */
 
 /* Q15 matrix, row-major, as the original's 9-word matrices */
 typedef struct {

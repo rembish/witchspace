@@ -24,7 +24,7 @@ typedef struct {
     uint16_t arg; /* sound id (4c98), size (4e1a), or the original's address */
 } ep_event;
 
-#define EP_MAX_EVENTS 64
+#define EP_MAX_EVENTS 1024
 
 /* Flight variables (data segment addresses) */
 typedef struct {
@@ -146,6 +146,10 @@ typedef struct {
     uint8_t list_keep;          /* ds:ad2c: the row to come back to when the list is rebuilt */
     uint8_t laser_kind;         /* ds:92f9: the laser type of the row (8df7) */
     uint8_t list_count;         /* ds:acb0: rows of the equipment list */
+    uint8_t chart[0x407];       /* ds:5604: the short-range chart's symbols and labels */
+    uint8_t chart_kind;         /* ds:6404: 0 short-range, else galactic */
+    uint8_t chart_digit;        /* ds:55e6: the galaxy's number in its chart's title */
+    uint8_t dist_shown[0x12];   /* ds:5550: the distance as the chart shows it ("xx.x") */
     uint8_t station_ecm;        /* ds:8891: the station's ECM runs this many frames (0 = watching) */
     uint8_t reg_dl;             /* DL as the last routine left it: some AI handlers read it stale */
     uint8_t ai_hold;            /* ds:b138: ships may not fire this frame */

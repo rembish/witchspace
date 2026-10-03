@@ -4,6 +4,9 @@
 #include <string.h>
 
 #include "ep_chart.h"
+#include "ep_circle.h"
+#include "ep_flight.h"
+#include "ep_galaxy.h"
 #include "ep_dsmap.h"
 #include "ep_combat.h"
 #include "ep_commands.h"
@@ -59,8 +62,13 @@ static int digits(uint8_t *d, uint16_t v, int n)
 
 static void sprite(ep_game *g, uint8_t id, int16_t x, int16_t y) { ep_render_sprite(&g->render, id, x, y); }
 
+static void frame_kind(ep_game *g, uint8_t kind);
+
 /* 7748: the frame of a screen at the station */
-static void frame(ep_game *g)
+static void frame(ep_game *g) { frame_kind(g, 2); }
+
+/* 76cb (kind 1, a screen in flight) and 7748 (kind 2) */
+static void frame_kind(ep_game *g, uint8_t kind)
 {
     ep_render *r = &g->render;
     if (g->f.other_screen)
@@ -74,7 +82,7 @@ static void frame(ep_game *g)
     sprite(g, 0x85, 0, 0x85);
     sprite(g, 0x86, 0x138, 0x85);
     sprite(g, 0x6c, 0, 0); /* 30d2: the message line */
-    g->f.other_screen = 2;
+    g->f.other_screen = kind;
     g->f.screen_shown = 0xff;
 }
 
@@ -1105,6 +1113,336 @@ int ep_equipment_sell(ep_game *g)
     return ask_mount(g, n, 0xad95, ST_MOUNT_SELL);
 }
 
+/* ---- the charts ---- */
+
+static void line(ep_game *g, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    ep_render_line(&g->render, colour, x0, y0, x1, y1); /* 261b */
+}
+
+/* 291b: a pixel (x < 130h, y < 7ch) */
+static void pixel(ep_game *g, uint8_t colour, int16_t x, int16_t y)
+{
+    if ((uint16_t)x < 0x130 && (uint16_t)y < 0x7c) ep_render_pixel(&g->render, colour, x, y);
+}
+
+/* the chart's frame and edges (5b28.., 58ce..) */
+static void chart_frame(ep_game *g, uint16_t title_addr)
+{
+    frame_kind(g, 1);
+    uint8_t t[40];
+    int n = ep_ds_text(g, title_addr, t, sizeof t);
+    title(g, 0xa0, 0, 0x0f, t, n);
+    ep_render_rect(&g->render, 0, 0x24, 0x8d, 0xc8, 0x14);
+    ep_render_rect(&g->render, 8, 0x1e, 9, 2, 0x7c);
+    ep_render_rect(&g->render, 8, 0x120, 9, 2, 0x7c);
+    ep_render_rect(&g->render, 8, 0x1e, 0x85, 0x104, 2);
+}
+
+static uint8_t *chart_b(ep_game *g, uint16_t addr) { return &g->f.chart[addr - 0x5604]; }
+
+static uint16_t chart_w(ep_game *g, uint16_t addr)
+{
+    return (uint16_t)(chart_b(g, addr)[0] | chart_b(g, addr)[1] << 8);
+}
+
+static void chart_set_w(ep_game *g, uint16_t addr, uint16_t v)
+{
+    chart_b(g, addr)[0] = (uint8_t)v;
+    chart_b(g, addr)[1] = (uint8_t)(v >> 8);
+}
+
+/* 6318: the box (x range dx, y range bx) meets the record at `at` */
+static int chart_overlap(ep_game *g, uint16_t at, uint16_t dx, uint16_t bx)
+{
+    const uint8_t *r = chart_b(g, at);
+    return r[1] >= (uint8_t)dx && (uint8_t)(dx >> 8) >= r[0] && r[3] >= (uint8_t)bx &&
+           (uint8_t)(bx >> 8) >= r[2];
+}
+
+/* 6275: each name placed where it hides nothing, moved up and down by growing steps */
+static void chart_labels(ep_game *g)
+{
+    uint8_t n = *chart_b(g, 0x5604);
+    if (!n) return;
+    uint16_t label = 0x5809;
+    *chart_b(g, 0x5a0a) = n;
+    for (; *chart_b(g, 0x5a0a); (*chart_b(g, 0x5a0a))--) {
+        uint16_t dx = ep_ds_word(g, label), bx = ep_ds_word(g, (uint16_t)(label + 2));
+        label = (uint16_t)(label + 4);
+        uint8_t *step_at = chart_b(g, 0x5a09), step = 0;
+        *step_at = 0;
+        for (;;) {
+            int hit = 0;
+            uint16_t at = 0x5607;
+            for (int k = 0; k < *chart_b(g, 0x5604); k++, at = (uint16_t)(at + 8))
+                if (chart_overlap(g, at, dx, bx)) {
+                    hit = 1;
+                    break;
+                }
+            if (!hit) break;
+            int placed = 0; /* 62ec */
+            for (;;) {
+                step++;
+                if (step >= 0x29) { /* give up: put it there anyway */
+                    placed = 1;
+                    break;
+                }
+                uint8_t lo = (uint8_t)bx, hi = (uint8_t)(bx >> 8);
+                if (step & 1) {
+                    hi = (uint8_t)(hi - step);
+                    lo = (uint8_t)(lo - step);
+                    bx = (uint16_t)(hi << 8 | lo);
+                    if (lo & 0x80) continue;
+                } else {
+                    lo = (uint8_t)(lo + step);
+                    hi = (uint8_t)(hi + step);
+                    bx = (uint16_t)(hi << 8 | lo);
+                    if (hi >= 0x7c) continue;
+                }
+                break;
+            }
+            *step_at = step;
+            if (placed) break;
+        }
+        *step_at = step;
+        uint16_t rec = chart_w(g, 0x5605); /* 62c1 */
+        chart_set_w(g, rec, dx);
+        chart_set_w(g, (uint16_t)(rec + 2), bx);
+        chart_set_w(g, (uint16_t)(rec + 4), label);
+        chart_b(g, rec)[7] = 1;
+        chart_set_w(g, 0x5605, (uint16_t)(rec + 8));
+        (*chart_b(g, 0x5604))++;
+        while (ep_ds_byte(g, label)) label++;
+        label++;
+    }
+}
+
+/* 621f: the symbols and the names */
+static void chart_symbols(ep_game *g)
+{
+    uint16_t at = 0x5607;
+    for (int k = 0; k < *chart_b(g, 0x5604); k++, at = (uint16_t)(at + 8)) {
+        const uint8_t *r = chart_b(g, at);
+        if (!r[7]) {
+            sprite(g, (uint8_t)((r[6] >> 1) + 0x50), (int16_t)(r[4] + 0x1d), (int16_t)(r[5] + 6));
+        } else {
+            uint8_t t[16];
+            int n = ep_ds_text(g, chart_w(g, (uint16_t)(at + 4)), t, sizeof t);
+            ep_pen(&g->render, (int16_t)(r[0] + 0x20), (int16_t)(r[2] + 9), 0x0e);
+            ep_text(&g->render, t, n, 0);
+        }
+    }
+}
+
+/* 5bab..5c75: the systems in the window, a circle each and a label to place */
+static void chart_local_systems(ep_game *g)
+{
+    *chart_b(g, 0x5604) = 0;
+    chart_set_w(g, 0x5605, 0x5607);
+    chart_set_w(g, 0x5807, 0x5809);
+    g->seed = ep_galaxy_seed(g->cmdr.b[EP_CMDR_GALAXY]);
+    for (int n = 0; n < 256; n++) {
+        int16_t dx = (int16_t)((g->seed.w[1] >> 8) - g->cmdr.b[EP_CMDR_CHART_CENTRE]);
+        int16_t dy = (int16_t)((g->seed.w[0] >> 9) - g->cmdr.b[EP_CMDR_CHART_CENTRE + 1]);
+        if ((dx < 0 ? -dx : dx) >= 0x14 || (dy < 0 ? -dy : dy) >= 0x11) { /* 6124 */
+            for (int k = 0; k < 4; k++) ep_twist(&g->seed);
+            continue;
+        }
+        uint16_t y = (uint16_t)(3 * dy + (dy >> 1) + 0x40), x = (uint16_t)(3 * dx + (dx >> 1) + 0x50);
+        if (y >= 0x7c) y = 0x7b;
+        uint16_t rec = chart_w(g, 0x5605);
+        uint8_t *r = chart_b(g, rec);
+        uint8_t size = (uint8_t)((g->seed.w[0] >> 8 & 1) * 2 + 4), half = (uint8_t)(size >> 1);
+        r[4] = (uint8_t)x;
+        r[5] = (uint8_t)y;
+        r[6] = size;
+        r[7] = 0;
+        r[0] = (uint8_t)((uint8_t)x - half);
+        r[1] = (uint8_t)((uint8_t)x + half);
+        r[2] = (uint8_t)((uint8_t)y - half);
+        r[3] = (uint8_t)((uint8_t)y + half);
+        chart_set_w(g, 0x5605, (uint16_t)(rec + 8));
+        (*chart_b(g, 0x5604))++;
+        uint8_t *name = &g->cmdr.b[EP_CMDR_SELECTED + EP_SYSREC_NAME];
+        ep_planet_name(&g->seed, name); /* 6130 (the four twists) */
+        uint8_t len = name[9];
+        uint8_t lx = (uint8_t)((uint8_t)x + 7);
+        uint16_t lab = chart_w(g, 0x5807);
+        chart_set_w(g, lab, (uint16_t)(((uint8_t)(lx + ep_text_width(name)) << 8) | lx));
+        uint8_t top = (uint8_t)y, bot;
+        int8_t t = (int8_t)(top - 3);
+        bot = top;
+        while (t < 0) {
+            bot++;
+            t++;
+        }
+        top = (uint8_t)t;
+        bot = (uint8_t)(bot + 4);
+        while (bot >= 0x7c) {
+            top--;
+            bot--;
+        }
+        chart_set_w(g, (uint16_t)(lab + 2), (uint16_t)(bot << 8 | top));
+        uint16_t d = (uint16_t)(lab + 4);
+        for (int k = 0; k < len; k++) *chart_b(g, d++) = name[k];
+        *chart_b(g, d++) = 0;
+        chart_set_w(g, 0x5807, d);
+    }
+    chart_labels(g);
+}
+
+/* 5d71 + the cursor moved by the steering (at most 4 a pass) */
+static void chart_cursor(ep_game *g, int galactic)
+{
+    uint16_t s = ep_steering(g);
+    int8_t al = (int8_t)s, ah = (int8_t)(s >> 8);
+    if (al > 4) al = 4;
+    if (al < -4) al = -4;
+    if (ah > 4) ah = 4;
+    if (ah < -4) ah = -4;
+    g->f.roll = al;
+    g->f.pitch = ah;
+    ah = (int8_t)-ah;
+    uint8_t *c = &g->cmdr.b[EP_CMDR_CURSOR];
+    unsigned x = c[0] + (unsigned)(uint8_t)al;
+    if (al >= 0)
+        c[0] = (uint8_t)(x > 0xff ? 0xff : x);
+    else
+        c[0] = (uint8_t)(x > 0xff ? x : 0);
+    unsigned y = c[1] + (unsigned)(uint8_t)ah;
+    if (!galactic) {
+        if (ah >= 0)
+            c[1] = (uint8_t)((uint8_t)y >= 0x7c ? 0x7b : y);
+        else
+            c[1] = (uint8_t)(y > 0xff ? y : 0);
+    } else {
+        if (ah >= 0)
+            c[1] = (uint8_t)((uint8_t)y >= 0x7e ? 0x7d : y);
+        else
+            c[1] = (uint8_t)((int8_t)(uint8_t)y < 2 ? 2 : y);
+    }
+}
+
+/* a pass of the short-range chart (5c80..5d6e) */
+static void chart_local_pass(ep_game *g)
+{
+    ep_render_rect(&g->render, 0, 0x20, 9, 0x100, 0x7c);
+    uint16_t r = (uint16_t)(((g->cmdr.b[EP_CMDR_FUEL] >> 1) + 1) >> 1);
+    ep_draw_circle(&g->rng, 0x68, 0x40, (int16_t)r, g->f.circle_mask, 0, g->f.video == 2, &g->circles);
+    ep_render_rect(&g->render, 0, 0x70, 0x38, 1, 0x23);
+    ep_render_rect(&g->render, 0, 0x5f, 0x49, 0x23, 1);
+    chart_symbols(g);
+    int16_t x = (int16_t)(g->cmdr.b[EP_CMDR_CURSOR] + 0x18), y = g->cmdr.b[EP_CMDR_CURSOR + 1];
+    line(g, 0x0a, (int16_t)(x - 5), y, (int16_t)(x + 6), y);
+    line(g, 0x0a, x, (int16_t)(y - 5), x, (int16_t)(y + 6));
+    pixel(g, 0, x, y);
+    chart_cursor(g, 0);
+}
+
+/* a pass of the galactic chart (595a..5abd) */
+static void chart_galaxy_pass(ep_game *g)
+{
+    ep_render_rect(&g->render, 0, 0x20, 9, 0x100, 0x7c);
+    g->seed = ep_galaxy_seed(g->cmdr.b[EP_CMDR_GALAXY]);
+    uint16_t r = (uint16_t)(((g->cmdr.b[EP_CMDR_FUEL] >> 3) + 3) >> 1);
+    int16_t cx = (int16_t)(g->cmdr.b[EP_CMDR_CHART_CENTRE] + 0x18),
+            cy = (int16_t)(g->cmdr.b[EP_CMDR_CHART_CENTRE + 1] - 2);
+    ep_draw_circle(&g->rng, cx, cy, (int16_t)r, g->f.circle_mask, 0, g->f.video == 2, &g->circles);
+    /* the cross over the present system: its y takes x + 18h's high byte (mov bh,ah) */
+    int16_t ly = (int16_t)(cy + (cx & 0xff00));
+    line(g, 0, cx, (int16_t)(ly - 0x11), cx, (int16_t)(ly + 0x12));
+    line(g, 0, (int16_t)(cx - 0x11), ly, (int16_t)(cx + 0x12), ly);
+    int16_t x = (int16_t)(g->cmdr.b[EP_CMDR_CURSOR] + 0x18), y = (int16_t)(g->cmdr.b[EP_CMDR_CURSOR + 1] - 2);
+    line(g, 0x0a, (int16_t)(x - 5), y, (int16_t)(x + 6), y);
+    line(g, 0x0a, x, (int16_t)(y - 5), x, (int16_t)(y + 6));
+    pixel(g, 0, x, y);
+    for (int n = 0; n < 256; n++) {
+        int16_t sx = (int16_t)((g->seed.w[1] >> 8) + 0x18), sy = (int16_t)(g->seed.w[0] >> 9);
+        if (sy > 1) {
+            sy = (int16_t)(sy - 2);
+            if (sy >= 0x7c) sy = 0x7b;
+        } else {
+            sy = 0;
+        }
+        pixel(g, 7, sx, sy);
+        for (int k = 0; k < 4; k++) ep_twist(&g->seed);
+    }
+    chart_cursor(g, 1);
+}
+
+int ep_chart_screen(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    uint8_t *c = g->cmdr.b;
+    if (f->screen != 1 && f->hyperspace && f->hyperspace != 1) { /* 5b09: no chart in witchspace */
+        f->message = 0x5a0b;
+        f->message_time = 0x23;
+        return f->other_screen ? ep_view_command(g) : EP_CMD_STAY; /* a1cf: back to the view */
+    }
+    if (f->screen == 0) f->screen = 2;
+    if (f->other_screen == 1)
+        f->chart_kind = (uint8_t)~f->chart_kind;
+    else
+        f->chart_kind = 0;
+    f->screen_flag = 1;
+    f->screen_bits = 0;
+    if (!f->chart_kind) { /* 5b20: short-range */
+        chart_frame(g, 0x55c5);
+        c[EP_CMDR_CURSOR] = c[EP_CMDR_CURSOR + 2];
+        c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CURSOR + 3];
+        c[EP_CMDR_ZOOM] = 1;
+        chart_local_systems(g);
+        f->idle = EP_IDLE_LOCAL;
+    } else { /* 58c6: galactic */
+        g->seed = ep_system_seed(c[EP_CMDR_GALAXY], c[EP_CMDR_CURRENT + EP_SYSREC_INDEX]);
+        c[EP_CMDR_CHART_CENTRE] = (uint8_t)(g->seed.w[1] >> 8);
+        c[EP_CMDR_CHART_CENTRE + 1] = (uint8_t)(g->seed.w[0] >> 9);
+        f->chart_digit = (uint8_t)(c[EP_CMDR_GALAXY] + '1');
+        chart_frame(g, 0x55d7);
+        c[EP_CMDR_CURSOR] = c[EP_CMDR_CURSOR + 4];
+        c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CURSOR + 5];
+        c[EP_CMDR_ZOOM] = 0;
+        f->idle = EP_IDLE_GALAXY;
+    }
+    return EP_CMD_SCREEN;
+}
+
+void ep_chart_find(ep_game *g)
+{
+    uint8_t *c = g->cmdr.b;
+    ep_render_rect(&g->render, 0, 0x24, 0x8d, 0xc8, 0x14);
+    ep_find_nearest(g);
+    int k = g->f.chart_kind ? 4 : 2;
+    c[EP_CMDR_CURSOR + k] = c[EP_CMDR_CURSOR];
+    c[EP_CMDR_CURSOR + k + 1] = c[EP_CMDR_CURSOR + 1];
+    ep_system_distance(g);
+    uint16_t v =
+        (uint16_t)(c[EP_CMDR_SELECTED + EP_SYSREC_DIST] | c[EP_CMDR_SELECTED + EP_SYSREC_DIST + 1] << 8);
+    digits(g->dist_text, v, 3);
+    uint8_t *d = g->f.dist_shown; /* ds:5550.. */
+    d[0] = g->dist_text[1];
+    d[1] = g->dist_text[2];
+    d[2] = g->dist_text[3];
+    d[4] = g->dist_text[4];
+    text_header(g, 0x553f);
+    ep_planet_name(&g->seed, &c[EP_CMDR_SELECTED + EP_SYSREC_NAME]);
+    text_at(g, 0x24, 0x8d, 0x0e, 0x8338);
+}
+
+void ep_chart_home(ep_game *g)
+{
+    uint8_t *c = g->cmdr.b;
+    if (!g->f.chart_kind) {
+        c[EP_CMDR_CURSOR] = 0x50;
+        c[EP_CMDR_CURSOR + 1] = 0x40;
+    } else {
+        c[EP_CMDR_CURSOR] = c[EP_CMDR_CHART_CENTRE];
+        c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CHART_CENTRE + 1];
+    }
+    ep_chart_find(g);
+}
+
 int ep_station_idle(ep_game *g)
 {
     ep_flight *f = &g->f;
@@ -1134,6 +1472,14 @@ int ep_station_idle(ep_game *g)
         if (r != EP_CMD_STAY || f->station_step) return r;
         equipment_tail(g);
         return r;
+    case EP_IDLE_LOCAL:
+    case EP_IDLE_GALAXY:
+        if (f->idle == EP_IDLE_LOCAL)
+            chart_local_pass(g);
+        else
+            chart_galaxy_pass(g);
+        ep_key_bar(g);
+        return ep_commands(g);
     default: /* the bar and the commands */ ep_key_bar(g); return ep_commands(g);
     }
 }

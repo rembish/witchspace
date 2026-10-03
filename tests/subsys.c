@@ -95,6 +95,19 @@ int main(int argc, char **argv)
             }
             print_prims(&g.render);
             printf("end\n");
+        } else if (!strcmp(argv[1], "chart_session")) { /* F4, then 12 passes: a key and arrows each */
+            int up = ep_chart_screen(&g) == EP_CMD_SCREEN;
+            const uint8_t *keys[4] = { &g.in.up, &g.in.down, &g.in.left, &g.in.right };
+            for (int k = 0; up && k < 12; k++) {
+                uint8_t arrows = ds[0xff20 + k];
+                for (int j = 0; j < 4; j++) g.in.key[*keys[j] & 0x7f] = (arrows >> j & 1) ? 0 : 0x80;
+                g.in.last_key = ds[0xff10 + k];
+                ep_station_idle(&g);
+            }
+            print_prims(&g.render);
+            for (int k = 0; k < g.circles.n; k++)
+                printf("span %d,%d,%d\n", g.circles.span[k].x, g.circles.span[k].w, g.circles.span[k].row);
+            printf("end\n");
         } else if (!strcmp(argv[1], "equip_screen")) {
             ep_equipment_screen(&g);
             print_prims(&g.render);

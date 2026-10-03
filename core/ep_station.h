@@ -69,8 +69,26 @@ void ep_equipment_screen(ep_game *g);
 int ep_equipment_buy(ep_game *g);
 int ep_equipment_sell(ep_game *g);
 
+/* 5ac0: the charts (F4): short-range first, the galactic chart when pressed again; not in
+ * witchspace */
+int ep_chart_screen(ep_game *g);
+
+/* 608f: the system nearest the cursor, its name and distance under the chart */
+void ep_chart_find(ep_game *g);
+
+/* 5d9f: the cursor back to the present system */
+void ep_chart_home(ep_game *g);
+
 /* where the screens idle */
-enum { EP_IDLE_NONE = 0, EP_IDLE_STATUS, EP_IDLE_PLAIN, EP_IDLE_MARKET, EP_IDLE_EQUIP };
+enum {
+    EP_IDLE_NONE = 0,
+    EP_IDLE_STATUS,
+    EP_IDLE_PLAIN,
+    EP_IDLE_MARKET,
+    EP_IDLE_EQUIP,
+    EP_IDLE_LOCAL,
+    EP_IDLE_GALAXY
+};
 
 /* one pass of the current screen's idle loop: the bar, the commands, the screen's own
  * work; returns the commands' EP_CMD_* (a new screen to show: EP_CMD_SCREEN) */

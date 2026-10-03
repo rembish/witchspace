@@ -197,6 +197,7 @@ void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y)
 
 void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y)
 {
+    if (r->nprim >= EP_MAX_PRIMS) return;
     ep_render_pixel(r, sprite, x, y);
     r->prim[r->nprim - 1].kind = EP_PRIM_SPRITE;
 }

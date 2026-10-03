@@ -22,6 +22,9 @@ void ep_key_bar(ep_game *g);
 /* 03c0: the key latched in g->in.last_key, if any: space, Esc, or a bar key */
 int ep_commands(ep_game *g);
 
+/* a1cf (F5): the next view; from another screen, back to the space view (EP_CMD_RESTART) */
+int ep_view_command(ep_game *g);
+
 /* a0ed: the hyperspace countdown (arriving at 0) and the escape capsule countdown */
 void ep_countdowns(ep_game *g);
 

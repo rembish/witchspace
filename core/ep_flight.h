@@ -29,6 +29,10 @@ int ep_tunnel_tick(ep_game *g);
  * attitude angles), the velocity, and moving everything by it */
 void ep_controls(ep_game *g);
 
+/* 0f27: the steering from the arrow keys (they build up, and return to centre), as
+ * pitch << 8 | roll; joystick and mouse are not reconstructed yet */
+uint16_t ep_steering(ep_game *g);
+
 /* a768: the player's velocity from the attitude and speed, when ds:af58 says it changed */
 void ep_player_velocity(ep_game *g);
 

@@ -91,6 +91,7 @@ ROUTINES = {
     "new_system": (0x666B, {}, {}),
     "explode": (0x7EA8, {}, {}),
     "equip_screen": (0x924A, {}, {0x92D3: "end"}),
+    "chart_session": (0x5AC0, {}, {0xA040: "end"}),  # a040: no chart in witchspace, back to the view
     "equip_session": (0x924A, {}, {}),
 }
 
@@ -370,6 +371,27 @@ def market_world(img, rng):
     for j in range(3):
         w(0x92E0 + 2 * j, rng.getrandbits(16), 2)
     w(0x8367, rng.choice([0, 1, 99999, 1234567]), 4)
+
+
+def chart_world(img, rng):
+    """Docked or in flight, a chart already up or not, cursors, fuel; keys and arrows per pass."""
+    w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
+    w(0x02F9, rng.choice([0, 1, 1, 2]))
+    w(0x8711, rng.choice([0, 1, 1, 2]))
+    w(0x6404, rng.choice([0, 0xFF]))
+    w(0x83A4, rng.choice([0, 0, 0, 1, 0x64]))
+    w(0x8315, rng.randrange(8))
+    w(0x8329, rng.randrange(256))
+    w(0x8356, rng.choice([0, 0x46, 0xFF]))
+    for a in (0x831A, 0x831C):
+        w(a, rng.randrange(256))
+    for a in (0x831B, 0x831D):
+        w(a, rng.randrange(0x80))
+    for a in (0x8316, 0x8317):
+        w(a, rng.randrange(0x100 if a == 0x8316 else 0x80))
+    for j in range(12):
+        w(0xFF10 + j, rng.choice([0xFF, 0xFF, 0x9E, 0xA0, 0x9A]))
+        w(0xFF20 + j, rng.choice([0, 0, 1, 2, 4, 8, 5, 10]))
 
 
 def equip_world(img, rng):
@@ -712,6 +734,7 @@ FUZZ = {
            (0x83A0, [0, 4, 5, 6]), (0x83A2, [0, 2, 3]), (0x83B0, [0, 1]), (0x839E, [0, 5, 0x0D]),
            (0x839F, [0, 1]), (0x83A3, [0, 7]), (0x8329, [7, 7, 3])],
     "equip_screen": [(0, trading), (0, equip_world)],
+    "chart_session": [(0, chart_world)],
     "equip_session": [(0, trading), (0, equip_world), (0, equip_keys)],
     "collisions": [(0, something_close), (0, docking_approach), (0x83AA, [0, 0, 1]), (0xAE23, [0, 0, 0, 1]),
                    (0x54C4, [0, 10, 0x80, 0xFF]), (0x54C8, [0, 0x10, 0x200, 0x3FF])],
@@ -819,10 +842,10 @@ def run_original(image, addr, regs, exits=None):
         if NAME == "commands":
             e.hook(0x37BD, lambda e, r: None)  # the cockpit redrawn by 763e
         done = "cmd 2" if NAME == "commands" else "frame 2"
-        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3):  # screens that are reconstructed: up to their idle loop
+        for at in (0x8DAC, 0x9124, 0x90B7, 0x92D3, 0x5C80, 0x595A):  # reconstructed screens: up to their idle loop
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (left.append(done), mu.emu_stop()),
                           begin=CS * 16 + at, end=CS * 16 + at)
-        for stub in (0x5AC0, 0x8880, 0x5DC2, 0x6189, 0x5D9F, 0x07AA, 0x08AB, 0x0674,
+        for stub in (0x8880, 0x6189, 0x07AA, 0x08AB, 0x0674,
                      0x0736, 0x0779, 0x062C, 0x0637, 0x0642, 0x064D, 0x0658, 0x0A92, 0x0AD5,
                      0x0425, 0xA23B):  # screens not reconstructed yet
             e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, stub=stub: (
@@ -851,7 +874,7 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session"):
         def sprite_or_icon(e, r):
             if e.mu.mem_read(SS * 16 + e.mu.reg_read(UC_X86_REG_SP), 2) == b"\x15\x03":  # the bar's (0312)
                 sounds.append(f"event 4:{((r['cx'] - 0x10) // 0x18) << 8 | (r['bx'] & 0xFF)}")
@@ -868,6 +891,28 @@ def run_original(image, addr, regs, exits=None):
         e.hook(0x0276, key)
         e.hook(0x3BB1, lambda e, r: None)
         e.hook(0x3821, lambda e, r: None)  # the palette (waits for the retrace)
+    if NAME == "chart_session":  # a key and the arrows held at each pass (5c80, 595a), 12 passes
+        ckeys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
+        carrows = list(image[DS * 16 + 0xFF20:DS * 16 + 0xFF2C])
+
+        def chart_pass(mu, ad, sz, u):
+            if not ckeys:
+                left.append("end")
+                mu.emu_stop()
+                return
+            a = carrows.pop(0)
+            for j, b in enumerate((0xB255, 0xB257, 0xB259, 0xB25B)):
+                ptr = e.r8(b) | e.r8(b + 1) << 8
+                mu.mem_write(DS * 16 + ptr, bytes([0 if a >> j & 1 else 0x80]))
+            mu.mem_write(DS * 16 + 0x0D2F, bytes([ckeys.pop(0)]))
+        for at in (0x5C80, 0x595A):
+            e.mu.hook_add(UC_HOOK_CODE, chart_pass, begin=CS * 16 + at, end=CS * 16 + at)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: (mu.reg_read(REGS["ax"]) < 0x130 and mu.reg_read(REGS["bx"]) < 0x7C)
+                      and prims.append(f"8:{mu.reg_read(REGS['cx']) & 0xFF},{mu.reg_read(REGS['ax'])},{mu.reg_read(REGS['bx'])}"),
+                      begin=CS * 16 + 0x291B, end=CS * 16 + 0x291B)  # pixels
+        e.hook(0x3956, lambda e, r: None)  # the display pages
+        e.hook(0x3941, lambda e, r: None)
+        e.hook(0x396E, lambda e, r: None)
     if NAME == "equip_session":  # a scripted key at each pass (92d3) or dialog loop (9502, 968f)
         keys = list(image[DS * 16 + 0xFF10:DS * 16 + 0xFF1C])
 
@@ -890,7 +935,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session"):  # rectangles
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
@@ -901,6 +946,8 @@ def run_original(image, addr, regs, exits=None):
     except RuntimeError:
         if not left:
             raise
+    if NAME == "chart_session" and not left:
+        left.append("end")
     if NAME == "commands" and not left:
         left.append("cmd 0")
     if NAME == "tunnel" and not left:
