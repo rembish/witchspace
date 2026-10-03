@@ -32,7 +32,8 @@ JUMP_TABLES = {
     (0, 0x63B0): (0x5B3E, 6),  # text control codes 1..6 (5b4a on is the token table); handlers return to 63d8
 }
 # Code reached only through values the walker cannot see (pushed return addresses etc.).
-EXTRA_ROOTS = [(0, 0x63D8)]
+EXTRA_ROOTS = [(0, 0x63D8), (0, 0x0215), (0, 0x4A99), (0, 0x00D6), (0, 0x00E4), (0, 0x0144), (0, 0x014C)]
+# (63d8: text code return; the rest are interrupt handlers the game installs)
 CODE_SEGS = {0x0000: 0xB000, 0x2270: 0x3010}  # segment -> size in bytes
 
 

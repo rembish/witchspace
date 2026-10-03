@@ -1,4 +1,7 @@
 # <addr> <name> [# comment]   addr = code offset in segment 0000, or ds:XXXX in data segment 0b00
+0215 keyboard_isr  # port 60h -> ds:020d table, ds:0d2f key
+4a99 timer_isr
+4a50 timer_tick  # 45de, 45e0 (32-bit frame clock), 45e4 countdown, sound
 0000 entry  # set stack, resize memory, hook ctrl-break/crit, check DOS, seed RNG, init, ret into 1415
 00b3 restart_main  # mov [0000],sp; jmp title_loop (abort target)
 1415 init_screens  # first-time init, returns to restart_main

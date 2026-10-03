@@ -106,7 +106,7 @@ Same scheme as the original Elite, with Elite Plus's own formulas for the system
 - Chart position (`5e95` → `ds:8318/8319`): x = w1hi, y = w0hi / 2 (galaxy chart).
 - Checked: `re/emu/galaxytest.py` compares all 8 × 256 systems with `core/ep_galaxy.c`.
 
-## Copy protection (not ported)
+## Copy protection (ported later as an opt-in, off by default)
 
 "Please type in the word at the following location in the Elite+ Novella 'Imprint'" — page,
 paragraph, line, word.
@@ -123,7 +123,8 @@ paragraph, line, word.
   unconditional (`mov bp,[09d9]` is immediately overwritten by `mov bp,00c3`, then four
   `nop`s where the comparison presumably was), so any answer passes. **[verify]** what `03ad`
   does when it is not patched, i.e. what a wrong answer costs.
-- The port leaves the protection out but keeps the RNG step, and treats `03ad` as `ret`.
+- The port will reconstruct it behind an opt-in switch, off by default; with it off it keeps
+  the RNG step and treats `03ad` as `ret`.
 
 ## System descriptions
 
@@ -247,3 +248,23 @@ quantities are random.
   far away, player angles) compares the primitives with `core/ep_render.c`.
 - Primitive colours are game colours; the video mode maps them through `ds:1ee9` (from
   `ds:1b3f` or `ds:1cf3`). Using `1cf3` + the DAC for previews is a guess **[verify]**.
+
+## Running the whole game (`re/emu/machine.py`)
+
+A test tool only, not part of the port: the original boots from `entry` under Unicorn with
+Python stand-ins for DOS (INT 21h files, memory, vectors, time), the video BIOS and an
+absent mouse. Deterministic time: timer interrupts (handler `4a99`, per-tick `4a50`:
+`45de`++, unless paused (`45e6`) the frame clock `45e0` (32-bit)++ and the countdown `45e4`--,
+sound tick unless `45e7`) are injected only at the game's wait loops: frame wait `3027`
+(2 ticks per frame, `301a`), title picture `3b18` (1000 ticks or a key), delay `4e88`,
+countdown `af9a`. Keys (keyboard handler `0215`: port 60h, press/release table
+`ds:020d + scancode` = 0 / 80h, key code via `ds:0cad` into `ds:0d2f`, E0 and NumLock flags
+`0d30/0d31`, left shift ignored) are delivered one interrupt per key poll (`0276`).
+PIT: divisor 5555h (54.6 Hz) from `49b4`; the sound driver uses 0555h. Boot with P, M and
+any word for the protection reaches the title loop in about a second; `screenshot()` saves
+the mode 13h screen with the DAC.
+
+- Title loop (`9e80`): ship type `ds:b1bb` (26 = Cobra Mk III) approaches from 5000 by 80
+  per frame in slot 2 (`ds:775e`) in front of a planet. MCGA palette cycling once per
+  retrace in `3b3e` (colours from a1h, `ds:1444`); the title picture has its own palette
+  (`ds:1744`, loaded at `3b7f`), which is why `grf.py` shows it with wrong colours.
