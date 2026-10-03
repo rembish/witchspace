@@ -46,6 +46,13 @@ typedef struct {
     uint8_t ship_slots;       /* ds:7fde: slots 2.. for ships and the station */
     uint8_t debris_slots;     /* ds:7fdf: slots 20.. for debris */
     ep_rot rot[6];            /* ds:76be.. */
+    /* the scanner blip the last ep_object_rotate drew (2995): its type, x, the row of its
+     * foot and the height of its stick (screen pixels, up when negative) */
+    struct {
+        uint8_t drawn, type;
+        int16_t x, y;
+        int8_t h;
+    } blip;
 } ep_space;
 
 /* 6d26: slot from an angle (2048 steps per turn) */

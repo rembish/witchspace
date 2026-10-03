@@ -158,6 +158,18 @@ void ep_draw_ship(ep_render *r, const ep_ship_view *v)
     ep_draw_model(r, type, pos, &t1);
 }
 
+void ep_render_blip(ep_render *r, uint8_t type, int16_t x, int16_t y, int8_t h)
+{
+    if (r->nprim >= EP_MAX_PRIMS) return;
+    ep_prim *p = &r->prim[r->nprim++];
+    memset(p, 0, sizeof *p);
+    p->kind = EP_PRIM_BLIP;
+    p->colour = type;
+    p->pt[0] = x;
+    p->pt[1] = y;
+    p->pt[2] = h;
+}
+
 void ep_render_quad(ep_render *r, uint8_t colour, const int16_t pt[8])
 {
     if (r->nprim >= EP_MAX_PRIMS) return;

@@ -153,6 +153,8 @@ static void to_camera(ep_game *g, ep_object *o)
     int16_t p[3];
     for (int k = 0; k < 3; k++) p[k] = (int16_t)get16(o, EP_OBJ_POS + 2 * k);
     ep_object_rotate(&g->space, o, p);
+    if (g->space.blip.drawn)
+        ep_render_blip(&g->render, g->space.blip.type, g->space.blip.x, g->space.blip.y, g->space.blip.h);
     if (ep_commander_b(&g->cmdr, EP_CMDR_EQUIPMENT + 5) == 1 && g->f.scoop_lock == 0) scoop(g, o, p);
     if (p[2] < 100) return;
     for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);

@@ -37,7 +37,9 @@ enum {
     EP_PRIM_SPRITE = 10,
     EP_PRIM_TEXT = 12,
     EP_PRIM_RECT = 14,
-    EP_PRIM_SPANS = 16 /* a filled circle: pt[0] its first span in g->circles, pt[1] how many */
+    EP_PRIM_SPANS = 16, /* a filled circle: pt[0] its first span in g->circles, pt[1] how many */
+    EP_PRIM_BLIP = 18   /* a scanner blip (screen): colour the object's type, pt[0] x, pt[1] the
+                         * foot's row, pt[2] the stick's height (signed); the head is 2 wide */
 };
 
 typedef struct {
@@ -80,6 +82,9 @@ void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m
 
 /* A circle's spans (ep_circle.h), where it was drawn among the other primitives */
 void ep_render_spans(ep_render *r, uint8_t colour, int first, int count);
+
+/* A scanner blip (2995) */
+void ep_render_blip(ep_render *r, uint8_t type, int16_t x, int16_t y, int8_t h);
 
 /* A filled quadrilateral (1a7a), four points in order */
 void ep_render_quad(ep_render *r, uint8_t colour, const int16_t pt[8]);

@@ -76,7 +76,7 @@ int ep_object_in_range(ep_object *o)
 
 /* 2995: the blip's place on the scanner from the camera position; an object that lands on
  * the scanner is marked (+1e bit 1, which also holds back its explosion timer) */
-static void scanner_blip(ep_object *o, const int16_t p[3])
+static void scanner_blip(ep_space *s, ep_object *o, const int16_t p[3])
 {
     int16_t y = (int16_t)((p[1] >> 2) - ((p[1] >> 2) >> 2));
     int16_t z = (int16_t)((p[2] >> 2) + ((p[2] >> 2) >> 2));
@@ -87,11 +87,16 @@ static void scanner_blip(ep_object *o, const int16_t p[3])
     uint8_t top = (uint8_t)(zh + (uint8_t)((uint16_t)y >> 8));
     if (top < 0xa0 || top >= 0xc1) return;
     o->b[EP_OBJ_FLAGS1E] |= 2;
+    s->blip.drawn = 1;
+    s->blip.type = (uint8_t)((o->b[EP_OBJ_FLAGS] >> 1) & 0x1f);
+    s->blip.x = xh;
+    s->blip.y = zh;
+    s->blip.h = (int8_t)((uint16_t)y >> 8);
 }
 
 /* 4359: scanner, in flight and for the first 20 slots: ships blink when +1e bit 5 is set
  * (bit 6: hidden, +34 counts the phases) */
-static void scanner(const ep_space *s, ep_object *o, const int16_t p[3])
+static void scanner(ep_space *s, ep_object *o, const int16_t p[3])
 {
     if (!s->in_flight || o >= &s->obj[20]) return;
     uint8_t type = (uint8_t)((o->b[EP_OBJ_FLAGS] >> 1) & 0x1f);
@@ -108,11 +113,12 @@ static void scanner(const ep_space *s, ep_object *o, const int16_t p[3])
             o->b[EP_OBJ_TIMER] = 0x19;
         }
     }
-    scanner_blip(o, p);
+    scanner_blip(s, o, p);
 }
 
 void ep_object_rotate(ep_space *s, ep_object *o, int16_t p[3])
 {
+    s->blip.drawn = 0;
     ep_rotate_by_player(s, p);
     o->b[EP_OBJ_ZHI] = (uint8_t)((uint16_t)p[2] >> 8);
     scanner(s, o, p);
