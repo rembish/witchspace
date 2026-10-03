@@ -1155,7 +1155,7 @@ def run_original(image, addr, regs, exits=None):
         e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
             f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
             + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session"):
+    if NAME in ("tribbles", "status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame", "message"):
         def sprite_or_icon(e, r):
             sp = SS * 16 + e.mu.reg_read(UC_X86_REG_SP)
             if e.mu.mem_read(sp, 2) == b"\x15\x03" or e.mu.mem_read(sp, 2) == b"\xce\x37" and e.mu.mem_read(sp + 8, 2) == b"\x15\x03":  # the bar's (0312, through 37bd on EGA/VGA)
@@ -1311,7 +1311,7 @@ def run_original(image, addr, regs, exits=None):
             mu.mem_write(DS * 16 + 0x0D2F, bytes([keys.pop(0)]))
         for at in (0x9124, 0x90B7):  # docked, in flight
             e.mu.hook_add(UC_HOOK_CODE, pass_start, begin=CS * 16 + at, end=CS * 16 + at)
-    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session"):  # rects
+    if NAME in ("status", "market", "market_session", "equip_screen", "equip_session", "chart_session", "data_screen", "pause_session", "start_game", "save_session", "load_session", "title_open", "title_session", "frame"):  # rects
         e.hook(0x2FD4, lambda e, r: prims.append(
             f"rect {e.r8(0x10A2)}:{s16(r['ax'])},{s16(r['bx'])},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line
