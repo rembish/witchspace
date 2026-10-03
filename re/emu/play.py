@@ -82,7 +82,8 @@ def main():
     base_ticks = [None]
 
     def deliver(mm):
-        if events and not mm.pending and not mm.keys and mm.down is None:
+        # one keyboard interrupt per pause (a timer tick is usually pending as well)
+        if events and not mm.keys and mm.down is None and not any(e != 8 for e in mm.pending):
             mm.scancode_event(events.pop(0))
         return mm.ticks >= target[0]
 
