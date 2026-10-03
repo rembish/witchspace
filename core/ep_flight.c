@@ -1,6 +1,8 @@
 /* Elite Plus flight loop subsystems, reconstructed from ELITE.EXE (see ep_flight.h). */
 #include "ep_flight.h"
 
+#include "ep_dsmap.h"
+
 #include "ep_combat.h"
 #include "ep_dust.h"
 
@@ -51,7 +53,12 @@ void ep_message_tick(ep_game *g)
         }
     }
     f->message_time |= 0xff00; /* 7040 */
+    if (f->message == f->message_shown) return;
     f->message_shown = f->message;
+    /* 7053: the message line, centred and shadowed (2fca) */
+    uint8_t t[128];
+    int n = ep_ds_text(g, f->message, t, sizeof t);
+    ep_render_text(&g->render, 0x0f, (int16_t)(0xa0 - (ep_text_width(t) >> 1)), 0, t, n, 1);
 }
 
 void ep_fuel_leak(ep_game *g)

@@ -17,6 +17,7 @@ typedef struct {
 
 static const field fields[] = {
     F(0x82db, cmdr.b, 1),
+    F(0x83be, cmdr_saved.b, 1),
     F(0x76de, space.obj, 1),
     F(0x76b5, space.count, 0),
     F(0x76d8, space.player_angle[0], 0),
@@ -260,5 +261,18 @@ int ep_ds_string(const ep_game *g, uint16_t addr, uint8_t *out, int max)
         if (!c) return n - 1;
     }
     out[n] = 0;
+    return n;
+}
+
+int ep_ds_text(const ep_game *g, uint16_t addr, uint8_t *out, int max)
+{
+    int n = 0;
+    while (n < max) {
+        uint8_t c = ep_ds_byte(g, (uint16_t)(addr + n));
+        out[n++] = c;
+        if (!c) return n;
+        int extra = c == 1 ? 1 : c == 2 ? 4 : 0;
+        for (; extra && n < max; extra--, n++) out[n] = ep_ds_byte(g, (uint16_t)(addr + n));
+    }
     return n;
 }

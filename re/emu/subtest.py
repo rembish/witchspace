@@ -565,7 +565,7 @@ def attacker(img, rng):
 FUZZ = {
     "message": [(0x8058, [0x81FE, 0x8212, 0x802C]), (0x805A, 1), (0x805B, [0, 0xFF]), (0x8056, [0x81FE, 0x802C]),
                 (0xB0DE, [0, 0x200, 0x400, 0x600, 0x100]), (0xB126, [0, 0, 1]), (0x81F4, [0, 0, 1, 5]),
-                (0x81F5, 1), (0x81F2, 2), (0x8892, [0, 1, 2]), (0x54C3, [0x10, 0x31, 0x32, 0xFE]),
+                (0x81F5, 1), (0x81F2, [0x81FE, 0x8212]), (0x8892, [0, 1, 2]), (0x54C3, [0x10, 0x31, 0x32, 0xFE]),
                 (0x54C1, [0x10, 0xE0, 0xE1]), (0x54C8, [0xFF, 0x100, 0x3FF])],
     "fuel_leak": [(0x83A5, [0, 0, 1, 2, 9]), (0x83A6, [0, 1, 2, 0x33]), (0x8356, [0, 3, 5, 6, 0x46, 0xFF])],
     "energy_drain": [(0xB139, [0, 1, 2]), (0x54C8, [0, 1, 2, 3, 0x3FF])],
@@ -653,6 +653,19 @@ def s16(v):
 FRAME_DL = [0]
 
 
+def text_bytes(e, si):
+    """A text as 2e6d walks it: codes 1 and 2 carry 1 and 4 data bytes; the NUL included."""
+    out = bytearray()
+    while len(out) < 512:
+        c = e.r8(si + len(out))
+        out.append(c)
+        if c == 0:
+            break
+        for _ in range(1 if c == 1 else 4 if c == 2 else 0):
+            out.append(e.r8(si + len(out)))
+    return out.hex()
+
+
 def run_original(image, addr, regs, exits=None):
     e = Elite()
     exits = exits or {}
@@ -736,6 +749,10 @@ def run_original(image, addr, regs, exits=None):
         if x < 0x130 and r["bx"] < 0x7C:
             prims.append(f"8:{e.r8(r['si'] + 6) & 0xF},{x},{r['bx']}")
     e.hook(0x2973, pixel)
+    for at, shadow in ((0x2E6D, 0), (0x2EC0, 1)):  # texts (observed, not replaced)
+        e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u, shadow=shadow: prims.append(
+            f"text {s16(mu.reg_read(REGS['bx']))},{s16(mu.reg_read(REGS['cx']))},{e.r8(0x10A2)},{shadow}:"
+            + text_bytes(e, mu.reg_read(REGS['si']))), begin=CS * 16 + at, end=CS * 16 + at)
     if NAME == "tribbles":
         e.hook(0x3411, lambda e, r: prims.append(f"10:{r['bx'] & 0xFF},{s16(r['cx'])},{s16(r['dx'])}"))
     e.hook(0x2576, lambda e, r: prim(6, [r["cx"], r["ax"], r["dx"], r["bx"]]))  # clipped line

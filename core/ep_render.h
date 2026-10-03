@@ -12,7 +12,8 @@
 #include <stdint.h>
 
 #define EP_MAX_VERTS 64 /* the buffer at ds:28e6 has room for more than any model uses */
-#define EP_MAX_PRIMS 128
+#define EP_MAX_PRIMS 512
+#define EP_TEXT_POOL 4096 /* bytes of the strings of the text primitives */
 
 /* Q15 matrix, row-major, as the original's 9-word matrices */
 typedef struct {
@@ -31,7 +32,8 @@ enum {
     EP_PRIM_LINE = 4,
     EP_PRIM_CLIPPED_LINE = 6,
     EP_PRIM_PIXEL = 8,
-    EP_PRIM_SPRITE = 10
+    EP_PRIM_SPRITE = 10,
+    EP_PRIM_TEXT = 12
 };
 
 typedef struct {
@@ -44,6 +46,8 @@ typedef struct {
     ep_vertex vtx[EP_MAX_VERTS];
     ep_prim prim[EP_MAX_PRIMS];
     int nprim;
+    uint8_t text[EP_TEXT_POOL]; /* EP_PRIM_TEXT: pt[2] offset, pt[3] length here */
+    int ntext;
 } ep_render;
 
 /* The parts of an object slot (ds:76de + 64 n) and the globals draw_ship reads. */
@@ -80,6 +84,15 @@ void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y);
 
 /* a sprite (3411): colour is the sprite number, one point */
 void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y);
+
+/* text (2e6d; shadowed: 2ec0): pt = x, y, offset and length in r->text, shadow. The bytes
+ * keep the original's codes: 1 c = colour c from here, 2 x y (words) = move to (x, y);
+ * characters 20h..7ah are glyphs, others are skipped. */
+void ep_render_text(ep_render *r, uint8_t colour, int16_t x, int16_t y, const uint8_t *s, int len,
+                    int shadow);
+
+/* 2f84: the width of a text in pixels, up to its end or a move (code 2) */
+uint16_t ep_text_width(const uint8_t *s);
 
 void ep_draw_ship(ep_render *r, const ep_ship_view *v);
 

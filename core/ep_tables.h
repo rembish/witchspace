@@ -45,6 +45,7 @@ extern const uint16_t ep_title_min_dist[32];
 extern const char *const ep_ship_names[30];
 
 extern const uint8_t ep_ring_start[30];
+extern const uint8_t ep_glyph_width[0x5b];
 /* a byte of the data segment's static text regions as loaded (0 elsewhere) */
 uint8_t ep_ds_static(uint16_t addr);
 extern const uint8_t ep_key_rows[6][12];

@@ -24,6 +24,12 @@ static void print_prims(const ep_render *r)
 {
     for (int k = 0; k < r->nprim; k++) {
         const ep_prim *p = &r->prim[k];
+        if (p->kind == EP_PRIM_TEXT) {
+            printf("text %d,%d,%d,%d:", p->pt[0], p->pt[1], p->colour, p->pt[4]);
+            for (int j = 0; j < p->pt[3]; j++) printf("%02x", r->text[p->pt[2] + j]);
+            printf("\n");
+            continue;
+        }
         int n = p->kind == EP_PRIM_TRI                                  ? 3
                 : p->kind == EP_PRIM_QUAD                               ? 4
                 : p->kind == EP_PRIM_PIXEL || p->kind == EP_PRIM_SPRITE ? 1
@@ -45,6 +51,7 @@ int main(int argc, char **argv)
         static ep_game g;
         state_load(&g, ds);
         g.render.nprim = 0;
+        g.render.ntext = 0;
         g.circles.n = 0;
         g.nevents = 0;
         if (!strcmp(argv[1], "update_objects")) {
@@ -56,6 +63,7 @@ int main(int argc, char **argv)
 
         } else if (!strcmp(argv[1], "message")) {
             ep_message_tick(&g);
+            print_prims(&g.render);
         } else if (!strcmp(argv[1], "fuel_leak")) {
             ep_fuel_leak(&g);
         } else if (!strcmp(argv[1], "energy_drain")) {

@@ -200,3 +200,34 @@ void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y)
     ep_render_pixel(r, sprite, x, y);
     r->prim[r->nprim - 1].kind = EP_PRIM_SPRITE;
 }
+
+void ep_render_text(ep_render *r, uint8_t colour, int16_t x, int16_t y, const uint8_t *s, int len, int shadow)
+{
+    if (r->nprim >= EP_MAX_PRIMS || r->ntext + len > EP_TEXT_POOL) return;
+    ep_prim *p = &r->prim[r->nprim++];
+    memset(p, 0, sizeof *p);
+    p->kind = EP_PRIM_TEXT;
+    p->colour = colour;
+    p->pt[0] = x;
+    p->pt[1] = y;
+    p->pt[2] = (int16_t)r->ntext;
+    p->pt[3] = (int16_t)len;
+    p->pt[4] = (int16_t)shadow;
+    memcpy(r->text + r->ntext, s, (size_t)len);
+    r->ntext += len;
+}
+
+uint16_t ep_text_width(const uint8_t *s)
+{
+    uint16_t w = 0;
+    for (;;) {
+        uint8_t c = *s;
+        if (c == 0 || c == 2) return w;
+        if (c == 1) {
+            s += 2;
+            continue;
+        }
+        if (c >= 0x20 && c <= 0x7a) w = (uint16_t)(w + ep_glyph_width[c - 0x20]);
+        s++;
+    }
+}

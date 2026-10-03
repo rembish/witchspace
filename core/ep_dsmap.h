@@ -24,4 +24,8 @@ uint8_t ep_ds_byte(const ep_game *g, uint16_t addr);
 /* the NUL-terminated bytes at ds:addr (codes included) into out; returns the length */
 int ep_ds_string(const ep_game *g, uint16_t addr, uint8_t *out, int max);
 
+/* a text at ds:addr as 2e6d walks it (code 1 skips its colour byte, code 2 its two words,
+ * so data bytes may be 0), the final NUL included in the count; returns the length */
+int ep_ds_text(const ep_game *g, uint16_t addr, uint8_t *out, int max);
+
 #endif
