@@ -232,3 +232,5 @@ quantities are random.
   `261b`); `03` ends the model. 30 models (types 0–29), 12–37 vertices.
 - Checked: `re/emu/rendertest.py` (random types, angles, positions from inside the ship to
   far away, player angles) compares the primitives with `core/ep_render.c`.
+- Primitive colours are game colours; the video mode maps them through `ds:1ee9` (from
+  `ds:1b3f` or `ds:1cf3`). Using `1cf3` + the DAC for previews is a guess **[verify]**.

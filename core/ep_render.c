@@ -21,7 +21,7 @@ static void mat_axis(uint16_t angle, ep_mat *m, int one, int c0, int c1, int s, 
     m->m[one] = 0x7ffe;
     m->m[c0] = m->m[c1] = cos_at(angle);
     m->m[s] = sin_at(angle);
-    m->m[ns] = (int16_t)-sin_at(angle);
+    m->m[ns] = (int16_t)(uint16_t)(0u - (uint16_t)sin_at(angle));
 }
 
 void ep_mat_rot_x(uint16_t angle, ep_mat *m) { mat_axis(angle, m, 0, 4, 8, 5, 7); }
@@ -122,20 +122,28 @@ void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m
     }
 }
 
+/* Angle word to the matrices' 16-bit angle: times 32, optionally negated first (in unsigned
+ * arithmetic, as the 16-bit `neg` / `shl` do). */
+static uint16_t to_angle(uint16_t a, int negate)
+{
+    unsigned u = negate ? 0x10000u - a : a;
+    return (uint16_t)(u << 5);
+}
+
 void ep_draw_ship(ep_render *r, const ep_ship_view *v)
 {
     int type = (v->flags0 >> 1) & 0x1f;
     if (type >= 30 || (v->flags1e & 0x60) == 0x60) return;
-    uint16_t a = (uint16_t)(-(uint16_t)(v->angle[0] + v->player_angle[0]) << 5);
-    uint16_t b = (uint16_t)(-(uint16_t)v->angle[1] << 5);
-    uint16_t c = (uint16_t)(v->angle[2] << 5);
+    uint16_t a = to_angle((uint16_t)(v->angle[0] + v->player_angle[0]), 1);
+    uint16_t b = to_angle(v->angle[1], 1);
+    uint16_t c = to_angle(v->angle[2], 0);
     ep_mat rx, rz, ry, p1, p2, p3, t1, t2;
     ep_mat_rot_x(a, &rx);
     ep_mat_rot_z(c, &rz);
     ep_mat_rot_y(b, &ry);
-    ep_mat_rot_y((uint16_t)(-(uint16_t)v->player_angle[1] << 5), &p1);
-    ep_mat_rot_z((uint16_t)(-(uint16_t)v->player_angle[2] << 5), &p2);
-    ep_mat_rot_y((uint16_t)(v->extra_angle << 5), &p3);
+    ep_mat_rot_y(to_angle(v->player_angle[1], 1), &p1);
+    ep_mat_rot_z(to_angle(v->player_angle[2], 1), &p2);
+    ep_mat_rot_y(to_angle(v->extra_angle, 0), &p3);
     ep_mat_mul(&p3, &p2, &t1); /* 2b78 = 2be4 x 2bd2 */
     ep_mat_mul(&t1, &p1, &t2); /* 2be4 = 2b78 x 2bc0 */
     ep_mat_mul(&t2, &rx, &t1); /* 2bd2 = 2be4 x 2b8a */
