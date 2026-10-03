@@ -1,67 +1,98 @@
-# Elite Plus (1991) — decompilation & multiplatform port (work in progress)
+# Elite Plus (1991) — decompilation & port
 
-Elite Plus is the PC version of Elite by David Braben and Ian Bell, written for DOS in
-assembly by Chris Sawyer (Realtime Software); the executable says "Release: V3.1 August
-1990". This repo reverse-engineers `ELITE.EXE` with the same approach as the BlockOut and
-Welltris ports: a deterministic C core reconstructed from the machine code and checked
-against the original running in an emulator, with a fresh frontend on top. No original game
-files are included.
+Elite Plus is the PC version of Elite by David Braben and Ian Bell, written in assembly for
+DOS by Chris Sawyer (Realtime Software); the executable calls itself "Release: V3.1 August
+1990". This project reconstructs the game from `ELITE.EXE` as portable C and runs it with a
+new SDL2 frontend. No original game files are included.
 
-**Status:** the game is reconstructed and playable through the port. Checked against the
-original: galaxy and system generation, descriptions, markets, the commander block (save
-files), ship models and rendering, start-up and the copy protection (opt-in), the title (intro,
-credits, frames), starting, saving and loading games, every station screen and dialogue, the
-pause menu and options, the whole flight loop (objects, sun, planet, scanner, controls, laser,
-messages, energy, dashboard, compass, crosshair, star dust, combat, the ship AI, scooping,
-docking, launching through the tunnel, hyperspace and witchspace), sound (the PC speaker's
-sequencer) and the keyboard. Each part is difftested on game states taken from the running
-original (`re/emu/corpus.py`, `re/emu/subtest.py`); `boottest.py` and `flowtest.py` boot the
-whole original and compare start-up and a game from the title to the first flight frame;
-`ep_flow` covers what the emulator cannot (the timer). Left: redefining keys, the joystick and
-the mouse (the original reads the hardware), the AdLib/Roland music drivers, and a few
-approximations listed in `re/AI.md` and `re/FLIGHT.md`.
+## How it works
 
-## Layout
+- **The core** (`core/`) is the game itself, rebuilt routine by routine from the machine
+  code: the galaxy, markets, ships and their AI, combat, the station screens, saving and
+  loading, sound. It is plain C99 with no I/O and fully deterministic, and it keeps the
+  original's quirks and bugs.
+- **Every part is checked against the original.** The original runs inside an emulator;
+  each reconstructed routine gets the same game state (taken from the running original and
+  fuzzed) and must end with the same memory, draw the same things and make the same sounds.
+  Two further tests boot the whole original and compare the start-up and a game played from
+  the title to the first frame in space, byte for byte.
+- **The core says what to draw, not how.** It emits primitives (polygons, lines, circles,
+  sprites by number, text strings with their colour codes) in the original's 320 × 200
+  coordinates. The frontend in `src/` draws them as the original did; a modern renderer
+  could draw the same stream differently (see
+  [docs/core-interface.md](docs/core-interface.md)).
 
-| Path        | Contents |
-|-------------|----------|
-| `core/`     | Game logic reconstructed from `ELITE.EXE`: plain C99, no I/O, deterministic |
-| `src/`      | SDL2 frontend: the original's 320x200 MCGA screen from the core's output, timer, keyboard, PC speaker, files |
-| `tests/`    | Tools the differential tests drive (`galdump`) |
-| `re/`       | Notes, unpacker, explorer, Ghidra scripts, emulator harness, DOSBox-X runner |
+## Status
 
-## The original
+The game is complete and playable: title, new game, every station screen and dialogue,
+flight (combat, the ship AI, scooping, docking, hyperspace and witchspace), the pause menu
+and options, saving and loading commanders, the PC speaker's music and effects, and keyboard,
+joystick and mouse controls. The copy protection is reconstructed too, but off unless asked
+for (`--protection`).
 
-The tools in `re/` need your own copy of the DOS release in `original/` (git-ignored, never
-distributed). The files they were written against are listed with their SHA-256 in
-[`re/NOTES.md`](re/NOTES.md). `ELITE.EXE` is EXEPACK-compressed hand-written assembly with
-some obfuscation (computed addresses and calls, `push`/`ret` jumps); `re/tools/unexepack.py`
-restores a plain executable and `re/tools/explore.py` recovers its control flow.
+Not done yet: the AdLib and Roland music (their drivers play the original's `.MID` files),
+and the 16-colour EGA/VGA screen modes (the frontend shows the 256-colour MCGA mode). Three rare
+edge cases still behave approximately; they are described in [re/FLIGHT.md](re/FLIGHT.md).
 
-## Building and testing
+## Playing
+
+You need your own copy of the DOS release; the frontend takes its pictures from
+`ELITE.GRF` (without it the game runs with placeholders).
 
 ```sh
 cmake -S . -B build && cmake --build build -j       # needs SDL2 (apt install libsdl2-dev)
-./build/eliteplus --data original                  # the pictures from your ELITE.GRF; --saves DIR
-python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip install unicorn capstone
-~/tools/venv/bin/python re/tools/gen_tables.py      # regenerate core/ep_tables.c from original/
-~/tools/venv/bin/python re/emu/galaxytest.py        # core vs the original's code, all systems
-~/tools/venv/bin/python re/emu/titletest.py 6000    # whole original booted headless vs core
-~/tools/venv/bin/python re/emu/play.py              # the original in the harness, in a window
-~/tools/venv/bin/python re/emu/corpus.py            # flight states from the original (git-ignored)
-~/tools/venv/bin/python re/emu/subtest.py controls --fuzz 10   # one subsystem vs the core
-ctest --test-dir build                               # core checks outside the emulator
-re/ghidra/run.sh                                     # Ghidra project, decompiled C and listing
+./build/eliteplus --data original                  # the folder with your ELITE.GRF
 ```
 
-## Tooling
+Options: `--saves DIR` (where commanders are saved, default the current folder),
+`--protection` (ask the novella question). Alt+Enter toggles full screen. The keys are the
+original's; a game controller acts as the joystick.
+
+## Layout
+
+| Path     | Contents |
+|----------|----------|
+| `core/`  | The game, reconstructed from `ELITE.EXE`: plain C99, no I/O, deterministic |
+| `src/`   | SDL2 frontend: screen, timer, keyboard/mouse/controller, PC speaker, save files |
+| `tests/` | Small programs the differential tests drive, and `ep_flow` (checks the emulator cannot do) |
+| `re/`    | Reverse-engineering notes, unpacker, table generator, Ghidra scripts, emulator harness |
+| `docs/`  | How a frontend uses the core |
+
+## Reverse engineering
+
+The tools in `re/` need your own copy of the game in `original/` (git-ignored, never
+distributed); the expected files and their SHA-256 are listed in
+[re/NOTES.md](re/NOTES.md). `ELITE.EXE` is EXEPACK-compressed, hand-written assembly with
+some obfuscation (computed addresses and calls, `push`/`ret` jumps); `re/tools/unexepack.py`
+restores a plain executable and `re/tools/explore.py` recovers its control flow.
+
+The notes:
+
+- [re/NOTES.md](re/NOTES.md) — the executable, start-up, galaxy, descriptions, pictures,
+  copy protection, sound, and the object update.
+- [re/FLIGHT.md](re/FLIGHT.md) — the flight loop, travel, docking, and the remaining
+  approximations.
+- [re/AI.md](re/AI.md), [re/SHIPS.md](re/SHIPS.md) — the ship AI and the ships.
+
+```sh
+python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip install unicorn capstone
+~/tools/venv/bin/python re/tools/gen_tables.py      # regenerate core/ep_tables.c from original/
+~/tools/venv/bin/python re/emu/corpus.py            # game states from the original (git-ignored)
+~/tools/venv/bin/python re/emu/subtest.py frame --fuzz 4   # one routine vs the core (see ROUTINES)
+~/tools/venv/bin/python re/emu/boottest.py          # start-up, original booted vs the core
+~/tools/venv/bin/python re/emu/flowtest.py 5        # title to first flight frame, vs the core
+~/tools/venv/bin/python re/emu/titletest.py 600     # title frames, vs the core
+~/tools/venv/bin/python re/emu/play.py              # the original in the harness, in a window
+ctest --test-dir build                              # core checks outside the emulator
+re/ghidra/run.sh                                    # Ghidra project, decompiled C and listing
+```
 
 | Tool | Used for | Install |
 |------|----------|---------|
+| Python 3 + Unicorn, capstone | Unpacking, control-flow recovery, emulator harness, differential tests | `pip install unicorn capstone` in a venv |
 | Ghidra (headless) | Decompiling `ELITE.EXE` (16-bit real mode); names in `re/ghidra/names.txt` | zip from GitHub into `~/tools/`, needs `openjdk-21-jdk` |
-| Python 3 + capstone, Unicorn | Unpacking, control-flow recovery, emulator harness and differential tests | `pip install unicorn capstone` in a venv |
 | DOSBox-X + Xvfb + xdotool + ffmpeg | Running the original as a reference, headless screenshots | `apt install dosbox-x xvfb xdotool ffmpeg` |
-| gcc + CMake | Native build | `apt install cmake` |
+| gcc + CMake + SDL2 | Building | `apt install cmake libsdl2-dev` |
 
 ## Credits
 
