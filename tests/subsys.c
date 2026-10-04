@@ -46,11 +46,10 @@ static void print_prims(const ep_render *r)
             printf("\n");
             continue;
         }
-        int n = p->kind == EP_PRIM_TRI                                  ? 3
-                : p->kind == EP_PRIM_QUAD                               ? 4
-                : p->kind == EP_PRIM_PIXEL || p->kind == EP_PRIM_SPRITE ? 1
-                                                                        : 2;
-        printf("%d:%d", p->kind, p->colour);
+        int dot = p->kind == EP_PRIM_PIXEL || p->kind == EP_PRIM_DUST || p->kind == EP_PRIM_SPRITE;
+        int n = p->kind == EP_PRIM_TRI ? 3 : p->kind == EP_PRIM_QUAD ? 4 : dot ? 1 : 2;
+        /* a dust particle is the original's pixel call (2973), its colour as it is */
+        printf("%d:%d", p->kind == EP_PRIM_DUST ? EP_PRIM_PIXEL : p->kind, p->colour);
         for (int j = 0; j < 2 * n; j++) printf(",%d", p->pt[j]);
         printf("\n");
     }

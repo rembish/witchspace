@@ -100,11 +100,15 @@ target_link_libraries(ep_datadump PRIVATE epcore)
 add_executable(ep_badinput tests/badinput.c src/grf.c) # needs no game files: broken inputs rejected
 target_link_libraries(ep_badinput PRIVATE epcore)
 target_include_directories(ep_badinput PRIVATE src)
+add_executable(ep_screencheck tests/screencheck.c src/screen.c src/grf.c) # pixels the renderer puts down
+target_link_libraries(ep_screencheck PRIVATE epcore)
+target_include_directories(ep_screencheck PRIVATE src)
 add_executable(ep_flow tests/flow.c)
 target_link_libraries(ep_flow PRIVATE epcore)
 enable_testing()
 add_test(NAME flow COMMAND ep_flow)
 add_test(NAME badinput COMMAND ep_badinput)
+add_test(NAME screencheck COMMAND ep_screencheck)
 
 add_executable(ep_subsys tests/subsys.c tests/statemap.c)
 target_link_libraries(ep_subsys PRIVATE epcore)
@@ -116,16 +120,17 @@ add_library(eptestdata OBJECT tests/testdata.c)
 target_link_libraries(eptestdata PRIVATE epcore)
 target_compile_definitions(eptestdata PRIVATE EP_SOURCE_ORIGINAL="${CMAKE_CURRENT_SOURCE_DIR}/original")
 foreach(t ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump ep_planetdump
-          ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_clips ep_bootdump ep_flowdump ep_flow ep_subsys)
+          ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_clips ep_bootdump ep_flowdump ep_flow ep_subsys
+          ep_screencheck)
   target_sources(${t} PRIVATE $<TARGET_OBJECTS:eptestdata>)
 endforeach()
-set_tests_properties(flow PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(flow screencheck PROPERTIES SKIP_RETURN_CODE 77)
 
 # The frontend and the test tools: the usual warnings (the core has stricter ones above)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   foreach(t witchspace ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump
             ep_planetdump ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_clips ep_bootdump ep_flowdump ep_flow
-            ep_subsys ep_badinput)
+            ep_subsys ep_badinput ep_screencheck)
     target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
     if(WS_WERROR)
       target_compile_options(${t} PRIVATE -Werror)
