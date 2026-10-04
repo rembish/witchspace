@@ -59,27 +59,30 @@ static uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
  * (b0) and copy (b2) commands, bit 0 the last; the stub at CS:0 gives the unpacked size */
 static int unexepack(const uint8_t *img, size_t len, uint16_t cs, uint8_t *out, size_t out_len)
 {
-    if ((size_t)cs * 16 + 16 > len) return 0;
-    const uint8_t *stub = img + (size_t)cs * 16;
+    /* si and di count the bytes still before the read and write positions, so no step can
+     * reach outside either buffer, whatever the input */
+    size_t src_len = (size_t)cs * 16;
+    if (src_len < 16 || src_len + 16 > len || src_len > out_len) return 0;
+    const uint8_t *stub = img + src_len;
     if (stub[14] != 'R' || stub[15] != 'B') return 0;
-    size_t dest = (size_t)le16(stub + 12) * 16, src_len = (size_t)cs * 16;
-    if (dest != out_len || src_len > out_len) return 0;
+    size_t dest = (size_t)le16(stub + 12) * 16;
+    if (dest != out_len) return 0;
     memset(out, 0, out_len);
     memcpy(out, img, src_len);
-    size_t si = src_len - 1, di = dest - 1;
-    while (si > 0 && img[si] == 0xff) si--; /* padding to a paragraph */
+    size_t si = src_len, di = dest;
+    while (si > 0 && img[si - 1] == 0xff) si--; /* padding to a paragraph */
     for (;;) {
         if (si < 3) return 0;
-        uint8_t cmd = img[si];
-        size_t n = (size_t)(img[si - 2] | img[si - 1] << 8);
+        uint8_t cmd = img[si - 1];
+        size_t n = (size_t)(img[si - 3] | img[si - 2] << 8);
         si -= 3;
-        if ((cmd & 0xfe) == 0xb0) {
-            uint8_t v = img[si--];
-            if (n > di + 1) return 0;
-            while (n--) out[di--] = v;
-        } else if ((cmd & 0xfe) == 0xb2) {
-            if (n > di + 1 || n > si + 1) return 0;
-            while (n--) out[di--] = img[si--];
+        if ((cmd & 0xfe) == 0xb0) { /* fill: n times the byte before */
+            if (si < 1 || n > di) return 0;
+            uint8_t v = img[--si];
+            while (n--) out[--di] = v;
+        } else if ((cmd & 0xfe) == 0xb2) { /* copy n bytes */
+            if (n > di || n > si) return 0;
+            while (n--) out[--di] = img[--si];
         } else {
             return 0;
         }
