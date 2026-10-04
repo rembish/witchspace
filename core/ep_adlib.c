@@ -316,7 +316,7 @@ void ep_adlib_music(ep_game *g)
     ww(g, 0xb69f, rb(g, (uint16_t)(0xbd00 + rw(g, 0xbccd))));
     uint32_t t = (uint32_t)rw(g, 0xb69f) * rw(g, 0xb6b4) / 0x3c; /* 7e8: ticks a second */
     /* 123321h: the driver's figure for the timer's input, near the PIT's 1193182 Hz */
-    set_timer(g, t > 0x12 ? (uint16_t)(0x123321u / t) : 0xffff);
+    set_timer(g, (uint16_t)(t > 0x12 ? 0x123321u / t : 0xffff));
     uint16_t si = 18; /* 3cf: past MThd and its six bytes, MTrk; the track's length (low word) */
     ww(g, 0xb688, (uint16_t)(song(g, 20) << 8 | song(g, 21)));
     si = 22;

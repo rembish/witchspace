@@ -235,7 +235,7 @@ static void mickeys(ep_game *g, int16_t *x, int16_t *y)
 /* 1164: an eighth of the mickeys, at most 63 */
 static int8_t mouse_axis(int16_t v)
 {
-    uint16_t a = (uint16_t)(v < 0 ? 0u - (uint16_t)v : (uint16_t)v) >> 3;
+    uint16_t a = (uint16_t)((uint16_t)(v < 0 ? 0u - (uint16_t)v : (uint16_t)v) >> 3);
     uint8_t b = a >= 0x40 ? 0x3f : (uint8_t)a;
     return (int8_t)(v < 0 ? (uint8_t)(0u - b) : b);
 }
@@ -561,7 +561,7 @@ static void autopilot(ep_game *g)
         p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
         uint16_t m = magnitude(p[0], p[1], p[2]);
         ap_speed_up_or_down(f, m >= 0x15e);
-        uint16_t q = f->speed ? (uint16_t)(m / f->speed) : 0;
+        uint16_t q = (uint16_t)(f->speed ? m / f->speed : 0);
         if (q == 1) { /* there: the last step exactly onto the point */
             f->speed = 0;
             f->moved = 1;
@@ -666,7 +666,7 @@ static uint8_t *drawn(ep_game *g, uint16_t addr) { return &g->f.dash[addr - 0x54
  * 48, the rest black */
 static void gauge(ep_game *g, int16_t x, int16_t y, uint8_t colour, uint8_t value, int scale, int16_t h)
 {
-    int16_t w = scale ? (int16_t)(value * 12 / 0x3f) : value;
+    int16_t w = (int16_t)(scale ? value * 12 / 0x3f : value);
     if (w) ep_render_rect(&g->render, colour, x, y, w, h);
     if (w != 0x30) ep_render_rect(&g->render, 0, (int16_t)(x + w), y, (int16_t)(0x30 - w), h);
 }

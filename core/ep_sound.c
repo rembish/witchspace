@@ -71,7 +71,7 @@ void ep_sound_under_fire(ep_game *g)
 void ep_surface_sound(ep_game *g, uint16_t size)
 {
     ep_event_add(g, EP_EV_SURFACE_SOUND, size);
-    unsigned al = ((size & 0xff) >> 1) + 0xa0;
+    unsigned al = ((size & 0xffu) >> 1) + 0xa0u;
     uint8_t ah = al > 0xff ? 0xff : (uint8_t)al;
     if (ah >= 0xfa) ah = 0xfa;
     if (speaker(g)) { /* 4cfe: sequence 9 (ds:4f73) at that pitch */

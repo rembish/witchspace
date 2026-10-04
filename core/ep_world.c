@@ -279,7 +279,7 @@ static int16_t compass_div(int16_t v, uint16_t d)
     uint16_t a = neg ? (uint16_t)(0u - (uint16_t)v) : (uint16_t)v;
     uint16_t hi = (uint16_t)(((int16_t)a < 0 ? 0xff00u : 0) | (a >> 8)), lo = (uint16_t)(a << 8); /* cwd */
     uint32_t n = (uint32_t)hi << 16 | lo;
-    uint16_t q = n / d > 0xffff ? lo : (uint16_t)(n / d);
+    uint16_t q = (uint16_t)(n / d > 0xffff ? lo : n / d);
     return (int16_t)(neg ? (uint16_t)(0u - q) : q);
 }
 

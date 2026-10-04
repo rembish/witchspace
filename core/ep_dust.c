@@ -219,10 +219,11 @@ void ep_dust_frame(ep_game *g)
     if (view == 0x600 || view == 0x200) {
         int right = view == 0x600;
         uint8_t v = (uint8_t)pitch;
-        if (v) shift(g, (int16_t)(right ? -(int16_t)(v << 8) : (int16_t)(v << 8)) >> 1, 0);
+        if (v) shift(g, (int16_t)((int16_t)(right ? -(int16_t)(v << 8) : (int16_t)(v << 8)) >> 1), 0);
         uint16_t sp = f->speed;
         if (sp) shift(g, (int16_t)(uint16_t)((uint8_t)(right ? sp : -sp) << 8) >> 3, 1);
-        uint16_t a = (uint16_t)((int16_t)(int8_t)(turn >> 8) << 1);
+        uint16_t a = (uint16_t)((int16_t)(int8_t)(turn >> 8) *
+                                2); /* times two: a shift of a negative is undefined in C */
         if (a) roll(g, right ? a : (uint16_t)-a);
         for (int i = 0; i < DUST; i++) {
             const uint8_t *p = f->dust + 7 * i;
@@ -237,7 +238,7 @@ void ep_dust_frame(ep_game *g)
         if (!rear) d = (uint16_t)-d;
         shift(g, sar((int16_t)d, 1), 0);
     }
-    uint16_t a = (uint16_t)((int16_t)(int8_t)turn << 1);
+    uint16_t a = (uint16_t)((int16_t)(int8_t)turn * 2);
     if (!rear) a = (uint16_t)-a;
     if (a) roll(g, a);
     fly(g, rear);

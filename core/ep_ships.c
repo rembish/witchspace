@@ -377,7 +377,7 @@ void ep_explode(ep_game *g, ep_object *o)
         uint8_t c = o->b[0x2c];
         if (!c) return;
         uint8_t q = (uint8_t)(0xff / (c + 1));
-        count = (rng(g) & 0xff) / (uint8_t)(q + 1); /* 0..about c, near evenly */
+        count = (unsigned)(rng(g) & 0xff) / (unsigned)(uint8_t)(q + 1); /* 0..about c, near evenly */
         if (!count) return;
     }
     for (; count; count--) {
@@ -1027,7 +1027,7 @@ static void ai_loner(ep_game *g, ep_object *o)
 }
 
 /* with the jump drive on, a spawn chance 32 times higher, as the speed is (a768) */
-static uint16_t jump(const ep_game *g, uint16_t p) { return g->f.jump_speed ? (uint16_t)(p << 5) : p; }
+static uint16_t jump(const ep_game *g, uint16_t p) { return (uint16_t)(g->f.jump_speed ? p << 5 : p); }
 
 void ep_ai_frame(ep_game *g)
 {

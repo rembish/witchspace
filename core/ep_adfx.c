@@ -132,13 +132,13 @@ static uint8_t operators(const ep_game *g, uint8_t v)
 static uint16_t shl16(uint16_t v, uint8_t n)
 {
     n &= 31;
-    return n >= 16 ? 0 : (uint16_t)(v << n);
+    return (uint16_t)(n >= 16 ? 0 : v << n);
 }
 
 static uint16_t shr16(uint16_t v, uint8_t n)
 {
     n &= 31;
-    return n >= 16 ? 0 : (uint16_t)(v >> n);
+    return (uint16_t)(n >= 16 ? 0 : v >> n);
 }
 
 /* 262e */
