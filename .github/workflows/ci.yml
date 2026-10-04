@@ -7,6 +7,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call: # the release and Pages workflows run these checks first
 
 jobs:
   build:
@@ -36,6 +37,20 @@ jobs:
           set -e
           cat err.txt
           test "$code" = 1 && grep -q "ELITE.EXE" err.txt
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - name: Build with AddressSanitizer and UBSan (errors stop the run)
+        run: |
+          cmake -S . -B build-san -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all"
+          cmake --build build-san -j
+      - name: Broken game files rejected cleanly (and the tests that need none)
+        run: ctest --test-dir build-san --output-on-failure
 
   web:
     runs-on: ubuntu-24.04
