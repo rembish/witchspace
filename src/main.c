@@ -35,6 +35,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h> /* AttachConsole */
 #endif
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+#include "icon.h"
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -544,10 +547,10 @@ int main(int argc, char **argv)
     if (!saves) saves = data; /* the commanders beside the game, as the original kept them */
     size_t n;
     uint8_t *exe = files_slurp(path, &n); /* the game's tables */
-    if (!exe) { return fail("%s: cannot be read\n", path); }
+    if (!exe) return fail("%s: cannot be read\n", path);
     int r = ep_data_load(exe, n);
     free(exe);
-    if (r) { return fail("%s: %s\n", path, ep_data_error(r)); }
+    if (r) return fail("%s: %s\n", path, ep_data_error(r));
     files_find(data, "ELITE.GRF", path, sizeof path);
     uint8_t *grf = files_slurp(path, &n);
     if (grf) ep_data_grf(grf, n);
@@ -557,6 +560,10 @@ int main(int argc, char **argv)
         return fail("%s: the folder's name is too long\n", strlen(saves) >= strlen(data) ? saves : data);
     }
 
+#ifdef _WIN32
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1"); /* the program's icon, every size of it */
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
+#endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
         return fail("SDL_Init: %s\n", SDL_GetError());
     }
@@ -567,7 +574,15 @@ int main(int argc, char **argv)
     tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_W,
                                   SCREEN_H)
               : NULL;
-    if (!tex) { return fail("SDL: %s\n", SDL_GetError()); }
+    if (!tex) return fail("SDL: %s\n", SDL_GetError());
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+    SDL_Surface *icon = SDL_CreateRGBSurfaceWithFormatFrom((void *)icon_rgba, ICON_SIZE, ICON_SIZE, 32,
+                                                           ICON_SIZE * 4, SDL_PIXELFORMAT_RGBA32);
+    if (icon) { /* the window's icon (Windows takes the program's) */
+        SDL_SetWindowIcon(win, icon);
+        SDL_FreeSurface(icon);
+    }
+#endif
     audio_init();
     screen_init();
 

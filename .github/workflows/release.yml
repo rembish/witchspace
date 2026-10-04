@@ -101,7 +101,7 @@ jobs:
         run: |
           mkdir -p witchspace-web
           cp build-web/witchspace.html witchspace-web/index.html
-          cp build-web/witchspace.js build-web/witchspace.wasm witchspace-web/
+          cp build-web/witchspace.js build-web/witchspace.wasm web/favicon.png witchspace-web/
           web/licenses.sh witchspace-web # ours and the third parties', Emscripten's included
           zip -r witchspace-web.zip witchspace-web
       - uses: actions/upload-artifact@v4

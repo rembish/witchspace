@@ -1,2 +1,4 @@
 /* the program's manifest (1, RT_MANIFEST): see witchspace.manifest */
 1 24 "@CMAKE_CURRENT_SOURCE_DIR@/src/witchspace.manifest"
+/* its icon (made by tools/make_icon.py): Explorer's, and the window's (src/main.c) */
+1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/src/witchspace.ico"

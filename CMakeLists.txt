@@ -65,6 +65,7 @@ if(EMSCRIPTEN)
     -sEXIT_RUNTIME=0 -sFORCE_FILESYSTEM=1 -lidbfs.js "-sEXPORTED_RUNTIME_METHODS=['callMain','FS','IDBFS']"
     --shell-file ${CMAKE_CURRENT_BINARY_DIR}/shell.html)
   configure_file(web/shell.html shell.html @ONLY) # with the version filled in
+  configure_file(web/favicon.png favicon.png COPYONLY) # the page's icon, beside it
   set_property(TARGET witchspace APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/shell.html)
   set_target_properties(witchspace PROPERTIES SUFFIX ".html")
 else()

@@ -10,7 +10,7 @@ C_FILES    = core/*.c core/*.h src/*.c src/*.h tests/*.c
 
 VERSION   := $(shell cat VERSION)
 
-.PHONY: help version-check build web run test clips difftest difftest-run windows wintest windifftest format format-check data-check py-sync py-format py-check check
+.PHONY: help version-check build web run test clips icon difftest difftest-run windows wintest windifftest format format-check data-check py-sync py-format py-check check
 
 help: ## This list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -54,16 +54,19 @@ clips: build ## Short videos and previews of scripted scenes into clips/ (from o
 
 format: ## Format the C code (clang-format 21) and the Python (ruff)
 	clang-format -i $(C_FILES)
-	$(UV) run ruff format re
+	$(UV) run ruff format re tools
 
 format-check: ## Check formatting only
 	clang-format --dry-run --Werror $(C_FILES)
-	$(UV) run ruff format --check re
+	$(UV) run ruff format --check re tools
 
 data-check: build ## The core's loader against an independent extraction of the tables
 	$(UV) run re/tools/gen_tables.py --check $(BUILD)/ep_datadump
 
 difftest: build difftest-run ## Every reconstructed routine against the original (about an hour); fails if any differs
+
+icon: ## The icon's sizes (Windows, the window, the web page) from assets/icon.png
+	$(UV) run tools/make_icon.py
 
 windows: ## The Windows version and test tools, cross-built with MinGW-w64 (build-win/)
 	cmake -S . -B $(BUILD_WIN) -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake -DWS_VENDOR_SDL=ON -DCMAKE_BUILD_TYPE=Release
@@ -88,11 +91,11 @@ py-sync: ## The Python environment (.venv) for the tools in re/
 	$(UV) sync --extra dev
 
 py-format: ## Format the Python
-	$(UV) run ruff format re
+	$(UV) run ruff format re tools
 
 py-check: ## Python: format check, lint, strict types
-	$(UV) run ruff format --check re
-	$(UV) run ruff check re
+	$(UV) run ruff format --check re tools
+	$(UV) run ruff check re tools
 	$(UV) run mypy
 
 check: version-check format-check py-check test data-check ## What CI checks, plus the data check

@@ -112,8 +112,8 @@ jobs:
       - name: Environment
         run: uv sync --extra dev
       - name: Format
-        run: uv run ruff format --check re
+        run: uv run ruff format --check re tools
       - name: Lint
-        run: uv run ruff check re
+        run: uv run ruff check re tools
       - name: Types
         run: uv run mypy

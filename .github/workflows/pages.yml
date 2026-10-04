@@ -38,7 +38,7 @@ jobs:
         run: |
           mkdir -p site
           cp build-web/witchspace.html site/index.html
-          cp build-web/witchspace.js build-web/witchspace.wasm site/
+          cp build-web/witchspace.js build-web/witchspace.wasm web/favicon.png site/
           web/licenses.sh site # ours and the third parties', Emscripten's included
       - uses: actions/upload-pages-artifact@v3
         with:
