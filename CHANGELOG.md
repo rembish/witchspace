@@ -4,7 +4,7 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
-## [Unreleased]
+## [0.1.5] — 2026-10-04
 
 - **The copy protection takes the right word.** Every copy the port was made from had the
   protection's check patched out, so `--protection` checked a guessed rule and refused the
@@ -123,6 +123,7 @@ desktop and in the browser.
 
 Not planned: the Roland LAPC-1's music and effects, and the 16-colour EGA/VGA screen modes.
 
+[0.1.5]: https://github.com/rembish/witchspace/releases/tag/v0.1.5
 [0.1.4]: https://github.com/rembish/witchspace/releases/tag/v0.1.4
 [0.1.3]: https://github.com/rembish/witchspace/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rembish/witchspace/releases/tag/v0.1.2
