@@ -2093,6 +2093,8 @@ def runs_of(addrs: Iterable[int]) -> list[tuple[int, int]]:
 def main() -> None:
     addr, regs, exits = ROUTINES[NAME]
     files = sorted(glob.glob(PATTERN))
+    if not files:  # nothing compared proves nothing: a failure, not "0 differ"
+        sys.exit(f"{NAME}: no states match {PATTERN} (make the corpus with corpus.py)")
     tmp = tempfile.mkdtemp()
     maskf = os.path.join(tmp, "mask")
     subprocess.run([TOOL, "mask", maskf], check=True)

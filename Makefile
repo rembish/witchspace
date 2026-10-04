@@ -61,9 +61,11 @@ format-check: ## Check formatting only
 data-check: build ## The core's loader against an independent extraction of the tables
 	$(UV) run re/tools/gen_tables.py --check $(BUILD)/ep_datadump
 
-difftest: build ## Every reconstructed routine against the original (about an hour)
-	cd re/emu && for t in $$($(UV) run subtest.py --list); do \
-		$(UV) run subtest.py $$t --fuzz 2 --show 2 | tail -1; done
+difftest: build ## Every reconstructed routine against the original (about an hour); fails if any differs
+	@cd re/emu && failed=""; for t in $$($(UV) run subtest.py --list); do \
+		out=$$($(UV) run subtest.py $$t --fuzz 2 --show 2 2>&1); status=$$?; \
+		echo "$$out" | tail -1; [ $$status = 0 ] || failed="$$failed $$t"; done; \
+		if [ -n "$$failed" ]; then echo "difftest FAILED:$$failed"; exit 1; else echo "difftest: all passed"; fi
 
 py-sync: ## The Python environment (.venv) for the tools in re/
 	$(UV) sync --extra dev
