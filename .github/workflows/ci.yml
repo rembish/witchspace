@@ -1,5 +1,6 @@
-# What can be checked without the original game: the build (warnings are errors), the web
-# build, formatting, and the Python tooling's lint and types. The differential tests need
+# What can be checked without the original game: the build (warnings are errors), the
+# Windows build as released (with a non-ASCII folder), the web build, formatting, and the
+# Python tooling's lint and types. The differential tests need
 # your copy of Elite Plus, so they run locally (see README); here the test tools that need
 # it exit 77 and ctest counts them as skipped.
 name: CI
@@ -51,6 +52,36 @@ jobs:
           cmake --build build-san -j
       - name: Broken game files rejected cleanly (and the tests that need none)
         run: ctest --test-dir build-san --output-on-failure
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
+      - name: Build (as released)
+        run: |
+          cmake -S . -B build -G Ninja -DWS_VENDOR_SDL=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target witchspace
+      - name: The manifest is in (UTF-8 file names)
+        run: grep -c activeCodePage build/witchspace.exe
+      - name: A game folder with a non-ASCII name is found
+        run: |
+          # not Elite Plus's ELITE.EXE: the program finds and reads it, and says so (exit 1)
+          mkdir -p "tést" && echo "not a game" > "tést/ELITE.EXE" && cp build/witchspace.exe "tést/"
+          check() {
+            set +e; "$@" 2> err.txt; code=$?; set -e
+            cat err.txt
+            test "$code" = 1 && grep -q "not a DOS executable" err.txt
+          }
+          check ./build/witchspace.exe --data "tést" # given with --data
+          check "./tést/witchspace.exe"              # beside the program
 
   web:
     runs-on: ubuntu-24.04
