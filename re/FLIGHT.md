@@ -215,6 +215,21 @@ Findings:
     by 1 instead: the ship moves onto the point, and then stays in step 4 the same way,
     without the stray sprite.
   - Its roll match stores the 11-bit sign-extended angle.
+- **The docking computer flies through the station, a bug of the original.** Step 4 flies
+  a straight line to the point 2000 before the slot (the slot faces +z, the planet's side)
+  with no thought for what is in the way. From behind the station, within about 9° of its
+  rear axis at the safe zone's edge (wider closer in), that line crosses the station's box
+  (±275, `ds:7614`), and the collision (`66d6`) finds the ship not lined up: 1500 damage,
+  dead.
+  - Arrivals come in near the station's equator (|x|, |y| ≥ 20000h, |z| < 8000h) and
+    launches leave the ship in front of the slot, so only a ship that has gone round the
+    back gets there. George Hooper's guide blamed engaging it "immediately after entering
+    protected station space"; the timing does not matter, the side does, and both his
+    remedies (fly in, line up first) move the ship to the slot's side.
+  - In the core, 27 of 3000 random directions at 13000 crash (55 of 3000 at 3000), all
+    near −z. The original, run in the emulator frame by frame with the station 12000 away:
+    from (0,0,−1) it flies into the station and dies; from the side or the front it docks.
+    The core does the same.
 - **`find_nearest`** (5fe1) would keep the caller's BP if no system qualified. That cannot
   happen in play:
   - Zoomed, a system must lie in the window around the chart's centre (±13h, ±10h). The

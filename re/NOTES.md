@@ -711,9 +711,22 @@ The flight loop (`a027`, top `a040`) calls, in order:
     byte).
 
   The price comes from the price table, paid by `8e23` (32-bit; refused → `ad50`). Then
-  held +1, offer −1, tonnes +1.
-- **Sell** (`9781`): held −1, offer +1 (stays at 255), tonnes −1, cash + selling price.
-  `98d4` adds the item's illegal flag (third byte at `ds:92a1`) to the legal status.
+  held +1, offer −1, and tonnes +1 for rows 0–12 (`9762`).
+- **Sell** (`9781`): held −1, offer +1 (stays at 255), tonnes −1 for rows 0–12 (`97b2`),
+  cash + selling price. `98d4` adds the item's illegal flag (third byte at `ds:92a1`) to
+  the legal status.
+- **The hold loses room for good, a bug of the original.** Alien Items (row 16) are in
+  tonnes by the goods table (`ds:8f2d`), and scooping a Thargon (`485f`) adds one to the
+  held count and to `ds:839c`; but buying and selling count tonnes only for rows below 13,
+  so selling one leaves `839c` a tonne too high. Each Alien Item scooped and sold costs a
+  tonne of capacity, saved with the commander and never recounted from the hold: only the
+  escape capsule (`6b40`) and the end of mission 1 (`9b4a`) zero it. Every other write
+  balances (the scoops at `478d`–`4855`, the Tribbles at `12f7`). George Hooper's guide
+  reported it ("35 tons may only allow 29–34", "after a mission?": Thargons come with the
+  Thargoids, in witchspace and their missions), and three of his mission saves carry
+  `839c` = 1 with an empty hold. Checked in the emulator (the original's sell at `9781` on
+  Alien Items leaves `839c` as it was) and in the core, which keeps it (`ep_trade.c`,
+  `ep_world.c`): six sold, then 29 tonnes fit.
 - **Equipment** (`932f`):
   - Fuel (row 0; mission 1 refuses with `8dad`; ≥ fbh refuses with `adaa`): a full tank
     costs `((255 − fuel)·7 · price) >> 8`; otherwise it buys what the low word of the cash
