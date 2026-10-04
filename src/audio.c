@@ -87,7 +87,13 @@ void audio_opl(const uint8_t (*writes)[2], int n, double ago)
     at = back < at ? at - back : 0;
     if (at < last_at) at = last_at; /* in the order made */
     last_at = at;
-    for (int k = 0; k < n && (tail + 1) % QUEUE != head; k++) {
+    for (int k = 0; k < n; k++) {
+        /* full (the device stalled): the oldest goes to the chip now, its timing lost, so that
+           no write is lost (a lost key-off would leave a note sounding) */
+        if ((tail + 1) % QUEUE == head) {
+            OPL3_WriteReg(&chip, queue[head].reg, queue[head].val);
+            head = (head + 1) % QUEUE;
+        }
         queue[tail].at = at;
         queue[tail].reg = writes[k][0];
         queue[tail].val = writes[k][1];
