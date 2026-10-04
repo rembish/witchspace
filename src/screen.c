@@ -1,4 +1,6 @@
-/* The original's screen, drawn from the core's output (see screen.h). */
+/* The original's screen, drawn from the core's output (see screen.h): the witchspace frontend's
+ * software renderer. Pixels go through the game's colour tables, so this draws only the MCGA
+ * mode. */
 #include "screen.h"
 
 #include "ep_circle.h"
@@ -15,8 +17,8 @@ uint8_t screen_px[SCREEN_H][SCREEN_W];
 #define VIEW_H 0x7c
 
 static uint8_t text_colour[256 + 0x15]; /* ds:20e9 (shadows from ds:20fe, 15h on) */
-static uint16_t palette = 0x1144;       /* the DAC table loaded (ds:) */
-static uint8_t kept_box[0x75][0x112], kept_line[9][0x130];
+static uint16_t palette = 0x1144;       /* the DAC table loaded: its ds address (EP_EV_PALETTE) */
+static uint8_t kept_box[0x75][0x112], kept_line[9][0x130]; /* EP_EV_KEEP's arg 1, arg 2 */
 
 void screen_init(void)
 {
@@ -129,7 +131,7 @@ static int glyph(int x, int y, uint8_t ch, uint8_t c)
 /* 2e6d (and 2ec0 first, one down and right in the shadows' colours) */
 static void text(const uint8_t *s, int len, int x, int y, uint8_t colour, int shadow)
 {
-    for (int pass = shadow ? 0 : 1; pass < 2; pass++) {
+    for (int pass = shadow ? 0 : 1; pass < 2; pass++) { /* pass 0: the shadow, colours from +15h */
         int off = pass ? 0 : 0x15, d = pass ? 0 : 1, px = x + d, py = y + d;
         uint8_t c = text_colour[colour + off];
         for (int i = 0; i < len && s[i];) {
@@ -208,6 +210,8 @@ static void prim(const ep_game *g, const ep_prim *p)
     }
 }
 
+/* the events in their places among the primitives (ep_event.at): a palette, an icon or the
+ * screen kept or put back takes effect between the primitives it came between */
 void screen_draw(const ep_game *g)
 {
     int e = 0;

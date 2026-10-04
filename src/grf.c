@@ -1,4 +1,5 @@
-/* ELITE.GRF, the 256-colour pictures (see grf.h). */
+/* ELITE.GRF, the 256-colour pictures, for the witchspace frontend's screen (see grf.h). The
+ * core reads only the widths (ep_data_grf); the pixels are the frontend's to draw. */
 #include "grf.h"
 
 #include <stdio.h>

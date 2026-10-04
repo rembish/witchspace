@@ -1,4 +1,6 @@
-/* The sound (see audio.h). */
+/* The sound (see audio.h): the witchspace frontend's, on SDL2. The speaker's square wave and
+ * the chip are mixed in the device's callback; the chip's writes wait in a queue, each marked
+ * with the sample it plays from. */
 #include "audio.h"
 
 #include "opl3.h"

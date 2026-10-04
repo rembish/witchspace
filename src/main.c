@@ -9,7 +9,8 @@
  *                  this program's folder, then the current one, then original/)
  *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
- *   --protection   ask the copy protection's question (off by default) */
+ *   --protection   ask the copy protection's question (off by default)
+ *   --shots DIR    every 25th picture shown saved as a PPM file in DIR, for checking */
 #include "audio.h"
 #include "files.h"
 #include "grf.h"
@@ -44,6 +45,13 @@ static uint32_t rgba[SCREEN_W * SCREEN_H];
 static int running = 1;
 static Uint64 t0, clocks_done; /* the timer's input clock, since t0 */
 
+/* which of the core's loops runs next (step):
+ *   M_TITLE_OPENING  the protection's question or the title's intro and credits (ep_station_key)
+ *   M_TITLE          the title's frames (ep_title_frame)
+ *   M_DIALOG         a screen waiting for keys (ep_station_key), then after_dialog
+ *   M_IDLE           a station screen idling (ep_station_idle)
+ *   M_FLIGHT         flight frames (ep_flight_frame)
+ *   M_PAUSE          the pause menu (ep_pause_idle), over paused_from */
 enum { M_TITLE_OPENING, M_TITLE, M_DIALOG, M_IDLE, M_FLIGHT, M_PAUSE };
 static int mode, after_dialog, waiting; /* waiting: the dialogue's EP_WAIT_* */
 static int paused_from;                 /* the mode the pause menu came over */
@@ -286,7 +294,8 @@ static void wait_for(ep_game *gg, uint32_t until, int show)
     }
 }
 
-/* a screen's pass: as often as a frame (two ticks), the original runs them as fast as it can */
+/* a screen's pass: as often as a frame (two ticks of the game's 54.6 Hz clock, about 36 ms),
+ * where the original runs them as fast as it can */
 static void pace(void)
 {
     Uint32 until = SDL_GetTicks() + 36;
@@ -383,6 +392,8 @@ static void step(void)
     case M_TITLE_OPENING:
     case M_DIALOG: {
         uint8_t k = g.in.last_key;
+        /* these waits are passed ffh (no key) every pass as well: the core looks at the clock
+         * or the key table itself (EP_WAIT_* in ep_station.h) */
         if (k == 0xff && waiting != EP_WAIT_TEXT && waiting != EP_WAIT_TIME && waiting != EP_WAIT_LIST &&
             waiting != EP_WAIT_SCAN) {
             pace();
