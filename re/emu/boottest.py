@@ -7,23 +7,30 @@ point with the answers typed (sound, graphics, the protection's word) up to 9e80
 segment is compared, byte by byte where the core models it, with what ep_boot (and the
 protection's question, asked with the same word) gives.
 """
+
 import datetime
 import os
 import subprocess
 import sys
 import tempfile
+from typing import Any, Final
 
-from machine import CS, DS, Machine
 from unicorn import UC_HOOK_CODE
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-DUMP = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "build", "ep_bootdump")
-SUBSYS = os.path.join(os.path.dirname(DUMP), "ep_subsys")
-os.environ["EP_ORIGINAL"] = os.path.join(HERE, "..", "..", "original")  # where ep_bootdump reads the music
-SCAN = {c: s for c, s in zip("QWERTYUIOP", range(0x10, 0x1A))}
-SCAN.update({c: s for c, s in zip("ASDFGHJKL", range(0x1E, 0x27))})
-SCAN.update({c: s for c, s in zip("ZXCVBNM", range(0x2C, 0x33))})
-CASES = [  # time, sound key, graphics key, word
+from eliteemu import Uc
+from machine import CS, DS, Machine
+
+HERE: Final = os.path.dirname(os.path.abspath(__file__))
+DUMP: Final = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "build", "ep_bootdump")
+SUBSYS: Final = os.path.join(os.path.dirname(DUMP), "ep_subsys")
+# where ep_bootdump reads the music
+os.environ["EP_ORIGINAL"] = os.path.join(HERE, "..", "..", "original")
+# letter -> scancode, by keyboard row
+SCAN: Final = dict(zip("QWERTYUIOP", range(0x10, 0x1A), strict=True))
+SCAN.update(zip("ASDFGHJKL", range(0x1E, 0x27), strict=True))
+SCAN.update(zip("ZXCVBNM", range(0x2C, 0x33), strict=True))
+TITLE: Final = 0x9E80  # where the start-up is over
+CASES: Final = [  # time, sound key, graphics key, word
     (datetime.datetime(1991, 1, 1, 12, 0, 0), "P", "M", "A"),
     (datetime.datetime(1991, 3, 7, 9, 41, 17, 230000), "P", "E", "ELITE"),
     (datetime.datetime(1991, 5, 2, 23, 59, 59, 990000), "P", "V", "WORD"),
@@ -33,28 +40,46 @@ CASES = [  # time, sound key, graphics key, word
 ]
 
 
-def main():
+def boot(when: datetime.datetime, sound: str, video: str, word: str) -> Machine:
+    """The original from its entry point, the answers typed, stopped at 9e80."""
+    m = Machine(clock=when)
+    m.boot()
+    m.press(SCAN[sound], SCAN[video], *[SCAN[c] for c in word], 0x1C)
+    at: list[int] = []
+
+    def reached(mu: Uc, a: int, s: int, u: Any) -> None:
+        at.append(1)
+        mu.emu_stop()
+
+    m.mu.hook_add(UC_HOOK_CODE, reached, begin=CS * 16 + TITLE, end=CS * 16 + TITLE)
+    m.run(stop=lambda m: bool(at))
+    return m
+
+
+def main() -> None:
     tmp = tempfile.mkdtemp()
     subprocess.run([SUBSYS, "mask", os.path.join(tmp, "mask")], check=True)
-    mask = open(os.path.join(tmp, "mask"), "rb").read()
+    with open(os.path.join(tmp, "mask"), "rb") as f:
+        mask = f.read()
     bad = 0
     for when, sound, video, word in CASES:
-        m = Machine(clock=when)
-        m.boot()
-        m.press(SCAN[sound], SCAN[video], *[SCAN[c] for c in word], 0x1C)
-        at = []
-        m.mu.hook_add(UC_HOOK_CODE, lambda mu, a, s, u: (at.append(1), mu.emu_stop()),
-                      begin=CS * 16 + 0x9E80, end=CS * 16 + 0x9E80)
-        m.run(stop=lambda m: bool(at))
+        m = boot(when, sound, video, word)
         want = bytes(m.mu.mem_read(DS * 16, 0x10000))
         out = os.path.join(tmp, "out")
-        subprocess.run([DUMP, str(m.r8(0x10BC)), str(m.r8(0x4801)), str(when.minute), str(when.second),
-                        str(when.microsecond // 10000), word, out], check=True)
-        got = open(out, "rb").read()
-        diff = [i for i in range(0x10000) if mask[i] and want[i] != got[i]
-                and not 0x020D <= i < 0x028D and i not in (0x0D2D, 0x0D2E)]  # the keys held (Enter, still down at 9e80)
-        print(f"{when} {sound}{video} {word}: {len(diff)} modelled bytes differ "
-              + " ".join(f"{i:x}:{want[i]:02x}/{got[i]:02x}" for i in diff[:16]))
+        args = [str(m.r8(0x10BC)), str(m.r8(0x4801)), str(when.minute), str(when.second)]
+        subprocess.run([DUMP, *args, str(when.microsecond // 10000), word, out], check=True)
+        with open(out, "rb") as f:
+            got = f.read()
+        # not compared: the keys held (Enter, still down at 9e80)
+        diff = [
+            i
+            for i in range(0x10000)
+            if mask[i] and want[i] != got[i] and not 0x020D <= i < 0x028D and i not in (0x0D2D, 0x0D2E)
+        ]
+        print(
+            f"{when} {sound}{video} {word}: {len(diff)} modelled bytes differ "
+            + " ".join(f"{i:x}:{want[i]:02x}/{got[i]:02x}" for i in diff[:16])
+        )
         bad += bool(diff)
     print(f"{len(CASES)} start-ups, {bad} differ")
     sys.exit(1 if bad else 0)

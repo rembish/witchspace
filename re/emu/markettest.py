@@ -9,20 +9,23 @@ generator state; quantities are the second byte of each cargo pair at ds:8379. E
 (9161) with a pattern of owned items (ds:8356): count ds:acb0, prices at ds:8d0a. Selling price
 (8e6b) for every possible buying price.
 """
+
 import os
 import subprocess
 import sys
+from typing import Final
 
 from eliteemu import Elite
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ARRIVALS = int(sys.argv[1]) if len(sys.argv) > 1 else 200
-DUMP = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "..", "build", "ep_marketdump")
+HERE: Final = os.path.dirname(os.path.abspath(__file__))
+ARRIVALS: Final = int(sys.argv[1]) if len(sys.argv) > 1 else 200
+DUMP: Final = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "..", "build", "ep_marketdump")
 
 
-def original():
+def original() -> list[str]:
+    """Prices, then arrivals (q), equipment (e) and selling prices (s), from the emulated original."""
     e = Elite()
-    lines = []
+    lines: list[str] = []
     for gov in range(8):
         for eco in range(8):
             for tech in range(256):
@@ -46,23 +49,26 @@ def original():
                 row = "".join(f" {e.r16(0x8D0A + 4 * k)}/{e.r16(0x8D0C + 4 * k)}" for k in range(n))
                 lines.append(f"e {gov} {eco} {tech} {n}{row}")
     for v in range(0, 0x10000, 16):
-        row = []
+        sells: list[str] = []
         for k in range(v, v + 16):
             e.w16(0x8D08, k)
-            row.append(str(e.call(0x8E6B)["ax"]))
-        lines.append("s " + " ".join(row))
+            sells.append(str(e.call(0x8E6B)["ax"]))
+        lines.append("s " + " ".join(sells))
     return lines
 
 
-def main():
+def main() -> None:
     want = original()
-    got = subprocess.run([DUMP, str(ARRIVALS)], capture_output=True, text=True,
-                         check=True).stdout.splitlines()
-    bad = [(a, b) for a, b in zip(want, got) if a != b]
+    got = subprocess.run(
+        [DUMP, str(ARRIVALS)], capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    bad = [(a, b) for a, b in zip(want, got, strict=False) if a != b]
     for a, b in bad[:6]:
         print(f"original: {a}\ncore:     {b}\n")
-    print(f"{len(want)} lines, {len(bad)} differ" + ("" if len(got) == len(want) else
-          f" (core printed {len(got)})"))
+    print(
+        f"{len(want)} lines, {len(bad)} differ"
+        + ("" if len(got) == len(want) else f" (core printed {len(got)})")
+    )
     sys.exit(1 if bad or len(got) != len(want) else 0)
 
 

@@ -1,5 +1,8 @@
 """Run the whole original ELITE.EXE headless: a minimal DOS and PC around Unicorn.
 
+Not run on its own: boottest.py, flowtest.py, titletest.py, corpus.py and play.py boot the
+game with Machine and compare its data segment (or record it) against the C core.
+
 The game is started from its entry point like DOS would (PSP below the image, DS = ES = PSP)
 and talks to Python stand-ins for DOS (INT 21h: files from original/ and an in-memory
 directory for saves, memory blocks, vectors, time), the video BIOS (INT 10h, only the mode
@@ -10,69 +13,115 @@ Time is deterministic: timer interrupts (INT 8, the game's handler at 4a99) are 
 where the game waits for them (the frame wait at 3027), and keys only when the game polls for
 one (0276) or between frames, from a script.
 """
+
 import datetime
 import os
 import struct
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any, Final, Literal
 
-from unicorn import UC_HOOK_CODE, UC_HOOK_INSN, UC_HOOK_INTR
-from unicorn.x86_const import (UC_X86_INS_IN, UC_X86_INS_OUT, UC_X86_REG_AX, UC_X86_REG_BX,
-                               UC_X86_REG_CS, UC_X86_REG_CX, UC_X86_REG_DI, UC_X86_REG_DS,
-                               UC_X86_REG_DX, UC_X86_REG_ES, UC_X86_REG_FLAGS, UC_X86_REG_IP,
-                               UC_X86_REG_SI, UC_X86_REG_SP, UC_X86_REG_SS)
+from unicorn import UC_HOOK_CODE, UC_HOOK_INSN
+from unicorn.x86_const import (
+    UC_X86_INS_IN,
+    UC_X86_INS_OUT,
+    UC_X86_REG_AX,
+    UC_X86_REG_BX,
+    UC_X86_REG_CS,
+    UC_X86_REG_CX,
+    UC_X86_REG_DS,
+    UC_X86_REG_DX,
+    UC_X86_REG_ES,
+    UC_X86_REG_FLAGS,
+    UC_X86_REG_IP,
+    UC_X86_REG_SP,
+    UC_X86_REG_SS,
+)
 
-import eliteemu
-from eliteemu import CS, DS, LOAD, Elite
+from eliteemu import CS, DS, LOAD, Elite, Uc
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ORIGINAL = os.path.join(HERE, "..", "..", "original")
+# CS and DS are re-exported: the tests take them from here.
+__all__ = ["CS", "DS", "LOAD", "WAITS", "Event", "Exit", "Machine", "StopFn", "WaitFn"]
 
-PSP = LOAD - 0x10
-BIOS = 0xF000           # segment of the default interrupt handlers (an IRET each)
-MEM_TOP = 0xA000
-CF, IF = 0x0001, 0x0200
+HERE: Final = os.path.dirname(os.path.abspath(__file__))
+ORIGINAL: Final = os.path.join(HERE, "..", "..", "original")
 
-KEY_POLL = 0x0276
+PSP: Final = LOAD - 0x10
+BIOS: Final = 0xF000  # segment of the default interrupt handlers (an IRET each)
+MEM_TOP: Final = 0xA000
+CF: Final = 0x0001
+IF: Final = 0x0200
+
+KEY_POLL: Final = 0x0276
+
+# A condition on the machine: a wait that still holds (WAITS), or a stop request (Machine.run).
+type WaitFn = Callable[[Machine], bool]
+type StopFn = Callable[[Machine], bool]
+# An interrupt to inject at the next resume: 8 (a timer tick) or ("kbd", scancode) through INT 9.
+type Event = Literal[8] | tuple[Literal["kbd"], int]
 
 
-def _deadline(hi, lo, equal):
-    def waiting(m):
+def _deadline(hi: int, lo: int, equal: bool) -> WaitFn:
+    """A deadline wait: the tick count ds:45e0 has not yet passed the 32-bit deadline hi:lo
+    (or reached it, with equal)."""
+
+    def waiting(m: "Machine") -> bool:
         target = m.reg(hi) << 16 | m.reg(lo)
         now = m.r16(0x45E2) << 16 | m.r16(0x45E0)
         return target > now or (equal and target == now)
+
     return waiting
+
+
+def _countdown(m: "Machine") -> bool:
+    return m.r16(0x45E4) != 0
 
 
 # Loops that wait for timer ticks: address -> condition that still holds while waiting. The
 # deadline loops compare the tick count ds:45e0 with a 32-bit deadline in registers.
-WAITS = {
+WAITS: Final[dict[int, WaitFn]] = {
     0x3027: _deadline(UC_X86_REG_DX, UC_X86_REG_AX, False),  # frame wait (301a)
-    0x3B18: _deadline(UC_X86_REG_DX, UC_X86_REG_CX, True),   # title picture: 1000 ticks or a key
+    0x3B18: _deadline(UC_X86_REG_DX, UC_X86_REG_CX, True),  # title picture: 1000 ticks or a key
     0x4E88: _deadline(UC_X86_REG_DX, UC_X86_REG_AX, False),  # delay: 570 ticks (120 with a card)
-    0xAF9A: lambda m: m.r16(0x45E4) != 0,                    # countdown ds:45e4 or a key
+    0xAF9A: _countdown,  # countdown ds:45e4 or a key
 }
 
 
 class Exit(Exception):
-    pass
+    """The program's exit (unused: INT 21h/4Ch stops the emulation and sets exit_code)."""
+
+
+@dataclass
+class _Handle:
+    """An open DOS file: its name in Machine.files and the file position."""
+
+    name: str
+    pos: int
 
 
 class Machine(Elite):
-    def __init__(self, clock=datetime.datetime(1991, 1, 1, 12, 0, 0), files=None):
+    """The whole game on a minimal PC: boot(), then run() with keys queued by press()."""
+
+    def __init__(
+        self,
+        clock: datetime.datetime = datetime.datetime(1991, 1, 1, 12, 0, 0),
+        files: Mapping[str, bytearray] | None = None,
+    ) -> None:
         super().__init__()
         mu = self.mu
         self.clock = clock
         self.stdout = ""
-        self.files = dict(files or {})   # extra/writable files by upper-case name
-        self.handles = {}
-        self.next_seg = LOAD + 0x2571     # first paragraph after the image
+        self.files: dict[str, bytearray] = dict(files or {})  # extra/writable files by upper-case name
+        self.handles: dict[int, _Handle] = {}
+        self.next_seg = LOAD + 0x2571  # first paragraph after the image
         self.video_mode = 3
         self.scancode = 0
         self.retrace = 0
-        self.pending = []                 # interrupts to inject before resuming
+        self.pending: list[Event] = []  # interrupts to inject before resuming
         self.ticks = 0
-        self.keys = []                    # scancodes, delivered at polls
-        self.down = None                  # pressed key whose release is still to come
-        self.exit_code = None
+        self.keys: list[int] = []  # scancodes, delivered at polls
+        self.down: int | None = None  # pressed key whose release is still to come
+        self.exit_code: int | None = None
         self.dta = (0, 0)
         self.dac = bytearray(768)
         self.dac_index = 0
@@ -92,23 +141,29 @@ class Machine(Elite):
         for a in WAITS:
             mu.hook_add(UC_HOOK_CODE, self._wait, begin=CS * 16 + a, end=CS * 16 + a)
         mu.hook_add(UC_HOOK_CODE, self._key_poll, begin=CS * 16 + KEY_POLL, end=CS * 16 + KEY_POLL)
-        self.stop_at = {}                 # address -> callback(machine) returning True to stop
+        self.stop_at: dict[int, StopFn] = {}  # address -> callback(machine) returning True to stop
 
     # ---- registers ----
-    def reg(self, r):
-        return self.mu.reg_read(r)
+    def reg(self, r: int) -> int:
+        """Register r (a UC_X86_REG_* id)."""
+        v: int = self.mu.reg_read(r)
+        return v
 
-    def setreg(self, r, v):
+    def setreg(self, r: int, v: int) -> None:
+        """Set register r (a UC_X86_REG_* id) to the low word of v."""
         self.mu.reg_write(r, v & 0xFFFF)
 
-    def carry(self, on):
+    def carry(self, on: bool) -> None:
+        """Set or clear the carry flag (DOS's error return)."""
         f = self.reg(UC_X86_REG_FLAGS)
         self.setreg(UC_X86_REG_FLAGS, (f | CF) if on else (f & ~CF))
 
-    def lin(self, seg, off):
+    def lin(self, seg: int, off: int) -> int:
+        """The linear address of seg:off."""
         return (seg << 4) + off
 
-    def read_str(self, seg, off, end=0):
+    def read_str(self, seg: int, off: int, end: int = 0) -> bytes:
+        """The string at seg:off up to (without) the byte end."""
         out = bytearray()
         while True:
             b = self.mu.mem_read(self.lin(seg, off + len(out)), 1)[0]
@@ -117,7 +172,7 @@ class Machine(Elite):
             out.append(b)
 
     # ---- ports ----
-    def _in(self, mu, port, size, _):
+    def _in(self, mu: Uc, port: int, size: int, _: Any) -> int:
         if port == 0x3DA:
             self.retrace ^= 0x09
             return self.retrace
@@ -125,26 +180,29 @@ class Machine(Elite):
             return self.scancode
         return 0
 
-    def _out(self, mu, port, size, value, _):
+    def _out(self, mu: Uc, port: int, size: int, value: int, _: Any) -> None:
         if port == 0x3C8:
             self.dac_index = (value & 0xFF) * 3
         elif port == 0x3C9:
             self.dac[self.dac_index % 768] = value & 0x3F
             self.dac_index += 1
 
-    def screenshot(self, path):
+    def screenshot(self, path: str) -> None:
         """Save the mode 13h screen (a000:0000) with the current DAC as a PNG."""
-        from PIL import Image
+        # Pillow is not a dependency of the tools (a system package, viewers only).
+        from PIL import Image  # type: ignore[import-not-found]
+
         pix = bytes(self.mu.mem_read(0xA0000, 320 * 200))
         im = Image.frombytes("P", (320, 200), pix)
         im.putpalette([v * 255 // 63 for v in self.dac])
         im.convert("RGB").save(path)
 
     # ---- interrupts ----
-    def _intr(self, mu, intno, _):
+    def _intr(self, mu: Uc, intno: int, _: Any) -> None:
         ip = self.reg(UC_X86_REG_IP)
         if intno == 0x21:
-            return self._dos()
+            self._dos()
+            return
         if intno == 0x10:
             ah = self.reg(UC_X86_REG_AX) >> 8
             if ah == 0x00:
@@ -159,7 +217,9 @@ class Machine(Elite):
             return
         raise RuntimeError(f"unhandled int {intno:#x} near {self.reg(UC_X86_REG_CS):04x}:{ip:04x}")
 
-    def _dos(self):
+    def _dos(self) -> None:
+        """INT 21h: the calls the game makes. Errors set the carry flag and an error code in ax,
+        as DOS does."""
         ax = self.reg(UC_X86_REG_AX)
         ah, al = ax >> 8, ax & 0xFF
         ds, dx = self.reg(UC_X86_REG_DS), self.reg(UC_X86_REG_DX)
@@ -180,70 +240,86 @@ class Machine(Elite):
         elif ah == 0x30:
             self.setreg(UC_X86_REG_AX, 0x0005)
         elif ah in (0x3C, 0x3D):
-            name = self.read_str(ds, dx).decode("latin1").upper()
-            if ah == 0x3C:
-                self.files[name] = bytearray()
-            data = self.files.get(name)
-            if data is None:
-                path = os.path.join(ORIGINAL, name)
-                if not os.path.exists(path):
-                    self.setreg(UC_X86_REG_AX, 2)
-                    return self.carry(True)
-                data = bytearray(open(path, "rb").read())
-                self.files[name] = data
-            h = 5 + len(self.handles)
-            while h in self.handles:
-                h += 1
-            self.handles[h] = [name, 0]
-            self.setreg(UC_X86_REG_AX, h)
-            return self.carry(False)
+            self._dos_open(ah, ds, dx)
         elif ah == 0x3E:
             self.handles.pop(self.reg(UC_X86_REG_BX), None)
-            return self.carry(False)
+            self.carry(False)
         elif ah in (0x3F, 0x40):
-            h = self.handles.get(self.reg(UC_X86_REG_BX))
-            if h is None:
-                self.setreg(UC_X86_REG_AX, 6)
-                return self.carry(True)
-            data, n = self.files[h[0]], self.reg(UC_X86_REG_CX)
-            if ah == 0x3F:
-                chunk = bytes(data[h[1]:h[1] + n])
-                self.mu.mem_write(self.lin(ds, dx), chunk)
-            else:
-                chunk = bytes(self.mu.mem_read(self.lin(ds, dx), n))
-                data[h[1]:h[1] + n] = chunk
-            h[1] += len(chunk)
-            self.setreg(UC_X86_REG_AX, len(chunk))
-            return self.carry(False)
+            self._dos_read_write(ah, ds, dx)
         elif ah == 0x42:
             h = self.handles[self.reg(UC_X86_REG_BX)]
             off = self.reg(UC_X86_REG_CX) << 16 | dx
-            base = (0, h[1], len(self.files[h[0]]))[al]
-            h[1] = (base + (off - (1 << 32) if off >> 31 else off))
-            self.setreg(UC_X86_REG_AX, h[1] & 0xFFFF)
-            self.setreg(UC_X86_REG_DX, h[1] >> 16)
-            return self.carry(False)
+            base = (0, h.pos, len(self.files[h.name]))[al]
+            h.pos = base + (off - (1 << 32) if off >> 31 else off)
+            self.setreg(UC_X86_REG_AX, h.pos & 0xFFFF)
+            self.setreg(UC_X86_REG_DX, h.pos >> 16)
+            self.carry(False)
         elif ah == 0x48:
-            n = self.reg(UC_X86_REG_BX)
-            if self.next_seg + n > MEM_TOP:
-                self.setreg(UC_X86_REG_AX, 8)
-                self.setreg(UC_X86_REG_BX, max(0, MEM_TOP - self.next_seg))
-                return self.carry(True)
-            self.setreg(UC_X86_REG_AX, self.next_seg)
-            self.next_seg += n
-            return self.carry(False)
+            self._dos_alloc()
         elif ah == 0x4A:
-            return self.carry(False)
+            self.carry(False)
         elif ah == 0x4C:
             self.exit_code = al
             self.mu.emu_stop()
         elif ah in (0x4E, 0x4F):
             self.setreg(UC_X86_REG_AX, 0x12)
-            return self.carry(True)
+            self.carry(True)
         else:
             raise RuntimeError(f"unhandled DOS call {ax:#06x}")
 
-    def inject(self, n):
+    def _dos_open(self, ah: int, ds: int, dx: int) -> None:
+        """3Ch create (an empty in-memory file), 3Dh open (in-memory, else from original/)."""
+        name = self.read_str(ds, dx).decode("latin1").upper()
+        if ah == 0x3C:
+            self.files[name] = bytearray()
+        data = self.files.get(name)
+        if data is None:
+            path = os.path.join(ORIGINAL, name)
+            if not os.path.exists(path):
+                self.setreg(UC_X86_REG_AX, 2)
+                self.carry(True)
+                return
+            with open(path, "rb") as f:
+                data = bytearray(f.read())
+            self.files[name] = data
+        h = 5 + len(self.handles)
+        while h in self.handles:
+            h += 1
+        self.handles[h] = _Handle(name, 0)
+        self.setreg(UC_X86_REG_AX, h)
+        self.carry(False)
+
+    def _dos_read_write(self, ah: int, ds: int, dx: int) -> None:
+        """3Fh read, 40h write: cx bytes at ds:dx through handle bx."""
+        h = self.handles.get(self.reg(UC_X86_REG_BX))
+        if h is None:
+            self.setreg(UC_X86_REG_AX, 6)
+            self.carry(True)
+            return
+        data, n = self.files[h.name], self.reg(UC_X86_REG_CX)
+        if ah == 0x3F:
+            chunk = bytes(data[h.pos : h.pos + n])
+            self.mu.mem_write(self.lin(ds, dx), chunk)
+        else:
+            chunk = bytes(self.mu.mem_read(self.lin(ds, dx), n))
+            data[h.pos : h.pos + n] = chunk
+        h.pos += len(chunk)
+        self.setreg(UC_X86_REG_AX, len(chunk))
+        self.carry(False)
+
+    def _dos_alloc(self) -> None:
+        """48h: bx paragraphs from next_seg up, MEM_TOP the limit."""
+        n = self.reg(UC_X86_REG_BX)
+        if self.next_seg + n > MEM_TOP:
+            self.setreg(UC_X86_REG_AX, 8)
+            self.setreg(UC_X86_REG_BX, max(0, MEM_TOP - self.next_seg))
+            self.carry(True)
+            return
+        self.setreg(UC_X86_REG_AX, self.next_seg)
+        self.next_seg += n
+        self.carry(False)
+
+    def inject(self, n: int) -> None:
         """Push FLAGS, CS, IP and enter the handler of INT n (emulation must be stopped)."""
         mu = self.mu
         off, seg = struct.unpack("<HH", mu.mem_read(4 * n, 4))
@@ -257,13 +333,13 @@ class Machine(Elite):
         self.setreg(UC_X86_REG_IP, off)
 
     # ---- waits ----
-    def _wait(self, mu, addr, size, _):
+    def _wait(self, mu: Uc, addr: int, size: int, _: Any) -> None:
         if WAITS[addr - CS * 16](self):
             self.pending.append(8)
             self.ticks += 1
             mu.emu_stop()
 
-    def _key_poll(self, mu, addr, size, _):
+    def _key_poll(self, mu: Uc, addr: int, size: int, _: Any) -> None:
         # One keyboard interrupt per poll with no key waiting: the release of the last key,
         # else the next press. Delivering them only here keeps keys from arriving while the
         # game is busy (it flushes the key before each prompt).
@@ -278,17 +354,18 @@ class Machine(Elite):
             self.pending.append(("kbd", self.down))
             mu.emu_stop()
 
-    def scancode_event(self, code):
+    def scancode_event(self, code: int) -> None:
         """Deliver one raw scancode (make, break or E0) through INT 9 at the next resume."""
         self.pending.append(("kbd", code))
 
-    def press(self, *scancodes):
+    def press(self, *scancodes: int) -> None:
         """Queue key presses (each a press and a release through the game's keyboard
         handler, INT 9), delivered when the game next polls with no key waiting."""
         self.keys += scancodes
 
     # ---- running ----
-    def boot(self):
+    def boot(self) -> None:
+        """Set the registers as DOS leaves them at the entry point (the EXE header's SS:SP)."""
         hdr_ss, hdr_sp = 0x2571, 0x0100
         self.setreg(UC_X86_REG_CS, CS)
         self.setreg(UC_X86_REG_IP, 0)
@@ -298,7 +375,7 @@ class Machine(Elite):
         self.setreg(UC_X86_REG_SP, hdr_sp)
         self.setreg(UC_X86_REG_FLAGS, IF | 0x0002)
 
-    def run(self, max_insns=50_000_000, stop=None, idle_ticks=False):
+    def run(self, max_insns: int = 50_000_000, stop: StopFn | None = None, idle_ticks: bool = False) -> None:
         """Run until the program exits or stop(machine) returns True. stop is checked whenever
         emulation pauses: at frame waits that need a tick, at key polls with keys queued and
         every million instructions. idle_ticks: also inject a tick after every 200000
@@ -310,11 +387,11 @@ class Machine(Elite):
                 return
             if self.pending:
                 ev = self.pending.pop(0)
-                if ev == 8:
-                    self.inject(8)
-                else:
+                if isinstance(ev, tuple):  # ("kbd", scancode)
                     self.scancode = ev[1]
                     self.inject(9)
+                else:  # 8, a timer tick
+                    self.inject(8)
             start = self.lin(self.reg(UC_X86_REG_CS), self.reg(UC_X86_REG_IP))
             mu.emu_start(start, 0xFFFFF, count=200_000 if idle_ticks else 1_000_000)
             if idle_ticks and not self.pending and self.exit_code is None:
