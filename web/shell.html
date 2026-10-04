@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<title>Witchspace — a free reimplementation of Elite Plus</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --fg: #c8d4f0; --dim: #7f8cb0; --accent: #ffd34d; --panel: #0b1024; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  #canvas { display: none; width: 100vw; height: 100vh; height: 100dvh; object-fit: contain; outline: none; }
+  body.playing #canvas { display: block; }
+  body.playing #intro { display: none; }
+  #intro { max-width: 640px; margin: 0 auto; padding: 32px 20px; }
+  h1 { margin: 0; font-size: 34px; letter-spacing: .08em; color: var(--accent); }
+  h1 + p { margin-top: 2px; color: var(--dim); }
+  .box { background: var(--panel); border: 1px solid #1d2850; border-radius: 10px; padding: 16px 18px; margin: 18px 0; }
+  .box h2 { margin: 0 0 8px; font-size: 16px; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 16px; margin: 6px 8px 0 0; cursor: pointer;
+           background: var(--accent); color: #111; font-weight: 600; }
+  button.quiet { background: #1d2850; color: var(--fg); font-weight: 400; }
+  button[disabled] { opacity: .5; cursor: default; }
+  label.check { display: block; margin-top: 10px; }
+  #status { min-height: 1.5em; color: var(--accent); }
+  #status.error { color: #ff7a7a; }
+  kbd { background: #1d2850; border-radius: 4px; padding: 0 5px; font-size: 13px; }
+  a { color: var(--accent); }
+  small { color: var(--dim); }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="intro">
+  <h1>WITCHSPACE</h1>
+  <p>A free reimplementation of <i>Elite Plus</i> (1991), the PC version of Elite.</p>
+
+  <div class="box" id="stored" hidden>
+    <h2>Ready</h2>
+    <p>The game's files are in this browser from an earlier visit.</p>
+    <button id="play">Play</button>
+    <button class="quiet" id="forget">Forget the stored files</button>
+  </div>
+
+  <div class="box" id="fetch" hidden>
+    <h2>The game's files</h2>
+    <p>Witchspace contains no part of the original game. It needs three files from Elite Plus
+      (<code>ELITE.EXE</code>, <code>ELITE.GRF</code>, <code>ADBLUE.MID</code>, about 350 KB).</p>
+    <p>It can download them for you from the copy preserved by the
+      <a href="https://archive.org/details/b1022001" target="_blank" rel="noopener">Internet Archive</a>.
+      They then stay in your browser's storage on this computer and are never sent to us or
+      anyone else. Elite Plus is still under copyright (© 1991 Chris Sawyer, Realtime Software,
+      Bell &amp; Braben): whether to use that copy is your decision.</p>
+    <label class="check"><input type="checkbox" id="agree"> I understand, and choose to download them.</label>
+    <button id="download" disabled>Download and play</button>
+    <p><small>Or use your own copy: choose the three files from your Elite Plus folder.</small><br>
+      <button class="quiet" id="own">Use my own files…</button>
+      <input type="file" id="files" multiple hidden></p>
+  </div>
+
+  <p id="status"></p>
+
+  <div class="box">
+    <h2>Keys</h2>
+    <p><kbd>↑</kbd> <kbd>↓</kbd> pitch, <kbd>←</kbd> <kbd>→</kbd> roll, <kbd>.</kbd> faster,
+      <kbd>,</kbd> slower, <kbd>Space</kbd> fire. Commands are the icons along the bottom: press
+      <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd>, <kbd>-</kbd>, <kbd>=</kbd> (or <kbd>F1</kbd>–<kbd>F12</kbd>)
+      for the icon in that place. <kbd>Esc</kbd>: the menu (options, keys, save, load).</p>
+  </div>
+  <p><small>Source code and the desktop version:
+    <a href="https://github.com/rembish/witchspace">github.com/rembish/witchspace</a>.
+    Elite is a trademark of Frontier Developments; Witchspace is not affiliated with them.</small></p>
+</div>
+<script>
+  // The game's files: from the Internet Archive's copy (each file inside the zip, which the
+  // Archive serves to other sites), or from the player's own copy.
+  var ARCHIVE = 'https://archive.org/download/b1022001/b1022001.zip/';
+  var NEEDED = ['ELITE.EXE', 'ELITE.GRF', 'ADBLUE.MID'];
+  var $ = function (id) { return document.getElementById(id); };
+
+  function status(text, error) {
+    $('status').textContent = text || '';
+    $('status').className = error ? 'error' : '';
+  }
+
+  function persist(done) { FS.syncfs(false, function (err) { if (err) status('Could not store the files: ' + err, true); done(); }); }
+
+  function have(name) { try { FS.stat('/game/' + name); return true; } catch (e) { return false; } }
+
+  function start() {
+    document.body.className = 'playing';
+    Module.canvas.focus();
+    Module.callMain(['--data', '/game', '--saves', '/saves']);
+  }
+
+  function show() {
+    var ready = NEEDED.every(have);
+    $('stored').hidden = !ready;
+    $('fetch').hidden = ready;
+  }
+
+  var Module = {
+    canvas: $('canvas'),
+    print: function (t) { console.log(t); },
+    // the game's own messages (a missing or unknown file) shown on the page
+    printErr: function (t) { console.warn(t); document.body.className = ''; status(t, true); },
+    setStatus: function (t) { if (t) status(t); },
+    onRuntimeInitialized: function () {
+      FS.mkdir('/game');
+      FS.mkdir('/saves');
+      FS.mount(IDBFS, {}, '/game');
+      FS.mount(IDBFS, {}, '/saves');
+      FS.syncfs(true, function () { status(''); show(); });
+    }
+  };
+
+  $('agree').addEventListener('change', function () { $('download').disabled = !this.checked; });
+
+  $('download').addEventListener('click', function () {
+    $('download').disabled = true;
+    status('Downloading from the Internet Archive…');
+    Promise.all(NEEDED.map(function (name) {
+      return fetch(ARCHIVE + name).then(function (r) {
+        if (!r.ok) throw new Error(name + ': ' + r.status);
+        return r.arrayBuffer();
+      }).then(function (b) { FS.writeFile('/game/' + name, new Uint8Array(b)); });
+    })).then(function () {
+      persist(function () { status(''); start(); });
+    }).catch(function (e) {
+      status('The download failed (' + e.message + '). Try again later, or use your own files.', true);
+      $('download').disabled = false;
+    });
+  });
+
+  $('own').addEventListener('click', function () { $('files').click(); });
+  $('files').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files);
+    Promise.all(files.map(function (f) {
+      var name = f.name.toUpperCase();
+      if (NEEDED.indexOf(name) < 0) return null;
+      return f.arrayBuffer().then(function (b) { FS.writeFile('/game/' + name, new Uint8Array(b)); });
+    })).then(function () {
+      var missing = NEEDED.filter(function (n) { return !have(n); });
+      if (missing.length) { status('Still needed: ' + missing.join(', '), true); return; }
+      persist(function () { status(''); start(); });
+    });
+  });
+
+  $('play').addEventListener('click', start);
+  $('forget').addEventListener('click', function () {
+    NEEDED.forEach(function (n) { if (have(n)) FS.unlink('/game/' + n); });
+    persist(show);
+  });
+
+  // keep the game's keys from scrolling the page or reaching the browser (F1 help, F5 reload)
+  window.addEventListener('keydown', function (e) {
+    if (document.body.className !== 'playing') return;
+    if (/^(F([1-9]|1[0-2])|Arrow.*|Tab| |Backspace)$/.test(e.key)) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('pointerdown', function () { if (document.body.className === 'playing') Module.canvas.focus(); });
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

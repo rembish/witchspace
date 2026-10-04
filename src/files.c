@@ -1,6 +1,9 @@
 /* Commander files (see files.h). */
 #include "files.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -78,6 +81,9 @@ static int write_file(void *ctx, const char *name, const uint8_t *data, int len)
     if (!f) return -1;
     int n = (int)fwrite(data, 1, (size_t)len, f);
     fclose(f);
+#ifdef __EMSCRIPTEN__
+    EM_ASM(FS.syncfs(false, function(err){})); /* the commander kept in the browser's storage */
+#endif
     return n;
 }
 

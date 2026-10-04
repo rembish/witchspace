@@ -38,20 +38,33 @@ add_executable(ep_cmdrdump tests/cmdrdump.c)
 target_link_libraries(ep_cmdrdump PRIVATE epcore)
 
 # The frontend: SDL2 over the core. Text uses the original's own glyphs (from ELITE.EXE).
-find_package(SDL2 REQUIRED)
 # The AdLib's chip: Nuked OPL3 (LGPL-2.1+, third_party/nuked-opl3), for the frontend only
 add_library(opl3 STATIC third_party/nuked-opl3/opl3.c)
 target_include_directories(opl3 PUBLIC third_party/nuked-opl3)
 add_executable(witchspace src/main.c src/screen.c src/grf.c src/audio.c src/files.c)
-target_link_libraries(witchspace PRIVATE epcore opl3 SDL2::SDL2)
+target_link_libraries(witchspace PRIVATE epcore opl3)
+if(EMSCRIPTEN)
+  # The web build (web/shell.html): the page gets the game's files first, then calls main.
+  # ASYNCIFY lets the frontend's waits (SDL_Delay) give the browser its turn; IDBFS keeps
+  # the game's files and the commanders in the browser's storage.
+  set(SDL_FLAGS "-sUSE_SDL=2")
+  target_compile_options(witchspace PRIVATE ${SDL_FLAGS})
+  target_link_options(witchspace PRIVATE ${SDL_FLAGS} -sASYNCIFY -sALLOW_MEMORY_GROWTH=1 -sINVOKE_RUN=0
+    -sEXIT_RUNTIME=0 -sFORCE_FILESYSTEM=1 -lidbfs.js "-sEXPORTED_RUNTIME_METHODS=['callMain','FS','IDBFS']"
+    --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+  set_target_properties(witchspace PROPERTIES SUFFIX ".html")
+else()
+  find_package(SDL2 REQUIRED)
+  target_link_libraries(witchspace PRIVATE SDL2::SDL2)
+  if(TARGET SDL2::SDL2main)
+    target_link_libraries(witchspace PRIVATE SDL2::SDL2main)
+  endif()
+  if(NOT WIN32)
+    target_link_libraries(witchspace PRIVATE m)
+  endif()
+endif()
 add_executable(ep_musicwav tests/musicwav.c)
 target_link_libraries(ep_musicwav PRIVATE epcore opl3)
-if(TARGET SDL2::SDL2main)
-  target_link_libraries(witchspace PRIVATE SDL2::SDL2main)
-endif()
-if(NOT WIN32)
-  target_link_libraries(witchspace PRIVATE m)
-endif()
 add_executable(ep_bootdump tests/bootdump.c)
 target_link_libraries(ep_bootdump PRIVATE epcore)
 add_executable(ep_flowdump tests/flowdump.c)

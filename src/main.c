@@ -26,6 +26,9 @@
 #include "ep_travel.h"
 
 #include <SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -536,6 +539,9 @@ int main(int argc, char **argv)
         }
         step();
         present();
+#ifdef __EMSCRIPTEN__
+        emscripten_sleep(0); /* the browser's turn: a frame drawn, events delivered */
+#endif
     }
     audio_quit();
     SDL_Quit();
