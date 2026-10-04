@@ -12,9 +12,13 @@ endif()
 add_library(epcore STATIC core/ep_galaxy.c core/ep_desc.c core/ep_market.c core/ep_render.c core/ep_objects.c core/ep_world.c core/ep_flight.c core/ep_dust.c core/ep_combat.c core/ep_trade.c core/ep_ships.c core/ep_travel.c core/ep_chart.c core/ep_frame.c core/ep_commands.c core/ep_dsmap.c core/ep_station.c core/ep_rng.c core/ep_circle.c core/ep_title.c core/ep_boot.c core/ep_sound.c core/ep_adlib.c core/ep_adfx.c core/ep_commander.c core/ep_data.c)
 target_include_directories(epcore PUBLIC core)
 
+option(WS_WERROR "Treat warnings as errors (CI)" OFF)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(epcore PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion
     -Wsign-conversion -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes)
+  if(WS_WERROR)
+    target_compile_options(epcore PRIVATE -Werror)
+  endif()
 endif()
 
 # Test tools used by re/emu (differential tests against the original)
@@ -90,3 +94,15 @@ foreach(t ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circl
   target_sources(${t} PRIVATE $<TARGET_OBJECTS:eptestdata>)
 endforeach()
 set_tests_properties(flow PROPERTIES SKIP_RETURN_CODE 77)
+
+# The frontend and the test tools: the usual warnings (the core has stricter ones above)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  foreach(t witchspace ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump
+            ep_planetdump ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_bootdump ep_flowdump ep_flow
+            ep_subsys)
+    target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+    if(WS_WERROR)
+      target_compile_options(${t} PRIVATE -Werror)
+    endif()
+  endforeach()
+endif()

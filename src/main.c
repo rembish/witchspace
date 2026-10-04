@@ -225,7 +225,7 @@ static void advance(void)
         ep_pit_tick(&g);
         audio_speaker(g.speaker, g.speaker_on);
         if (g.nopl) {
-            audio_opl(g.opl, g.nopl, (double)(due - clocks_done) / PIT_HZ);
+            audio_opl((const uint8_t (*)[2])g.opl, g.nopl, (double)(due - clocks_done) / PIT_HZ);
             g.nopl = 0;
         }
     }
