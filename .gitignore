@@ -22,3 +22,6 @@ re/emu/corpus/
 
 # Python environment (uv sync)
 .venv/
+
+# make clips: videos made from your copy (never committed)
+clips/
