@@ -1,4 +1,5 @@
-/* Elite Plus objects in flight, reconstructed from ELITE.EXE (see ep_world.h). */
+/* Elite Plus objects in flight, reconstructed from ELITE.EXE (see ep_world.h); also the
+ * core's output queue (ep_event_add, ep_output_begin; declared in ep_game.h). */
 #include "ep_world.h"
 
 #include "ep_sound.h"
@@ -157,6 +158,7 @@ static void to_camera(ep_game *g, ep_object *o)
         ep_render_blip(&g->render, g->space.blip.type, g->space.blip.x, g->space.blip.y, g->space.blip.h);
     if (ep_commander_b(&g->cmdr, EP_CMDR_EQUIPMENT + 5) == 1 && g->f.scoop_lock == 0) scoop(g, o, p);
     if (p[2] < 100) return;
+    /* in view: ahead, with |x| and |y| at most z / 2 */
     for (int k = 0; k < 3; k++) set16(o, EP_OBJ_CAM + 2 * k, (uint16_t)p[k]);
     uint16_t z = (uint16_t)p[2];
     if (z < (uint16_t)(ep_abs16((uint16_t)p[0]) << 1)) return;
@@ -217,7 +219,9 @@ static void draw_planet_or_sun(ep_game *g, ep_object *o)
         return;
     }
     /* the sun */
-    if (f->approach && --f->approach == 0) { /* falling into it */
+    /* falling into it: once ds:83ae has counted down, it grows by a quarter a frame (it then
+     * stays at 1); past ffh is a crash */
+    if (f->approach && --f->approach == 0) {
         f->approach = 1;
         if (!f->approach_size) f->approach_size = f->sun_size;
         unsigned grow = (unsigned)(f->approach_size >> 2);

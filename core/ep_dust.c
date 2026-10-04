@@ -30,7 +30,8 @@ static int in_core(int16_t x, int16_t y)
     return hx >= -6 && hx <= 6 && hy >= -3 && hy <= 3;
 }
 
-/* 5359: screen byte of a coordinate (only the low byte is used) */
+/* 5359: screen byte of a coordinate (only the low byte is used): bits 6..13 of v, by two
+ * shifts that keep the carry */
 static uint8_t project(int16_t v, uint8_t centre)
 {
     uint16_t t = (uint16_t)((uint16_t)v << 1);
@@ -153,6 +154,7 @@ static uint16_t invert(const ep_flight *f, uint16_t s)
     return (uint16_t)(hi << 8 | lo);
 }
 
+/* the byte stretched by 5/4 over the 304-pixel view */
 static int16_t screen_x(uint8_t b) { return (int16_t)(b + (b >> 2) - 8); }
 
 /* 2973 (a pixel) or 4f6d (a streak from the shadow position in jump mode) */
@@ -212,7 +214,9 @@ void ep_dust_frame(ep_game *g)
     if (f->jump_speed) memcpy(f->dust_old, f->dust, sizeof f->dust); /* 53bf */
     uint16_t view = g->space.extra_angle;
     uint16_t pitch = invert(f, f->steer), turn = invert(f, f->steer);
-    if (view == 0x600 || view == 0x200) { /* side views: the dust drifts sideways */
+    /* side views: the dust drifts sideways; seen from the side the ship's roll moves it up or
+     * down, and its pitch turns it */
+    if (view == 0x600 || view == 0x200) {
         int right = view == 0x600;
         uint8_t v = (uint8_t)pitch;
         if (v) shift(g, (int16_t)(right ? -(int16_t)(v << 8) : (int16_t)(v << 8)) >> 1, 0);

@@ -259,7 +259,7 @@ void ep_laser_hits(ep_game *g)
         if (f->station_angry == 1) {
             if (is_station(o)) {
                 autopilot_off(g);
-                dmg = (uint8_t)-(int8_t)((int8_t)-(int8_t)dmg >> 1);
+                dmg = (uint8_t)-(int8_t)((int8_t)-(int8_t)dmg >> 1); /* neg, sar, neg: half, rounded up */
             }
         } else if (is_station(o)) {
             autopilot_off(g);
@@ -321,6 +321,8 @@ void ep_damage(ep_game *g, uint16_t amount)
         f->fore_shield = s;
         if (!borrow) return;
         f->fore_shield = 0;
+        /* what the shield did not take, sign-extended (cbw) as the original does: an excess of
+         * 80h or more reads as a huge amount and kills */
         rest = (uint16_t)(int16_t)(int8_t)(uint8_t)(0u - s);
     }
     if (f->energy < rest) {
@@ -379,6 +381,7 @@ void ep_collisions(ep_game *g)
         uint16_t r = ep_crash_radius[(o->b[EP_OBJ_FLAGS] & 0x3e) >> 1];
         int16_t x = (int16_t)get16(o, EP_OBJ_POS), y = (int16_t)get16(o, EP_OBJ_POS + 2);
         int16_t z = (int16_t)get16(o, EP_OBJ_POS + 4);
+        /* a station's +0c bit 0: touched the frame before; still touching is a crash (5dch) */
         if (!within(x, y, z, r)) {
             if (is_station(o)) o->b[0x0c] &= 0xfe;
             continue;
@@ -455,6 +458,8 @@ void ep_enemy_fire(ep_game *g)
         int16_t sx, sy;
         screen_point((int16_t)get16(o, EP_OBJ_CAM), (int16_t)get16(o, EP_OBJ_CAM + 2),
                      get16(o, EP_OBJ_CAM + 4), &sx, &sy);
+        /* the edge: top or bottom a third each, left or right a sixth; x goes no further than
+         * ffh, short of the view's right edge (12fh), as in the original */
         uint16_t r = ep_flight_random(g);
         int16_t ex, ey;
         if (r < 0x53fc) {

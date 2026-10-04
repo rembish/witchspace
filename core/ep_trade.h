@@ -1,6 +1,10 @@
 /* Elite Plus trading at a station, reconstructed from ELITE.EXE: buying and selling goods
- * (96de, 9781), buying equipment (932f) and fitting lasers (9492, 9524). The screens are the
- * frontend's; these are the actions behind them. */
+ * (96de, 9781), buying equipment (932f) and fitting lasers (9492, 9524), without the screens.
+ *
+ * The screens are ep_station.c's: MARKET PRICES goes through ep_trade_buy and ep_trade_sell
+ * (and every payment through ep_pay), while EQUIP SHIP has its own ep_equipment_buy, which
+ * asks for the mount on screen. ep_equip_buy, ep_free_mounts and ep_fit_laser are the same
+ * rules with the mount passed in; nothing in the game calls them now. */
 #ifndef EP_TRADE_H
 #define EP_TRADE_H
 
@@ -13,14 +17,17 @@ enum { EP_TRADE_OK = 0, EP_TRADE_NOTHING = 1, EP_TRADE_CHOOSE_MOUNT = 2 };
 /* Buying price of a commodity here (the docked system: ds:831f) */
 uint16_t ep_goods_buy_price(const ep_game *g, int row);
 
-/* One unit of a commodity */
 /* 8e23: pay if the cash covers it (and redo the cash text); 0 if not */
 int ep_pay(ep_game *g, uint32_t amount);
 
+/* One unit of commodity `row` (0..16; -1, no row under the cursor, does nothing): bought
+ * (96de: room in the hold, cash) or sold (9781: illegal goods raise the legal status, ds:92a1's
+ * third byte). EP_TRADE_OK, EP_TRADE_NOTHING or a message's address. */
 uint16_t ep_trade_buy(ep_game *g, int row);
 uint16_t ep_trade_sell(ep_game *g, int row);
 
-/* Equipment row (0 fuel .. 13 military laser, see ep_equipment) */
+/* Equipment row (0 fuel .. 13 military laser, see ep_equipment): bought if allowed and paid
+ * for; a laser with more than one free mount returns EP_TRADE_CHOOSE_MOUNT */
 uint16_t ep_equip_buy(ep_game *g, int row);
 
 /* Laser mounts without a laser, a bit each (front, rear, left, right) */

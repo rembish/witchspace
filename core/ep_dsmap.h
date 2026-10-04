@@ -13,8 +13,11 @@
 
 #define EP_DS_SIZE 0x10000
 
+/* a snapshot of the data segment into g (zeroed first: what is not mapped starts at 0) */
 void ep_ds_load(ep_game *g, const uint8_t ds[EP_DS_SIZE]);
+/* g over a data segment, leaving the bytes it does not model as they are */
 void ep_ds_store(const ep_game *g, uint8_t ds[EP_DS_SIZE]);
+/* 1 for every byte the core models (the ones a test compares), 0 elsewhere */
 void ep_ds_mask(uint8_t mask[EP_DS_SIZE]);
 
 /* the byte at ds:addr as the original would read it: game state where mapped, else the

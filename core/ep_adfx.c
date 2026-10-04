@@ -265,6 +265,8 @@ static void start(ep_game *g, uint8_t id, int queued)
 /* 21d0 (a note), 1ddb (the detune changed): the frequency and octave written */
 static void frequency(ep_game *g, uint16_t di, uint8_t note, int detune_zero_skipped)
 {
+    /* the note: octave in the high nibble, semitone (0..11) in the low; the octave goes to
+     * b0h's block bits (2..4), the semitone through the table at 16a9 to the frequency */
     uint8_t ch = (uint8_t)((note & 0xf0) + cb(g, di + R_OCTAVE));
     uint8_t al = (uint8_t)((note & 0x0f) + cb(g, di + R_TRANSPOSE));
     if ((int8_t)al >= 12) {
@@ -583,6 +585,7 @@ static int run(ep_game *g, uint16_t di)
             sw(g, di + R_PC, si);
             return 1;
         }
+        /* a command: 80h + n and an operand byte (ah); those without one step back (si--) */
         uint8_t n = al & 0x7f;
         uint16_t code = n > 0x70 ? C_END : cw(g, (uint16_t)(0x263e + n * 2));
         switch (code) {
@@ -912,7 +915,9 @@ void ep_adfx_tick(ep_game *g)
     }
     left = (uint8_t)(cb(g, CLOCK_LEFT) - 1);
     sb(g, CLOCK_LEFT, left);
-    if (!left) { /* 4a99: the game's own interrupt */
+    /* 4a99: the game's own interrupt; 16 x 555h is 5550h, not 5555h, so with the effects in
+     * the game's clock runs a little fast */
+    if (!left) {
         sb(g, CLOCK_LEFT, 0x10);
         ep_timer_tick(g);
     }

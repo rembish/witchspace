@@ -1,10 +1,13 @@
 /* Elite Plus at the station (and the screens brought up in flight), reconstructed from
- * ELITE.EXE.
+ * ELITE.EXE: the status screen with the arrival's dialogues (promotion, Tribbles, missions),
+ * MARKET PRICES, EQUIP SHIP, the charts, DATA ON, saving and loading commanders, the
+ * controls, typing a text (the chart's FIND, the copy protection's word) and a new game.
  *
- * A screen is drawn once (text and sprite primitives), then idles: the function-key bar and
- * the commands run until one switches screens. The original waits for keys inside some
- * screens (a promotion, the Tribble offer, mission briefings); here those are resumable:
- * the entry returns EP_WAIT_* and ep_station_key carries on with the key pressed.
+ * A screen is drawn once (text and sprite primitives into g->render, for the frontend to
+ * draw), then idles: the function-key bar and the commands run until one switches screens.
+ * The original waits for keys inside some screens (a promotion, the Tribble offer, mission
+ * briefings); here those are resumable: the entry returns EP_WAIT_* and ep_station_key
+ * carries on with the key pressed (f.station_step says where).
  */
 #ifndef EP_STATION_H
 #define EP_STATION_H
@@ -97,7 +100,9 @@ int ep_chart_find_name(ep_game *g);
 void ep_box_open(ep_game *g, uint16_t title);
 void ep_box_close(ep_game *g);
 
-/* the abandon (0a92) and exit (0ad5) questions; Y sets f.leave */
+/* the abandon (0a92) and exit (0ad5) questions: the box and "Sure ?" put up, returns
+ * EP_CMD_SCREEN; the answer comes through ep_station_key (EP_WAIT_YN). Y sets f.leave (1
+ * back to the title, 2 out of the game), N puts the screen back. */
 enum { EP_ASK_ABANDON = 1, EP_ASK_EXIT };
 int ep_station_ask(ep_game *g, uint16_t title, int what);
 
@@ -122,7 +127,9 @@ int ep_define_keys(ep_game *g);
 int ep_joystick(ep_game *g);
 int ep_mouse(ep_game *g);
 
-/* where the screens idle */
+/* where the screens idle (f.idle): what ep_station_idle does each pass besides the bar and
+ * the commands (STATUS: redrawn when asked; MARKET, EQUIP: the list's cursor and notes;
+ * LOCAL, GALAXY: the chart redrawn with its cursor) */
 enum {
     EP_IDLE_NONE = 0,
     EP_IDLE_STATUS,

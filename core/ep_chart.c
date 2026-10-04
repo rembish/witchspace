@@ -50,6 +50,7 @@ static void snap_cursor(ep_game *g)
     }
     for (int k = 0; k < 2; k++) {
         int16_t d = (int16_t)((k ? seed_y(&g->seed) : seed_x(&g->seed)) - centre(g, k));
+        /* x 7/2 (as ep_cursor_position undoes it) around the window's middle, 50h, 40h */
         c[k] = (uint8_t)(3 * d + (d >> 1) + (k ? 0x40 : 0x50));
     }
 }
@@ -79,6 +80,7 @@ void ep_system_distance(ep_game *g)
 {
     unsigned dx = absdiff(seed_x(&g->seed), centre(g, 0)) & 0xff;
     unsigned dy = absdiff(seed_y(&g->seed), centre(g, 1)) & 0xff;
+    /* the integer square root by subtracting odd numbers, 1 + 3 + 5 ... = n^2 */
     uint32_t sum = dx * dx + dy * dy, odd = 1;
     uint16_t root = 0;
     while (sum >= odd) {

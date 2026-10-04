@@ -21,16 +21,18 @@
 
 #include <stdint.h>
 
-/* video: ds:10bc (0 EGA, 1 VGA, 2 MCGA); sound: ds:4801 */
+/* video: ds:10bc (0 EGA, 1 VGA, 2 MCGA); sound: ds:4801 (0 Roland, 1 AdLib, 2 PC speaker); the
+ * time of day seeds the RNG */
 void ep_boot(ep_game *g, uint8_t video, uint8_t sound, uint8_t minute, uint8_t second, uint8_t hundredths);
 
 /* 1415: the question (EP_WAIT_TEXT; the word through ep_station_key) */
 int ep_protection_ask(ep_game *g);
 
-/* 32b8 */
+/* 32b8: one RNG step, mixed down to a byte, counts records of ds:5070 (wrapping at the 0
+ * after the last); the record's bits give f.prot_page .. prot_word and f.prot_hash */
 void ep_protection_pick(ep_game *g);
 
-/* h = 2h + (c - 'A'), 9 bits */
+/* the hash a typed word (NUL-terminated, capitals) is checked by: h = 2h + (c - 'A'), 9 bits */
 uint16_t ep_protection_hash(const uint8_t *word);
 
 #endif

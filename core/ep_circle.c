@@ -78,10 +78,13 @@ void ep_draw_circle(ep_rng *rng, int16_t x, int16_t y, int16_t r, uint16_t mask,
     if ((uint16_t)y >= 0x7c) { /* 2aa4 */
         if (y >= 0 ? (int16_t)(y - r) >= 0x7c : (int16_t)(y + r) <= 0) return;
     }
-    int16_t ry = (int16_t)(r - (int16_t)((uint16_t)r >> 3));
+    int16_t ry = (int16_t)(r - (int16_t)((uint16_t)r >> 3)); /* the half-height, r * 7/8 */
     span_ctx c = { rng, mask, mcga, out };
 
-    /* 2b1d..2bed: midpoint circle into the span table (word offsets into buf) */
+    /* 2b1d..2bed: midpoint circle into the span table (word offsets into buf). The table holds
+     * 2r spans of 4 bytes (x, width), top to bottom: one octant's spans fill it down from the
+     * top (p9a) and up from the bottom (pa0), the other's outwards from the middle at 4r (p9c,
+     * p9e). */
     uint16_t *buf = out->table; /* stale entries from earlier circles stay, as on the stack */
     int16_t di = 0, si = (int16_t)(r << 2), bx = 0, cx = r;
     int16_t dx = (int16_t)(3 - 2 * r);

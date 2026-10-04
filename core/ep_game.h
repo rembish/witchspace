@@ -1,6 +1,10 @@
 /* Elite Plus game state, reconstructed from ELITE.EXE: everything the core keeps between
- * frames. Grows as subsystems are reconstructed; tests/statemap.c lists where each field
- * lives in the original's data segment, so tests can load the original's state and compare. */
+ * frames. Grows as subsystems are reconstructed; core/ep_dsmap.c lists where each field
+ * lives in the original's data segment, so tests can load the original's state and compare.
+ *
+ * The core is a library: the frontend (src/, the witchspace binary) or a test tool fills in
+ * io and wait, calls the core's loops and draws what they leave in render, circles and event
+ * (the output of the last call; see ep_output_begin). */
 #ifndef EP_GAME_H
 #define EP_GAME_H
 
@@ -117,7 +121,7 @@ typedef struct {
     uint8_t ecm_shown;          /* ds:54c0: the ECM was just used (icon) */
     uint8_t class_count[9];     /* ds:8730: objects but debris, then per AI class 0..7 */
     uint8_t lock_text[0x28];    /* ds:8081: "<type> (<role>)" after "Missile locked onto " */
-    uint8_t sound_device;       /* ds:4801: 2 picks other sound numbers */
+    uint8_t sound_device;       /* ds:4801: 0 Roland, 1 AdLib, 2 PC speaker (other sound numbers) */
     uint8_t hyper_countdown;    /* ds:ae60: hyperspace countdown, seconds (0 = none) */
     uint8_t hyper_tick;         /* ds:ae61: frames to the next second */
     uint8_t missile_block;      /* ds:b1f8: 1 = missiles cannot be fired */
@@ -330,6 +334,8 @@ struct ep_game {
     int nevents;
 };
 
+/* Append an event (EP_EV_*) to the output, placed after the primitives emitted so far so the
+ * frontend handles it in drawing order; dropped once EP_MAX_EVENTS are queued */
 void ep_event_add(ep_game *g, uint8_t kind, uint16_t arg);
 
 /* Empty the output (primitives, their texts, circle spans, events) before a call whose

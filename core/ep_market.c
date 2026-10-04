@@ -12,8 +12,9 @@ uint16_t ep_goods_price(int k, uint8_t government, uint8_t economy, uint8_t tech
     uint16_t v = 0x100;
     v = fmul(v, ep_goods_eco_factor[k][economy & 7]);
     v = fmul(v, ep_goods_gov_factor[k][government & 7]);
-    v = fmul(v, 0x100);
+    v = fmul(v, 0x100); /* a factor of 1.0 the original applies too (re/NOTES.md) */
     v = fmul(v, ep_goods_base_price[k]);
+    /* a and b are 0 in the shipped data, so tech does not change prices */
     uint16_t adj = (uint16_t)(0x100 + ep_goods_tech_adj[k][0] + ep_goods_tech_adj[k][1] * t);
     return fmul(v, adj);
 }
@@ -21,6 +22,7 @@ uint16_t ep_goods_price(int k, uint8_t government, uint8_t economy, uint8_t tech
 uint16_t ep_sell_price(uint16_t price)
 {
     if (!price) return 0;
+    /* the margin: about 1/32 of the price, halved until it is under 10.0 credits */
     uint16_t cut = (uint16_t)(price >> 5);
     while (cut >= 100) cut >>= 1;
     return (uint16_t)(price - (cut + 1));
@@ -47,7 +49,7 @@ uint8_t ep_goods_quantity(ep_market_rng *r)
 {
     uint16_t v = market_random(r);
     uint8_t lo = (uint8_t)(v & 0x1f), hi = (uint8_t)((v >> 8) & 3);
-    if (lo < 7) return 0;
+    if (lo < 7) return 0; /* 7 draws in 32 leave none */
     return (uint8_t)((lo - 7) ^ hi);
 }
 

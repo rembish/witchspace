@@ -170,7 +170,8 @@ void ep_status_view(ep_game *g)
     text_at(g, 0x46, 0x19, witch ? 0x0c : 0x0f, witch ? 0x92fb : 0x831f); /* present system */
     text_header(g, 0x8e02);
     text_at(g, 0x64, 0x28, witch ? 0x0c : 0x0f, witch ? 0x92fb : 0x8338); /* hyperspace system */
-    /* 8e48: fuel in light years */
+    /* 8e48: fuel in light years (ffh is 7.0: tenths = fuel * 10 / 36); the units and tenths of
+       the five digits go into the text's "n.n" */
     uint8_t q = (uint8_t)((uint16_t)(g->cmdr.b[EP_CMDR_FUEL] * 10) / 0x24);
     digits(&f->fuel_text[0x19], q, 0);
     f->fuel_text[0x09] = f->fuel_text[0x1c];
@@ -391,6 +392,7 @@ static int tribble_offer(ep_game *g)
     uint8_t *c = g->cmdr.b;
     uint16_t price = (uint16_t)(c[0xdc] | c[0xdd] << 8); /* ds:83b7 */
     if (!price) return EP_WAIT_NONE;
+    /* the price only decides when they are offered (cash above it); Y costs 5000.0 all the same */
     uint32_t cash = ep_commander_cash(&g->cmdr);
     if (!(cash >> 16) && price >= (uint16_t)cash) return EP_WAIT_NONE;
     c[0xdc] = c[0xdd] = 0;
@@ -469,7 +471,7 @@ int ep_station_key(ep_game *g, uint8_t key)
         if (yes) {
             f->tribbles = 1;
             ep_pay(g, 0xc350);
-        } else if (!(ep_commander_cash(&g->cmdr) >> 16)) {
+        } else if (!(ep_commander_cash(&g->cmdr) >> 16)) { /* not again below 6553.6 credits */
             c[0xdc] = c[0xdd] = 0xff;
         }
         break;
@@ -560,7 +562,11 @@ int ep_station_key(ep_game *g, uint8_t key)
     return arrival(g);
 }
 
-/* ---- the list (0bea..0d9a) ---- */
+/* ---- the list (0bea..0d9a) ----
+ *
+ * f.menu is ds:0980: [0] rows, [1] the cursor's row, [2] the address of the first row's text,
+ * [4] the cursor's text, [6] x, [8] y, [10] width (words), [12] text and [13] back colour,
+ * [14], [15] the same under the cursor, [16] rows centred. */
 
 static uint16_t menu_word(const ep_game *g, int k)
 {
@@ -573,7 +579,8 @@ static void menu_set_word(ep_game *g, int k, uint16_t v)
     g->f.menu[k + 1] = (uint8_t)(v >> 8);
 }
 
-/* 0d27: the k-th text of the list */
+/* 0d27: the k-th text of the list (the texts follow each other, each ending in 0; the codes
+   1 c and 2 x y inside them are skipped with their operands) */
 static uint16_t list_item(const ep_game *g, uint8_t k)
 {
     uint16_t at = menu_word(g, 2);
@@ -743,7 +750,7 @@ void ep_market_rows(ep_game *g)
     uint8_t *o = f->rows;
     int at = 0;
 #define PUT(b)     (at < (int)sizeof f->rows ? (void)(o[at++] = (uint8_t)(b)) : (void)0)
-#define MOVE(x, y) (PUT(2), PUT(x), PUT((x) >> 8), PUT(y), PUT((y) >> 8))
+#define MOVE(x, y) (PUT(2), PUT(x), PUT((x) >> 8), PUT(y), PUT((y) >> 8)) /* text code 2: move */
     uint16_t names = 0xabe0, units = 0xac82, y = 0x1d;
     uint8_t *cargo = &g->cmdr.b[EP_CMDR_CARGO];
     for (int k = 0; k < 17; k++) {
@@ -767,7 +774,7 @@ void ep_market_rows(ep_game *g)
         uint8_t offer = cargo[2 * k + 1];
         if (!g->cmdr.b[EP_CMDR_MARKET_DRAWN]) { /* 8f5a: what is on offer, once per arrival */
             uint16_t r = market_random(g);
-            int8_t q = (int8_t)((r & 0x1f) - 7);
+            int8_t q = (int8_t)((r & 0x1f) - 7); /* as ep_goods_quantity */
             offer = q < 0 ? 0 : (uint8_t)(q ^ (r >> 8 & 3));
         }
         cargo[2 * k + 1] = offer;
@@ -912,6 +919,8 @@ void ep_equipment_rows(ep_game *g)
     uint16_t rec = 0x8bef, y = 0x14;
     uint8_t tech = (uint8_t)(cur[EP_SYSREC_TECH] + 1);
     int k = 0;
+    /* the records (ds:8bef: min tech, name, gov and eco factors, base price): the list stops at
+       the first one whose tech level is above this system's (+ 1) */
     while (k < 14 && tech >= ep_ds_byte(g, rec)) {
         rec++;
         uint8_t c;
@@ -1103,6 +1112,7 @@ int ep_equipment_buy(ep_game *g)
             box_note(g, 0xadaa);
             return EP_WAIT_NONE;
         }
+        /* (ffh - fuel) * 7 / 256: the light years missing (ffh is 7.0), at the row's price */
         uint32_t p = (uint32_t)(uint16_t)((0xff - c[EP_CMDR_FUEL]) * 7) * f->prices[0];
         if (ep_pay(g, (uint16_t)(p >> 8))) {
             c[EP_CMDR_FUEL] = 0xff;
@@ -1114,6 +1124,8 @@ int ep_equipment_buy(ep_game *g)
             box_note(g, 0xad50);
             return EP_WAIT_NONE;
         }
+        /* 937a: the cash is under 10000h (a full tank's word was too much): all of it buys
+           what fuel it can */
         uint32_t q = ((uint32_t)lo << 8) / f->prices[0];
         c[EP_CMDR_FUEL] = (uint8_t)(c[EP_CMDR_FUEL] + (uint8_t)((q & 0xffff) / 7));
         ep_pay(g, lo);
@@ -1338,6 +1350,7 @@ static void chart_local_systems(ep_game *g)
             for (int k = 0; k < 4; k++) ep_twist(&g->seed);
             continue;
         }
+        /* 3.5 times the galactic chart's scale, around (50h, 40h) */
         uint16_t y = (uint16_t)(3 * dy + (dy >> 1) + 0x40), x = (uint16_t)(3 * dx + (dx >> 1) + 0x50);
         if (y >= 0x7c) y = 0x7b;
         uint16_t rec = chart_w(g, 0x5605);
@@ -2115,6 +2128,8 @@ static int protection_key(ep_game *g, uint8_t key)
 
 #define KEY_NONE ((uint16_t)(0xffff - 0x20d)) /* a binding to nothing (ds:ffff) */
 
+/* the original binds a key by its address in the key table (ds:020d + scancode) and keeps
+   the bindings at ds:b251..b25d; here they are the scancodes, reached by those addresses */
 static uint16_t *binding(ep_game *g, uint16_t addr)
 {
     uint16_t *b[7] = { &g->in.faster, &g->in.slower, &g->in.up,  &g->in.down,
@@ -2275,6 +2290,7 @@ void ep_new_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8
     f->laser_temp = 0;
     f->energy_drain = 0;
     uint8_t x = (uint8_t)(rol8(minute, 2) ^ rol8(hour, 4) ^ hundredths ^ second); /* 7260 */
+    /* (4x + 5000) * 10: 5000.0..6020.0 credits, in tenths */
     uint16_t cx = (uint16_t)(((x << 2) + 0x1388) << 1);
     uint16_t price = (uint16_t)(cx * 5);
     c[0xdc] = (uint8_t)price; /* ds:83b7: the Tribble offer */

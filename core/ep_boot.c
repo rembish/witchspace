@@ -74,6 +74,7 @@ void ep_boot(ep_game *g, uint8_t video, uint8_t sound, uint8_t minute, uint8_t s
         n = (uint8_t)(n - 10);
         tens++;
     }
+    /* a space for no tens digit, else 20h + n + 10h, the digit n */
     f->prot_page[0] = tens == 0x20 ? tens : (uint8_t)(tens + 0x10);
     f->prot_page[1] = (uint8_t)(n + '0');
     f->prot_paragraph = (uint8_t)(f->prot_paragraph + '0');

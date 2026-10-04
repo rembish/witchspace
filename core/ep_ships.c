@@ -297,6 +297,9 @@ int ep_particle_update(ep_object *o)
     return 1;
 }
 
+/* Some handlers read DL as an earlier routine left it (stale_range, below), so the moves and
+ * launches that set it keep g->f.reg_dl as the original's DL would be (re/FLIGHT.md). */
+
 /* 7e58 leaves DX the sign of the z velocity */
 static uint8_t move_dl(const ep_object *o) { return (o->b[0x1b] & 0x80) ? 0xff : 0; }
 
@@ -338,6 +341,7 @@ void ep_explode(ep_game *g, ep_object *o)
         p->b[0x17] = 0;
         uint16_t r = rng(g);
         set16(p, 0x26, r);
+        /* half the ship's velocity, plus -15..16 at random (halved again when mining) */
         int8_t al = (int8_t)((r & 0x1f) - 15), ah = (int8_t)(((r >> 8) & 0x1f) - 15);
         p->b[0x19] = (uint8_t)((int8_t)p->b[0x19] >> 1);
         p->b[0x1a] = (uint8_t)((int8_t)p->b[0x1a] >> 1);
@@ -373,7 +377,7 @@ void ep_explode(ep_game *g, ep_object *o)
         uint8_t c = o->b[0x2c];
         if (!c) return;
         uint8_t q = (uint8_t)(0xff / (c + 1));
-        count = (rng(g) & 0xff) / (uint8_t)(q + 1);
+        count = (rng(g) & 0xff) / (uint8_t)(q + 1); /* 0..about c, near evenly */
         if (!count) return;
     }
     for (; count; count--) {
@@ -1022,11 +1026,14 @@ static void ai_loner(ep_game *g, ep_object *o)
     move(g, o);
 }
 
+/* with the jump drive on, a spawn chance 32 times higher, as the speed is (a768) */
 static uint16_t jump(const ep_game *g, uint16_t p) { return g->f.jump_speed ? (uint16_t)(p << 5) : p; }
 
 void ep_ai_frame(ep_game *g)
 {
     ep_flight *f = &g->f;
+    /* class_count[0]: every object but debris; [1 + class] each class: [4] junk, [5] traders,
+     * [6] hostiles, [7] loners */
     memset(f->class_count, 0, sizeof f->class_count);
     for (int i = 0; i < g->space.count && i < EP_OBJECTS; i++) {
         ep_object *o = &g->space.obj[i];

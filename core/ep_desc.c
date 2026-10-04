@@ -39,7 +39,7 @@ static uint16_t desc_random(desc_state *d)
  * The name is cut at the length byte, which may belong to a later random name. */
 static int name_scratch(desc_state *d, uint8_t tmp[16])
 {
-    d->nb[d->nb[9] < EP_NAMEBUF ? d->nb[9] : EP_NAMEBUF - 1] = 0;
+    d->nb[d->nb[9] < EP_NAMEBUF ? d->nb[9] : EP_NAMEBUF - 1] = 0; /* nb[9]: the length byte */
     int i = 0, j = 0;
     tmp[j++] = d->nb[i++];
     while (i < EP_NAMEBUF && d->nb[i]) tmp[j++] = (uint8_t)(d->nb[i++] | 0x20);
@@ -90,10 +90,11 @@ static void print(desc_state *d, const uint8_t *s)
             print_code(d, c);
         } else if (c >= 0x80) {
             const char *const *opts = ep_desc_tokens[(c - 0x80) % EP_DESC_TOKENS];
-            uint8_t pick = (uint8_t)((desc_random(d) & 0xff) / 0x34);
+            uint8_t pick = (uint8_t)((desc_random(d) & 0xff) / 0x34); /* 0..4: ffh / 34h is 4 */
             print(d, (const uint8_t *)opts[pick]);
         } else {
             if (c == ' ' && prev(d) == ' ') continue;
+            /* the original's bounds: '`' becomes '@', 'y' and 'z' stay lower case */
             if (d->caps == 1 && prev(d) == ' ' && c >= 0x60 && c < 0x79) c &= 0xdf;
             put(d, c);
         }

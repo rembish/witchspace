@@ -40,7 +40,7 @@ uint16_t ep_trade_buy(ep_game *g, int row)
     uint8_t *c = cargo(g, row);
     if (!c[1]) return EP_TRADE_NOTHING;
     uint8_t space = g->cmdr.b[EP_CMDR_EQUIPMENT + 1] == 1 ? 0x23 : 0x14; /* cargo bay ext. */
-    if (row >= 13) {
+    if (row >= 13) {                     /* rows 13.. take no room in the hold (not counted in CARGO_USED) */
         if (c[1] >= 0xfa) return 0xad3e; /* (the original tests what is on offer) */
     } else if (space <= g->cmdr.b[EP_CMDR_CARGO_USED]) {
         return 0xad2e; /* CARGO BAY FULL */
@@ -59,7 +59,7 @@ uint16_t ep_trade_sell(ep_game *g, int row)
     if (!c[0]) return EP_TRADE_NOTHING;
     earn(g, ep_sell_price(ep_goods_buy_price(g, row)));
     c[0]--;
-    if (++c[1] == 0) c[1]--;
+    if (++c[1] == 0) c[1]--; /* what is on offer stops at ffh */
     if (row < 13) g->cmdr.b[EP_CMDR_CARGO_USED]--;
     /* 98d4: illegal goods raise the legal status */
     uint8_t l = (uint8_t)(ep_goods_tech_adj[row][2] + g->cmdr.b[EP_CMDR_LEGAL]);
@@ -99,10 +99,12 @@ uint16_t ep_equip_buy(ep_game *g, int row)
 {
     uint8_t *fuel = g->cmdr.b + EP_CMDR_FUEL;
     if (row < 0 || row >= EP_EQUIPMENT) return EP_TRADE_NOTHING;
-    if (row == 0) { /* fuel: a full tank, or what the cash buys */
+    if (row == 0) { /* fuel: a full tank, or what the cash buys (as ep_equipment_buy) */
         if (g->f.mission == 1) return 0x8dad;
         if (*fuel >= 0xfb) return 0xadaa;
         uint16_t per = equipment_price(g, 0);
+        /* ffh of fuel is 7.0 light years: (ffh - fuel) * 7 / 256 is the light years missing,
+           at `per` each */
         uint32_t p = (uint32_t)(uint16_t)((0xff - *fuel) * 7) * per;
         uint16_t cost = (uint16_t)(p >> 8);
         if (ep_pay(g, cost)) {
@@ -111,7 +113,9 @@ uint16_t ep_equip_buy(ep_game *g, int row)
         }
         uint16_t lo = (uint16_t)ep_commander_cash(&g->cmdr);
         if (!lo) return 0xad50;
-        uint32_t q = ((uint32_t)lo << 8) / per; /* 937a: the cash's low word buys fuel */
+        /* 937a: the cash's low word buys fuel; the full tank's price (a word) failed, so the
+           cash is under 10000h and all of it is spent */
+        uint32_t q = ((uint32_t)lo << 8) / per;
         uint8_t add = (uint8_t)((q & 0xffff) / 7);
         *fuel = (uint8_t)(*fuel + add);
         ep_pay(g, lo);

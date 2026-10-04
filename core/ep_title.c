@@ -71,8 +71,8 @@ static void title_setup(ep_game *g)
     uint8_t t[512];
     int n = ep_ds_header_text(g, 0xb13a, t, sizeof t);
     ep_text_header(&g->render, t, n, 1);
-    ep_view_flip(g); /* 301a */
-    f->note_ticks = 0x2ee;
+    ep_view_flip(g);       /* 301a */
+    f->note_ticks = 0x2ee; /* 750 ticks: the credits' wait counts down in the note timer */
     g->in.last_key = 0xff; /* 0287 */
 }
 
@@ -118,7 +118,7 @@ int ep_title_frame(ep_game *g)
     if (f->title_hold == 0 && (uint16_t)(z - 0x50) >= ep_ds_word(g, (uint16_t)(0xb1bc + 2 * f->title_ship))) {
         set16(o, EP_OBJ_POS + 4, (uint16_t)(z - 0x50));
     } else if (++f->title_hold >= 0x78) {
-        f->title_hold--;
+        f->title_hold--; /* held at 78h, so every frame from here on backs off */
         z = (uint16_t)(z + 100);
         set16(o, EP_OBJ_POS + 4, z);
         if (z >= 5000) {

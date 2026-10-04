@@ -92,7 +92,8 @@ static void words(uint16_t *to, const uint8_t *from, size_t n)
     for (size_t k = 0; k < n; k++) to[k] = le16(from + 2 * k);
 }
 
-/* a ship model's length: vertices, then face groups and primitives up to the end mark */
+/* a ship model's length: vertices, then face groups and primitives up to the end mark (03);
+ * a group is 9 bytes, a triangle 8, a quad 10, a line 6 (code, vertex offsets, colour) */
 static size_t model_len(const uint8_t *m)
 {
     size_t q = 1 + 6 * (size_t)m[0];
@@ -160,7 +161,7 @@ static int fill(const uint8_t *img)
     words((uint16_t *)ep_sin1024, ds + 0x2cc0, 1024);
     words((uint16_t *)ep_sin2048, ds + 0x6410, 2048);
     for (int k = 0; k < EP_TITLE_SHIPS; k++) ep_title_ships[k] = ds[0xb263 + k];
-    if (ds[0xb263 + EP_TITLE_SHIPS] != 0xff) return 0;
+    if (ds[0xb263 + EP_TITLE_SHIPS] != 0xff) return 0; /* sanity: the title list's end mark */
     words(ep_title_min_dist, ds + 0xb1bc, 32);
     for (int k = 0; k < 30; k++) ep_ship_names[k] = text + le16(ds + 0xb27c + 2 * k);
     memcpy(ep_key_rows, ds + 0x31f, sizeof ep_key_rows);
@@ -171,7 +172,7 @@ static int fill(const uint8_t *img)
     memcpy(ep_ship_text, ds + 0x80a9, sizeof ep_ship_text);
     for (int k = 0; k < 256; k++) ep_mcga_colour[k] = ds[0x1cf3 + 2 * k];
     memcpy(ep_dac, ds + 0x1144, sizeof ep_dac);
-    if (le16(ds + 0x82d7) != EP_COMMANDER_SIZE) return 0;
+    if (le16(ds + 0x82d7) != EP_COMMANDER_SIZE) return 0; /* sanity: the size word before it */
     memcpy(ep_commander0, ds + 0x82db, EP_COMMANDER_SIZE);
     words(ep_tan256, ds + 0x7410, 256);
     for (int k = 0; k < 32; k++) ep_hit_size[k] = (uint16_t)(ds[0xb0e5 + 2 * k] << 8 | ds[0xb0e6 + 2 * k]);
@@ -191,7 +192,7 @@ int ep_data_load(const uint8_t *exe, size_t len)
     const uint8_t *img = exe + header;
     size_t img_len = size - header;
     uint8_t *buf = NULL;
-    if (img_len != IMAGE_SIZE) { /* EXEPACK: its stub at CS:0, entered at 10h */
+    if (img_len != IMAGE_SIZE) { /* any other size is taken as EXEPACK: its stub at CS:0, entered at 10h */
         if (le16(exe + 0x14) != 0x10) return EP_DATA_VERSION;
         buf = malloc(IMAGE_SIZE);
         if (!buf) return EP_DATA_BAD_PACKING;

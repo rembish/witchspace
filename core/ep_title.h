@@ -19,13 +19,18 @@
 
 #include <stdint.h>
 
+/* the object slot the title's ship turns in */
 #define EP_TITLE_SLOT 2
 
+/* 9e9a: the intro picture up and the music started; returns EP_WAIT_TIME (the rest of the
+ * opening goes on through ep_station_key) */
 int ep_title_open(ep_game *g);
 
 /* the waits of ep_title_open, through ep_station_key */
 int ep_title_key(ep_game *g, uint8_t key);
 
+/* one pass (9f21..9ffa); returns EP_CMD_START when space was pressed, EP_CMD_QUIT once the
+ * exit question was answered Y (f.leave 2), otherwise the commands' EP_CMD_* */
 int ep_title_frame(ep_game *g);
 
 #endif

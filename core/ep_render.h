@@ -5,6 +5,10 @@
  * persistent vertex buffer, culls face groups by their normal and emits triangles, quads and
  * lines with a colour each. The renderer here produces those primitives; drawing them is up
  * to the frontend. Screen coordinates are the original's 3D view (centre 152, 62).
+ *
+ * ep_render is also the core's one display list: the scanner, dust, circles, sprites, text and
+ * rectangles the other modules draw are appended here as primitives, in the order the
+ * original draws them.
  */
 #ifndef EP_RENDER_H
 #define EP_RENDER_H
@@ -97,7 +101,6 @@ void ep_render_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_
 /* A line clipped to the 3D view when drawn (2576) */
 void ep_render_clipped_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
-/* draw_ship (43ce). Appends to r->prim. */
 /* a dust pixel (2973): colour is the particle's colour byte, one point */
 void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y);
 
@@ -119,9 +122,14 @@ uint16_t ep_text_width(const uint8_t *s);
 /* 2e6d: text at the pen, which then stands after it (moves included); 2e5f: the text starts
  * with its own x, y (words) and colour; shadow: 2ec0 (2eb2 with the header) */
 void ep_text(ep_render *r, const uint8_t *s, int len, int shadow);
+/* 2e5f: s starts with x, y (words) and a colour byte, the pen set from them; then as ep_text */
 void ep_text_header(ep_render *r, const uint8_t *s, int len, int shadow);
+/* where (and in which colour) the next ep_text goes */
 void ep_pen(ep_render *r, int16_t x, int16_t y, uint8_t colour);
 
+/* draw_ship (43ce): the slot's matrix (player angles, extra angle, then the ship's own) and
+ * its model at twice the camera position. Nothing for types 30 and 31, a slot with both
+ * flags1e bits 5 and 6 set, or a position too far to double. Appends to r->prim. */
 void ep_draw_ship(ep_render *r, const ep_ship_view *v);
 
 #endif

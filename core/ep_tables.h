@@ -14,7 +14,10 @@ enum {
     EP_DATA_BAD_PACKING, /* EXEPACK data that does not unpack */
     EP_DATA_VERSION      /* another program, or another version of Elite Plus */
 };
+/* Unpack it if need be, check it is the known release (a hash of the load image) and fill
+ * every table below from it */
 int ep_data_load(const uint8_t *exe, size_t len);
+/* a sentence for an EP_DATA_* result */
 const char *ep_data_error(int code);
 
 /* ELITE.GRF: the MCGA pictures' widths (what the blit leaves in DL); 0 when read */

@@ -69,7 +69,9 @@ void ep_flight_start(ep_game *g)
     }
     if (f->approach || g->cmdr.b[EP_CMDR_DOCKED_AT] != g->cmdr.b[EP_CMDR_GALAXY] ||
         g->cmdr.b[EP_CMDR_DOCKED_AT + 1] != current(g, EP_SYSREC_INDEX)) {
-        ep_object *o = &s->obj[0]; /* the sun: 24-bit position from three steps */
+        /* the sun: 24-bit position from three steps, in units of 256: x and y within 200h
+         * either way, z 801h..c00h behind */
+        ep_object *o = &s->obj[0];
         o->b[EP_OBJ_FLAGS] = 0x3d;
         set_upper(o, 0, (uint16_t)((rng(g) & 0x3ff) - 0x200));
         set_upper(o, 1, (uint16_t)((rng(g) & 0x3ff) - 0x200));
@@ -88,7 +90,7 @@ void ep_flight_start(ep_game *g)
         o = &s->obj[2]; /* the station: a Coriolis from tech level 9 */
         o->b[EP_OBJ_FLAGS] = (uint8_t)((current(g, EP_SYSREC_TECH) < 9) << 1 | 1);
         set16(o, 0x0c, 0x400);
-        set16(o, EP_OBJ_POS + 4, 0xfed4);
+        set16(o, EP_OBJ_POS + 4, 0xfed4); /* z = -300: just behind, where a launch leaves it */
         o->b[EP_OBJ_POS_HI + 2] = 0xff;
         o->b[EP_OBJ_FLAGS1E] = 4;
         o->b[0x33] = 1;
@@ -122,6 +124,7 @@ static void face(ep_game *g, const ep_object *o, uint16_t *a, uint16_t *b)
     uint8_t cl = ep_planet_scale(o);
     int16_t p[3];
     for (int k = 0; k < 3; k++) {
+        /* the 24-bit coordinate, sign-extended by shifting it to the top and back */
         int32_t v = (int32_t)((uint32_t)o->b[EP_OBJ_POS_HI + k] << 24 | (uint32_t)get16(o, EP_OBJ_POS + 2 * k)
                                                                             << 8) >>
                     8;
@@ -144,6 +147,7 @@ void ep_new_system(ep_game *g)
         ep_object *o = &g->space.obj[i];
         set_upper(o, 0, (uint16_t)(get_upper(o, 0) + x));
         set_upper(o, 1, (uint16_t)(get_upper(o, 1) + y));
+        /* z moves by a whole step, signed: added to the low word, its sign and carry to +3 */
         uint32_t w = (uint32_t)get16(o, EP_OBJ_POS + 4) + z;
         set16(o, EP_OBJ_POS + 4, (uint16_t)w);
         unsigned hi = o->b[EP_OBJ_POS_HI + 2] + ((z & 0x8000) ? 0xffu : 0u) + (w >> 16);
@@ -184,6 +188,7 @@ void ep_witchspace(ep_game *g)
     uint8_t x = (uint8_t)(((unsigned)(g->seed.w[1] >> 8) + c[EP_CMDR_CHART_CENTRE]) >> 1); /* 16-bit add */
     c[EP_CMDR_CHART_CENTRE] = c[EP_CMDR_CURSOR] = c[EP_CMDR_CURSOR + 4] = x;
     c[EP_CMDR_CURSOR + 2] = 0x50;
+    /* y's sum is a byte (it wraps), unlike x's */
     uint8_t y = (uint8_t)((uint8_t)((uint8_t)(g->seed.w[0] >> 9) + c[EP_CMDR_CHART_CENTRE + 1]) >> 1);
     c[EP_CMDR_CHART_CENTRE + 1] = c[EP_CMDR_CURSOR + 1] = c[EP_CMDR_CURSOR + 5] = y;
     c[EP_CMDR_CURSOR + 3] = 0x40;

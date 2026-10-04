@@ -170,6 +170,8 @@ void ep_launch_missile(ep_game *g)
     }
     ep_ship_init(m, 0);
     m->b[0x33] = 2;
+    /* the player's rotation undone (angles negated, slots applied in reverse) to bring the
+     * point from the ship's frame into space */
     for (int k = 0; k < 3; k++) s->rot[k] = ep_rot_from_angle((uint16_t)(0u - s->player_angle[k]));
     int16_t x = 0, y = 100, z = 0; /* 6dc9: below the ship, into space */
     ep_rotate_pair(&s->rot[2], &x, &y);
@@ -202,6 +204,7 @@ void ep_escape_capsule(ep_game *g)
     memset(hulk->b, 0, sizeof hulk->b); /* 6bbe */
     ep_ship_init(hulk, 9);              /* 7b9f: the Cobra left behind */
     hulk->b[0x33] = 0;
+    /* half a turn (2048 a turn), and the rear view on */
     g->space.player_angle[0] = (uint16_t)(g->space.player_angle[0] + 0x400);
     g->space.extra_angle = 0x400;
     f->ap_flag = 1;
@@ -322,6 +325,8 @@ int ep_view_command(ep_game *g)
     f->screen_flag = 0;
     if (f->other_screen) return back_to_flight(g);
     if (f->scoop_lock || f->ap_flag == 1) return EP_CMD_STAY;
+    /* the view is the extra rotation's high byte: 0 front, 4 rear, 2 left, 6 right; anything
+     * else goes to the front with the low byte sign-extended (cbw) */
     uint16_t v = g->space.extra_angle;
     uint8_t hi = (uint8_t)(v >> 8);
     if (hi == 0)
@@ -456,6 +461,7 @@ static int hyperspace(ep_game *g)
         message(g, 0xae83, 0x23); /* no target */
     else if (dist >= 0x47)
         message(g, 0xae62, 0x23); /* out of range */
+    /* the fuel's range is fuel * 10 / 36 (24h), a jump costs dist * 36 / 10 (at least 1) */
     else if ((uint8_t)(fuel * 10u / 0x24) < (uint8_t)dist)
         message(g, 0xaea3, 0x23); /* not enough fuel */
     else {
@@ -621,6 +627,7 @@ int ep_pause_idle(ep_game *g)
 
 static int run(ep_game *g, uint8_t id)
 {
+    /* the original's handler for each id: what EP_EV_UNPORTED reports for one not ported */
     static const uint16_t handler[37] = {
         0x04b1, 0xa22a, 0x9048, 0x8bea, 0x5ac0, 0xa1cf, 0xa4a0, 0xa3b4, 0xa41f, 0xa4c4,
         0xa464, 0xa5de, 0x96de, 0x8880, 0xa314, 0xa293, 0x5dc2, 0x6189, 0x5d9f, 0x924a,
@@ -670,7 +677,7 @@ static int run(ep_game *g, uint8_t id)
         return EP_CMD_STAY;
     case 0x1d: /* 0658: sound on or off */
         g->f.sound_off ^= 1;
-        g->f.sound_mode = 5;
+        g->f.sound_mode = 5; /* the sequencer stopped, the speaker on with the next note */
         g->f.screen_shown = 0xff;
         ep_music_switch(g, g->f.sound_off); /* 4d6c */
         return EP_CMD_STAY;
@@ -702,7 +709,7 @@ int ep_commands(ep_game *g)
             int r = ep_pause_open(g);
             if (r != EP_CMD_STAY) return r;
             continue;
-        } else if (key >= 0x97 && key <= 0xa2) {
+        } else if (key >= 0x97 && key <= 0xa2) { /* F1..F12, as the key table (ds:0cad) codes them */
             slot = key - 0x97;
         } else if (key >= '1' && key <= '9') {
             slot = key - '1';

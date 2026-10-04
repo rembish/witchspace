@@ -71,6 +71,7 @@ int ep_commander_valid(const ep_commander *c);
 static inline uint8_t ep_commander_b(const ep_commander *c, int off) { return c->b[off]; }
 static inline void ep_commander_set_b(ep_commander *c, int off, uint8_t v) { c->b[off] = v; }
 
+/* the cash (EP_CMDR_CASH), in tenths of a credit */
 uint32_t ep_commander_cash(const ep_commander *c);
 void ep_commander_set_cash(ep_commander *c, uint32_t tenths);
 

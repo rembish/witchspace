@@ -15,7 +15,7 @@ ep_rot ep_rot_from_angle(uint16_t angle)
 {
     ep_rot r;
     r.sin = ep_sin2048[angle & 0x7ff];
-    r.cos = ep_sin2048[(angle + 0x200) & 0x7ff];
+    r.cos = ep_sin2048[(angle + 0x200) & 0x7ff]; /* the sine a quarter turn on */
     return r;
 }
 
@@ -78,6 +78,9 @@ int ep_object_in_range(ep_object *o)
  * the scanner is marked (+1e bit 1, which also holds back its explosion timer) */
 static void scanner_blip(ep_space *s, ep_object *o, const int16_t p[3])
 {
+    /* the scanner's perspective: y * 3/16, z * 5/16 (the original's shifts); x / 256 to a
+     * column around a0h, z to a row around b0h; outside its box (columns 60h..deh, rows
+     * a0h..c0h, foot and head both) no blip */
     int16_t y = (int16_t)((p[1] >> 2) - ((p[1] >> 2) >> 2));
     int16_t z = (int16_t)((p[2] >> 2) + ((p[2] >> 2) >> 2));
     uint8_t xh = (uint8_t)((uint8_t)((uint16_t)p[0] >> 8) + 0xa0);
@@ -137,7 +140,7 @@ static uint16_t atan_ratio(uint16_t a, uint16_t b)
     uint16_t ratio = (uint16_t)(num / b);
     uint16_t lo = 0, hi = 0x1fe, mid = 0;
     for (int n = 9; n > 0; n--) {
-        mid = (uint16_t)(((uint16_t)(lo + hi) >> 1) & 0xfffe);
+        mid = (uint16_t)(((uint16_t)(lo + hi) >> 1) & 0xfffe); /* a byte offset into a word table */
         uint16_t t = ep_tan256[mid >> 1];
         if (t == ratio) break;
         if (t < ratio)
@@ -220,7 +223,9 @@ uint16_t ep_apparent_size(const ep_object *o, uint16_t size)
         int16_t c = (int16_t)get16(o, EP_OBJ_CAM + 2 * k);
         sum += (uint32_t)((int32_t)c * c);
     }
-    /* integer square root of the high word, counted in an 8-bit register */
+    /* integer square root of the high word, counted in an 8-bit register: subtracting odd
+     * numbers, n ends one above the root (it counts the step that failed), and n << 8 is 0
+     * only when n wraps */
     uint16_t hi = (uint16_t)(sum >> 16), odd = 0xffff;
     uint8_t n = 0;
     for (;;) {

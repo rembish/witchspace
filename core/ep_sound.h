@@ -6,8 +6,9 @@
  * timer tick (4a50) the sequencer steps it: a sequence is notes (a pattern, a pitch, a length)
  * and rests; a pattern bends the pitch tick by tick, waits, loops, or turns noise on. What it
  * sets the speaker to is g->speaker (the PIT divisor, 1193182 / Hz) and g->speaker_on; the
- * frontend sounds that. The AdLib and Roland drivers (segment 2270) are the frontend's: it
- * gets the same events.
+ * frontend sounds that. With an AdLib (ds:4801 = 1) the number goes to the music driver's
+ * effects instead (segment 2270, ep_adlib.h), which write to the chip in g->opl. A Roland's
+ * (0) music and effects are not ported. The frontend gets the same events either way.
  *
  * ds:45ea, the sequencer's flags: 1 stopped (a sequence ended, or being set up), 2 the next
  * note is due, 4 the speaker to be turned on, 8 noise, 10h the note holds until its pattern
@@ -38,12 +39,15 @@ void ep_surface_sound(ep_game *g, uint16_t size);
  * EP_EV_WAIT ticks */
 void ep_launch_sound(ep_game *g);
 
-/* 4d21, 4d55: the title music on, off (EP_EV_MUSIC 2, 1); 4d6c: sound turned off (1) or on (0)
- * from the options (EP_EV_MUSIC that) */
+/* 4d21: the title music on (EP_EV_MUSIC 2): on the speaker sequence 81h, on an AdLib the
+ * driver's song from the start (unless sound is off) */
 void ep_music_start(ep_game *g);
+/* 4d55: the title music off (EP_EV_MUSIC 1) */
 void ep_music_stop(ep_game *g);
 /* 4ac0: flight's sound: on an AdLib the music off and the effects' timer in (17c6) */
 void ep_effects_on(ep_game *g);
+/* 4d6c: sound turned off (1) or on (0) from the options (EP_EV_MUSIC that); the AdLib's
+ * music stopped or started again if it was on */
 void ep_music_switch(ep_game *g, uint8_t off);
 
 /* 4d8e: the title music again once it has ended (the speaker) */

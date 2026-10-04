@@ -18,6 +18,7 @@ static uint16_t data_word(const ep_game *g, uint16_t addr)
 
 static void speaker_pitch(ep_game *g, uint16_t divisor) { g->speaker = divisor; } /* 43h b6, 42h */
 
+/* ds:4801, the sound device: 0 a Roland, 1 an AdLib, 2 the PC speaker */
 static int speaker(const ep_game *g) { return g->f.sound_device == 2; }
 
 /* 4c98's speaker part: sequence n (ds:4f7f) from the start */
@@ -89,7 +90,7 @@ void ep_launch_sound(ep_game *g)
     ep_flight *f = &g->f;
     if (speaker(g) || f->sound_off) return;
     ep_sound(g, 0x11);
-    uint16_t ticks = f->sound_device ? 0x78 : 0x23a;
+    uint16_t ticks = f->sound_device ? 0x78 : 0x23a; /* a Roland's is the longer wait */
     ep_event_add(g, EP_EV_WAIT, ticks);
     if (g->wait) g->wait(g, g->clock + ticks, 0); /* 4e88 */
 }
@@ -234,7 +235,7 @@ static void note_tick(ep_game *g)
         f->snd_wait--;
     } else {
         uint16_t si = f->snd_pattern;
-        for (int guard = 0; guard < 256; guard++) {
+        for (int guard = 0; guard < 256; guard++) { /* (ours: a pattern run wild ends) */
             uint8_t al = data_byte(g, si++);
             if (al == 0x80) { /* a wait */
                 f->snd_wait = data_byte(g, si++);
@@ -279,7 +280,9 @@ static void note_tick(ep_game *g)
             break;
         }
     }
-    if (f->sound_mode & 8) { /* 4c44: noise */
+    /* 4c44: noise: a subtract-with-borrow generator (ds:45dc), its low six bits a note
+     * above the current one, its high byte added to that note's divisor */
+    if (f->sound_mode & 8) {
         uint16_t bx = f->snd_noise;
         uint16_t ax = (uint16_t)((bx & 0xff) << 8 | 0xfd);
         uint8_t cl = (uint8_t)(bx >> 8);

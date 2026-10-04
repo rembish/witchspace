@@ -14,7 +14,9 @@
 
 /* 632b on the game's own state: the description into out (the buffer at ds:5a3e, which the
  * caller has zeroed), using and advancing the description seeds, the name buffer (ds:8338,
- * cut at its length; random names pass through it), the global seed and ds:5a2b, 5a34 */
+ * cut at its length; random names pass through it), the global seed and ds:5a2b, 5a34. The
+ * Data on System screen (ep_station.c) passes the game's own state, which carries over from
+ * one description to the next */
 typedef struct {
     uint8_t *out;   /* EP_DESC_MAX bytes */
     uint8_t before; /* the byte before the buffer (ds:5a3d) */
@@ -26,7 +28,8 @@ typedef struct {
 } ep_desc_io;
 void ep_describe(ep_desc_io *io);
 
-/* Description of the system with seed s, as the Data on System screen shows it. */
+/* Description of the system with seed s, as the Data on System screen shows it, from a fresh
+ * state (the name and description seeds of s alone); tests/descdump.c uses it. */
 void ep_system_description(const ep_seed *s, char out[EP_DESC_MAX + 1]);
 
 #endif

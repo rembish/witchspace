@@ -24,16 +24,18 @@ uint16_t ep_joystick_steering(ep_game *g);
 /* a183: firing the laser */
 void ep_laser_fire(ep_game *g);
 
-/* a0cc: the launch tunnel; returns 1 when it ends (the original returns to the docked
- * screens) */
+/* a0cc: the launch tunnel's countdown (ds:ae23, no crashing meanwhile; the escape capsule
+ * sets 100); returns 1 when it ends, where the original goes back to the docked screens
+ * (a012), and Tribbles aboard (ds:83b5) are cut down to 1 */
 int ep_tunnel_tick(ep_game *g);
 
 /* a63d: the player's controls: speed, steering (roll, and pitch re-deriving the three
  * attitude angles), the velocity, and moving everything by it */
 void ep_controls(ep_game *g);
 
-/* 0f27: the steering from the arrow keys (they build up, and return to centre), as
- * pitch << 8 | roll; joystick and mouse are not reconstructed yet */
+/* 0f27: the steering as pitch << 8 | roll, by the control chosen (ds:8f2c, looked at
+ * 0fee): the arrow keys (they build up, and return to centre), the joystick (1038) or the
+ * mouse's mickeys (1164) */
 uint16_t ep_steering(ep_game *g);
 
 /* a768: the player's velocity from the attitude and speed, when ds:af58 says it changed */
@@ -53,8 +55,10 @@ int ep_mass_locked(const ep_game *g);
 /* a5ee: the jump drive stays on only at full speed and away from masses */
 void ep_jump_drive(ep_game *g);
 
-/* 549f, the dashboard's state: the condition (585c), cooling, recharging and equipment loss
- * (579d), the station zone (6a45), the ECM icon flag; the gauges are the frontend's */
+/* 549f, the dashboard: the condition (585c) and its light, cooling, recharging and equipment
+ * loss (579d), the station zone (6a45) and the safe zone and ECM lights, the energy banks,
+ * the missiles, the roll and pitch markers and the gauges; each drawn (into g->render) only
+ * when its value is not the one drawn (ds:54cc..54e1) */
 void ep_dashboard_tick(ep_game *g);
 
 #endif

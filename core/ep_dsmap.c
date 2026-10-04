@@ -15,6 +15,8 @@ typedef struct {
 
 #define F(ds, member, raw) { ds, (uint16_t)sizeof(((ep_game *)0)->member), offsetof(ep_game, member), raw }
 
+/* Fields inside the commander block (ds:82db..83bc) are mapped twice, as bytes of cmdr.b and as
+ * their own ep_flight fields; ep_sync_from/to_commander keep the two in step. */
 static const field fields[] = {
     F(0x82db, cmdr.b, 1),
     F(0x83be, cmdr_saved.b, 1),
@@ -244,7 +246,8 @@ static const field fields[] = {
     F(0x8f2c, in.control, 0),
 };
 
-/* key bindings: pointers into the key table in the original, scancodes in the core */
+/* key bindings: pointers into the key table in the original, scancodes in the core (the
+ * pointer less ds:020d, the table's start) */
 static const uint16_t bindings[7] = { 0xb251, 0xb253, 0xb255, 0xb257, 0xb259, 0xb25b, 0xb25d };
 
 static const size_t binding_off[7] = {

@@ -1,8 +1,9 @@
 /* Elite Plus objects in space, reconstructed from ELITE.EXE.
  *
  * The object table (ds:76de) is kept as raw 64-byte slots like the original's, with named
- * offsets for the fields that are understood; this keeps the core comparable byte for byte
- * while the rest of the slot is still being worked out.
+ * offsets below for the fields shared across modules; this keeps the core comparable byte
+ * for byte. The ships' own fields (+17..+3f: speed, energy, AI state) are reached by raw
+ * offset (mostly in ep_ships.c), described in re/SHIPS.md.
  *
  * update_objects (4154) rotates every active object into camera space by the player's three
  * rotation slots, marks the ones in range and in view, and draws the ships farthest first.
@@ -90,6 +91,7 @@ void ep_object_rotate(ep_space *s, ep_object *o, int16_t p[3]);
 /* The renderer's view of a ship slot */
 ep_ship_view ep_ship_view_of(const ep_space *s, const ep_object *o);
 
+/* |v| of a 16-bit word, as the original's neg (8000h stays 8000h) */
 uint16_t ep_abs16(uint16_t v);
 
 #endif

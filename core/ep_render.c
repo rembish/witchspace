@@ -11,10 +11,14 @@ int16_t ep_qmul(int16_t a, int16_t b)
     return (int16_t)(uint16_t)((uint16_t)((uint32_t)p >> 16) << 1);
 }
 
+/* Angles here are 16 bits a turn; the sine table has 1024 steps, and the cosine is the sine a
+ * quarter turn (4000h) on. */
 static int16_t sin_at(uint16_t angle) { return ep_sin1024[angle >> 6]; }
 
 static int16_t cos_at(uint16_t angle) { return ep_sin1024[(uint16_t)(angle + 0x4000) >> 6]; }
 
+/* A rotation about one axis: `one` is the axis' diagonal entry, 7ffeh (just under 1.0 in Q15),
+ * c0/c1 the cosines, s and ns the sine and its negation. */
 static void mat_axis(uint16_t angle, ep_mat *m, int one, int c0, int c1, int s, int ns)
 {
     memset(m, 0, sizeof *m);
@@ -66,6 +70,8 @@ static int project(int16_t v, int16_t z, int16_t *q)
     return 1;
 }
 
+/* The model's primitives name their vertices by byte offset into the buffer of 10-byte
+ * records (the original's addressing), hence the / 10. */
 static void emit(ep_render *r, uint8_t kind, uint8_t colour, const uint8_t *refs, int n)
 {
     if (r->nprim >= EP_MAX_PRIMS) return;
@@ -97,13 +103,17 @@ void ep_draw_model(ep_render *r, int type, const int16_t pos[3], const ep_mat *m
             v->x = v->sy = 400; /* 3d63; screen x keeps whatever was there */
             continue;
         }
-        v->sx = (int16_t)(q + 0x98);
-        if (!project((int16_t)(v->y - (v->y >> 3)), v->z, &q)) {
+        v->sx = (int16_t)(q + 0x98);                             /* the view's centre, 152, 62 */
+        if (!project((int16_t)(v->y - (v->y >> 3)), v->z, &q)) { /* y * 7/8: the pixels' aspect */
             v->x = v->sy = 400;
             continue;
         }
         v->sy = (int16_t)(q + 0x3e);
     }
+    /* Then face groups: a byte 1, a reference vertex, the group's normal, and primitives (an
+     * even kind, its vertex offsets, a colour) until a byte with bit 0 set. A group is seen when
+     * the rotated normal points back towards the camera (its dot product with the vertex <= 0).
+     * size: bytes of a triangle, quad, line record. */
     static const int size[] = { 8, 10, 6 };
     while (*bp == 1) {
         const ep_vertex *ref = &r->vtx[(uint16_t)rd16(bp + 1) / 10 % EP_MAX_VERTS];
@@ -149,6 +159,7 @@ void ep_draw_ship(ep_render *r, const ep_ship_view *v)
     ep_mat_mul(&t2, &rx, &t1); /* 2bd2 = 2be4 x 2b8a */
     ep_mat_mul(&t1, &ry, &t2); /* 2be4 = 2bd2 x 2b9c */
     ep_mat_mul(&t2, &rz, &t1); /* 2b78 = 2be4 x 2bae */
+    /* the camera position doubled for the Q15 products; a ship that far out is not drawn */
     int16_t pos[3];
     for (int k = 0; k < 3; k++) {
         int32_t d = (int32_t)v->cam[k] * 2;

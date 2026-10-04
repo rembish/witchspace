@@ -9,6 +9,7 @@ uint16_t ep_commander_checksum(const ep_commander *c)
 {
     uint16_t ax = 0x454c;
     for (int i = 0; i < EP_CMDR_CHECKSUM; i++) {
+        /* add al, byte; adc ah, 0; rol ax, 1 */
         unsigned lo = (ax & 0xff) + c->b[i];
         ax = (uint16_t)((ax & 0xff00) + (lo >> 8 << 8) + (lo & 0xff));
         ax = (uint16_t)(ax << 1 | ax >> 15);

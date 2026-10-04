@@ -189,7 +189,6 @@ static int8_t steer_axis(const ep_flight *f, int8_t in, int8_t *acc)
     return v;
 }
 
-/* 0f27: steering from the keyboard (joystick and mouse are not reconstructed yet) */
 /* 1038: one axis of the joystick: its way from the centre times 256 over the centre, halved,
  * at most 127, an eighth of that less a dead zone of 4; -1 if the division faults (the
  * original then returns with the dividend's low word, *fault) */
@@ -383,7 +382,7 @@ void ep_controls(ep_game *g)
         f->pitch_angle[1] = (uint16_t)(0u - ep_atan2(x, z2));
         set_slot(g, 4, (uint16_t)(0u - (uint16_t)(f->pitch_angle[0] + 0x400)));
         x = 0;
-        y = (int16_t)0xd8f0;
+        y = (int16_t)0xd8f0; /* -10000: the point above */
         z = 0;
         rotate_back(g, &x, &y, &z);
         int16_t y3 = y, z3 = z;
@@ -418,6 +417,8 @@ static uint16_t magnitude(int16_t x, int16_t y, int16_t z)
         d = (uint16_t)s;
         shift = 0;
     }
+    /* the square root by counting the odd numbers 1, 3, 5.. that can be taken away (their
+     * sums are the squares); dropping 16 bits of the square drops 8 of the root */
     uint16_t odd = 0xffff;
     uint8_t n = 0xff;
     for (;;) {
@@ -613,7 +614,7 @@ static void autopilot(ep_game *g)
         f->moved = 1;
         return;
     }
-    case 9: {
+    case 9: { /* the slot's roll matched either way up: 0ah as it is, 0bh half a turn round */
         ep_player_move(g);
         uint16_t sr = (uint16_t)(st->b[0x0e] | st->b[0x0f] << 8);
         if (angle_close(sr, g->space.player_angle[2], 0x0b))
@@ -858,7 +859,7 @@ void ep_tribbles_tick(ep_game *g)
             if (*c) {
                 (*c)--;
                 f->tribbles++;
-                if (b < 0x1a) g->cmdr.b[EP_CMDR_CARGO_USED]--;
+                if (b < 0x1a) g->cmdr.b[EP_CMDR_CARGO_USED]--; /* rows 0..12 are in tonnes */
             }
         }
     }

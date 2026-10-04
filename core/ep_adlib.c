@@ -259,7 +259,7 @@ static uint16_t step(ep_game *g)
         }
         si = (uint16_t)(si + rw(g, 0xb5e2));
     }
-next:
+next: /* past the track's end (ds:b688 bytes from ds:b68a): the song from the top */
     if ((uint16_t)(si - rw(g, 0xb68a)) < rw(g, 0xb688)) goto delta;
 again:
     si = rw(g, 0xb68a);
@@ -282,8 +282,10 @@ void ep_adlib_music(ep_game *g)
 {
     if (!rb(g, 0xb5b7)) return; /* the driver's own test: a Roland's music (not ported) */
     ww(g, 0xb6b4, 0x60);
-    uint16_t s = rb(g, 0xb5b9); /* 73f */
+    uint16_t s = rb(g, 0xb5b9); /* 73f: the song's number, picking the tables below */
     ww(g, 0xbccd, s);
+    /* the song's tables: voices per MIDI channel, each channel's voices, each voice's
+     * instrument and its transposition */
     static const struct {
         uint16_t table, to, n;
     } copy[4] = {
@@ -313,6 +315,7 @@ void ep_adlib_music(ep_game *g)
     ww(g, 0xb686, 0);
     ww(g, 0xb69f, rb(g, (uint16_t)(0xbd00 + rw(g, 0xbccd))));
     uint32_t t = (uint32_t)rw(g, 0xb69f) * rw(g, 0xb6b4) / 0x3c; /* 7e8: ticks a second */
+    /* 123321h: the driver's figure for the timer's input, near the PIT's 1193182 Hz */
     set_timer(g, t > 0x12 ? (uint16_t)(0x123321u / t) : 0xffff);
     uint16_t si = 18; /* 3cf: past MThd and its six bytes, MTrk; the track's length (low word) */
     ww(g, 0xb688, (uint16_t)(song(g, 20) << 8 | song(g, 21)));
@@ -343,7 +346,7 @@ void ep_adlib_tick(ep_game *g)
 {
     ep_adlib *a = &g->adlib;
     if (--a->countdown == 0 && !a->busy) {
-        for (;;) {
+        for (;;) { /* every event due now: those a delta of 0 apart play in the same tick */
             uint16_t d = step(g);
             if ((uint16_t)(0u - a->countdown) < d) {
                 a->countdown = (uint16_t)(a->countdown + d);
