@@ -27,26 +27,40 @@ cd "$win" || exit 1 # a Windows folder: no UNC working directory for what is sta
 export EP_ORIGINAL=$win/original
 failed=""
 
-for t in ep_flow ep_badinput ep_screencheck ep_edgecheck; do
-    out=$("$src/tests/wintool.sh" "bin/$t.exe" 2>&1 | tr -d '\r')
-    status=${PIPESTATUS[0]}
-    printf '%-16s %s\n' "$t" "$(echo "$out" | tail -1)"
-    [ "$status" = 0 ] || { echo "$out"; failed="$failed $t"; }
-done
+# a Windows test tool: its output (without the CRs) and its own exit status, not a pipe's
+run() { # TOOL [args...]; sets out and status
+    out=$("$src/tests/wintool.sh" "bin/$1.exe" "${@:2}" 2>&1)
+    status=$?
+    out=${out//$'\r'/}
+}
+check() { # TOOL [args...]
+    run "$@"
+    printf '%-16s %s\n' "$1" "$(echo "$out" | tail -1)"
+    [ "$status" = 0 ] || { echo "$out"; failed="$failed $1"; }
+}
+
+# first, that a failing tool is seen failing: ep_flow given a copy of the game that is not one
+mkdir -p "$win/broken" && echo "not a game" > "$win/broken/ELITE.EXE"
+EP_ORIGINAL=$win/broken run ep_flow
+if [ "$status" = 0 ]; then
+    echo "wintest: a failing Windows tool was not seen failing (status 0): the checks cannot be trusted"
+    exit 1
+fi
+
+for t in ep_flow ep_badinput ep_screencheck ep_edgecheck; do check "$t"; done
 rm -rf "$win/savecheck.tmpdir"
-out=$("$src/tests/wintool.sh" bin/ep_savecheck.exe "$win/savecheck.tmpdir" 2>&1 | tr -d '\r')
-status=${PIPESTATUS[0]}
-printf '%-16s %s\n' ep_savecheck "$(echo "$out" | tail -1)"
-[ "$status" = 0 ] || { echo "$out"; failed="$failed ep_savecheck"; }
+check ep_savecheck "$win/savecheck.tmpdir"
 
 # the game, in a folder whose name is not ASCII (the manifest's UTF-8 file names)
 game="$win/Jürgen tést"
 rm -rf "$game" && mkdir -p "$game/shots" && cp "$win/original/"* "$game/"
+# under a name of its own, so that only this run is stopped (not a game you are playing)
+cp bin/witchspace.exe bin/witchspace-wintest.exe
 export SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy WSLENV=SDL_VIDEODRIVER:SDL_AUDIODRIVER
-"$src/tests/wintool.sh" bin/witchspace.exe --data "$game" --shots "$game/shots" > "$win/game.log" 2>&1 &
+"$src/tests/wintool.sh" bin/witchspace-wintest.exe --data "$game" --shots "$game/shots" > "$win/game.log" 2>&1 &
 pid=$!
 sleep 8
-taskkill.exe /F /IM witchspace.exe > /dev/null 2>&1
+taskkill.exe /F /IM witchspace-wintest.exe > /dev/null 2>&1
 wait $pid 2> /dev/null
 shots=$(ls "$game/shots" | wc -l)
 if [ "$shots" -gt 0 ]; then
