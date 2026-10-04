@@ -21,7 +21,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +39,7 @@ jobs:
           mkdir -p site
           cp build-web/witchspace.html site/index.html
           cp build-web/witchspace.js build-web/witchspace.wasm site/
+          cp LICENSE site/LICENSE.txt && cp THIRD_PARTY.md site/ && cp third_party/nuked-opl3/LICENSE site/LICENSE.Nuked-OPL3.txt
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
