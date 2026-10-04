@@ -4,6 +4,14 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [Unreleased]
+
+- **Closer to the original.** The differential tests now also run on states from all the
+  missions (real v3.1 saves flown into each mission in the original); they found one byte
+  the market list left differently from the original, now the same.
+- **A broken `ELITE.GRF`** gives no pictures to the game and the screen alike (it gave the
+  game some).
+
 ## [0.1.6] — 2026-10-04
 
 - **Two bugs of 1991, mended.** Players reported both in the 1990s; the reconstruction
