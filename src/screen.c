@@ -49,7 +49,9 @@ static void view_line(int x0, int y0, int x1, int y1, uint8_t c)
 {
     int dx = x1 > x0 ? x1 - x0 : x0 - x1, dy = y1 > y0 ? y0 - y1 : y1 - y0;
     int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx + dy;
-    for (int n = 0; n < 4096; n++) {
+    /* every step taken, so a line from far outside still reaches the view: int16 ends make
+       at most 65535 */
+    for (int n = 0; n <= 0x10000; n++) {
         view_put(x0, y0, c);
         if (x0 == x1 && y0 == y1) break;
         int e2 = 2 * err;
@@ -88,7 +90,8 @@ static void view_polygon(const int16_t *pt, int n, uint8_t c)
                 if (x1 > xr) xr = x1;
                 continue;
             }
-            x = x0 + (int)((long)(x1 - x0) * (y - y0) / (y1 - y0));
+            x = x0 +
+                (int)((int64_t)(x1 - x0) * (y - y0) / (y1 - y0)); /* long is 32 bits on Windows and wasm */
             if (x < xl) xl = x;
             if (x > xr) xr = x;
         }
