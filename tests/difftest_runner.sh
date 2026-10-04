@@ -8,10 +8,15 @@ trap 'rm -rf "$tmp"' EXIT
 fails=0
 
 # a fake `uv run subtest.py ...`: MODE=fail-one fails routine beta; MODE=fail-list cannot list;
-# MODE=empty lists nothing; MODE=pass passes all
+# MODE=empty lists nothing; MODE=pass passes all; MODE=order fails unless the build has finished
+# (the stub cmake's mark) and the comparisons are given that build's tool
 cat > "$tmp/uv" <<'EOF'
 #!/bin/sh
 shift; shift
+if [ "$MODE" = order ]; then
+  [ -f "$MARK" ] || { echo "compared before the build finished" >&2; exit 1; }
+  [ "$1" = --list ] || [ "$3" = "$TOOL" ] || { echo "compared with $3, not $TOOL" >&2; exit 1; }
+fi
 case "$MODE:$1" in
   fail-list:--list) echo "Traceback: no module" >&2; exit 1 ;;
   empty:--list) exit 0 ;;
@@ -37,5 +42,17 @@ check pass 0
 check fail-one 1
 check fail-list 1
 check empty 1
+
+# make -j2 difftest: the comparisons only once the build is done, with its ep_subsys (a stub
+# cmake that takes a second to build)
+printf '#!/bin/sh\ncase "$1" in --build) sleep 1; touch "%s" ;; esac\n' "$tmp/built" > "$tmp/cmake"
+chmod +x "$tmp/cmake"
+MODE=order MARK="$tmp/built" TOOL="$tmp/b/ep_subsys" \
+    make -s -j2 -C "$src" difftest UV="$tmp/uv" CMAKE="$tmp/cmake" BUILD="$tmp/b" > "$tmp/out" 2>&1
+if [ $? != 0 ]; then
+    echo "FAIL: make -j2 difftest compared too early or with another build's tool:"
+    cat "$tmp/out"
+    fails=$((fails + 1))
+fi
 [ "$fails" = 0 ] && echo "difftest runner: failures fail" || echo "difftest runner: FAILED"
 [ "$fails" = 0 ]

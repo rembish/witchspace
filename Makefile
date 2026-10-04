@@ -5,6 +5,7 @@ BUILD     ?= build
 BUILD_WEB ?= build-web
 EMSDK_ENV ?= $(HOME)/tools/emsdk/emsdk_env.sh
 UV        ?= uv
+CMAKE     ?= cmake
 BUILD_WIN ?= build-win
 C_FILES    = core/*.c core/*.h src/*.c src/*.h tests/*.c
 
@@ -22,8 +23,8 @@ version-check: ## The version is the same in VERSION, pyproject.toml and CHANGEL
 	@echo "version $(VERSION)"
 
 build: ## The game and the test tools (warnings are errors)
-	cmake -S . -B $(BUILD) -DWS_WERROR=ON
-	cmake --build $(BUILD) -j
+	$(CMAKE) -S . -B $(BUILD) -DWS_WERROR=ON
+	$(CMAKE) --build $(BUILD) -j
 
 web: SHELL := /bin/bash # emsdk_env.sh finds its folder only from bash
 web: ## The browser version (Emscripten: build-web/witchspace.html)
@@ -63,7 +64,9 @@ format-check: ## Check formatting only
 data-check: build ## The core's loader against an independent extraction of the tables
 	$(UV) run re/tools/gen_tables.py --check $(BUILD)/ep_datadump
 
-difftest: build difftest-run ## Every reconstructed routine against the original (about an hour); fails if any differs
+difftest: build ## Every reconstructed routine against the original (about an hour); fails if any differs
+	@# after the build, not beside it (make -j), and with this build's tool
+	$(MAKE) --no-print-directory difftest-run SUBSYS=$(abspath $(BUILD))/ep_subsys
 
 icon: ## The icon's sizes (Windows, the window, the web page) from assets/icon.png
 	$(UV) run tools/make_icon.py
