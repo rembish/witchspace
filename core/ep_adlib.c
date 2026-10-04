@@ -275,7 +275,17 @@ void ep_adlib_init(ep_game *g)
     /* 31a: a Roland's song goes to the same place (its effects, RFX.MID, after it at 1989h; a
      * Roland's music is not ported) */
     const char *name = rb(g, 0xb5b7) ? "ADBLUE.MID" : "BLUTEST.MID";
+    memset(g->adlib.song, 0, sizeof g->adlib.song);
     if (g->io && g->io->read) g->io->read(g->io->ctx, name, g->adlib.song, sizeof g->adlib.song);
+}
+
+/* a song this player can step through: a MIDI file (MThd, then MTrk) whose first track is not
+ * empty. Without one (ADBLUE.MID missing or not a song) the music's interrupt still runs the
+ * clock, but plays nothing. */
+static int song_ok(const ep_game *g)
+{
+    return !memcmp(g->adlib.song, "MThd", 4) && !memcmp(g->adlib.song + 14, "MTrk", 4) &&
+           (song(g, 20) | song(g, 21)) != 0;
 }
 
 void ep_adlib_music(ep_game *g)
@@ -324,7 +334,7 @@ void ep_adlib_music(ep_game *g)
     varlen(g, &si); /* 07c5: the first delta, not counted */
     ww(g, 0xb686, si);
     g->adlib.countdown = 1;
-    wb(g, 0xb66d, 0xff);
+    wb(g, 0xb66d, song_ok(g) ? 0xff : 0);
 }
 
 void ep_adlib_stop(ep_game *g)
@@ -346,7 +356,12 @@ void ep_adlib_tick(ep_game *g)
 {
     ep_adlib *a = &g->adlib;
     if (--a->countdown == 0 && !a->busy) {
-        for (;;) { /* every event due now: those a delta of 0 apart play in the same tick */
+        for (unsigned n = 0;; n++) { /* every event due now: those a delta of 0 apart play in the same tick */
+            if (n > sizeof a->song) { /* more events than the song has bytes: a song with no time in it */
+                wb(g, 0xb66d, 0);     /* would play for ever in this tick: stopped */
+                a->countdown = 1;
+                break;
+            }
             uint16_t d = step(g);
             if ((uint16_t)(0u - a->countdown) < d) {
                 a->countdown = (uint16_t)(a->countdown + d);
