@@ -227,7 +227,8 @@ const char *ep_data_error(int code)
 int ep_data_grf(const uint8_t *grf, size_t len)
 {
     if (len < 16) return 1;
-    size_t p = (size_t)(grf[10] | grf[11] << 8 | grf[12] << 16 | (uint32_t)grf[13] << 24);
+    size_t p = (size_t)((uint32_t)grf[10] | (uint32_t)grf[11] << 8 | (uint32_t)grf[12] << 16 |
+                        (uint32_t)grf[13] << 24);
     int count = grf[14] | grf[15] << 8;
     if (count > EP_SPRITES) count = EP_SPRITES;
     for (int i = 0; i < count; i++) {
