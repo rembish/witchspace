@@ -11,5 +11,5 @@ for a in "$@"; do
     *) args+=("$a") ;;
     esac
 done
-export WSLENV=EP_ORIGINAL/p
+export WSLENV=${WSLENV:+$WSLENV:}EP_ORIGINAL/p # added to what else is passed on
 exec "$exe" "${args[@]}"
