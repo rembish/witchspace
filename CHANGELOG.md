@@ -4,6 +4,14 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [Unreleased]
+
+- **The copy protection takes the right word.** Every copy the port was made from had the
+  protection's check patched out, so `--protection` checked a guessed rule and refused the
+  novella's words. The game as sold has the check; it is the one used now, confirmed against
+  the release's printed list of all 219 answers.
+- **The theme's second arrangement** (`b8060010.mp3`) is found beside the game's files too.
+
 ## [0.1.4] — 2026-10-04
 
 - **The game as sold in 1991 works.** Only copies with the copy protection patched out were
