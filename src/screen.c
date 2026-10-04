@@ -184,6 +184,9 @@ static void prim(const ep_game *g, const ep_prim *p)
     case EP_PRIM_LINE:
     case EP_PRIM_CLIPPED_LINE: view_line(p->pt[0], p->pt[1], p->pt[2], p->pt[3], c); break;
     case EP_PRIM_PIXEL: view_put(p->pt[0], p->pt[1], c); break;
+    case EP_PRIM_DUST: /* 2989: the dust's own table of MCGA pixels, not the game colours */
+        view_put(p->pt[0], p->pt[1], ep_ds_initial[0x2656 + (p->colour & 7)]);
+        break;
     case EP_PRIM_SPANS:
         for (int k = (uint16_t)p->pt[0]; k < (uint16_t)p->pt[0] + p->pt[1] && k < g->circles.n; k++) {
             const ep_span *s = &g->circles.span[k];
