@@ -31,6 +31,11 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h> /* AttachConsole */
+#endif
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -462,10 +467,36 @@ static void step(void)
     }
 }
 
-/* the program cannot go on (the message is out): in the browser the page shows it, with the
- * game's files to give again (web/shell.html) */
-static int fail(void)
+#ifdef _WIN32
+/* Windows: the program is a window's (no console opened with it, from Explorer). Started from
+ * a console it writes there; with its output sent elsewhere, there; else what stops it is said
+ * in a message box */
+static int console;
+
+static void find_console(void)
 {
+    HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+    if (h && h != INVALID_HANDLE_VALUE && GetFileType(h) != FILE_TYPE_UNKNOWN) {
+        console = 1;
+    } else if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        console = freopen("CONOUT$", "w", stdout) && freopen("CONOUT$", "w", stderr);
+    }
+}
+#endif
+
+/* the program cannot go on: why, on stderr; in the browser the page shows it, with the
+ * game's files to give again (web/shell.html); on Windows with no console, in a box */
+static int fail(const char *fmt, ...)
+{
+    char msg[2400];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof msg, fmt, ap);
+    va_end(ap);
+    fputs(msg, stderr);
+#ifdef _WIN32
+    if (!console) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Witchspace", msg, NULL);
+#endif
 #ifdef __EMSCRIPTEN__
     emscripten_run_script("Module.failed && Module.failed()");
 #endif
@@ -476,6 +507,9 @@ int main(int argc, char **argv)
 {
     const char *data = NULL, *saves = NULL;
     int protection = 0, adlib = 1;
+#ifdef _WIN32
+    find_console();
+#endif
     for (int k = 1; k < argc; k++) {
         if (!strcmp(argv[k], "--data") && k + 1 < argc)
             data = argv[++k];
@@ -503,38 +537,28 @@ int main(int argc, char **argv)
     for (int k = 0; !data && k < 3; k++)
         if (files_find(look[k], "ELITE.EXE", path, sizeof path)) data = look[k];
     if (!data || !files_find(data, "ELITE.EXE", path, sizeof path)) {
-        fprintf(stderr,
-                "Witchspace needs your copy of Elite Plus: ELITE.EXE was not found in %s.\n"
-                "Put this program in the game's folder, or give it with --data DIR.\n",
-                data ? data : "this program's folder, the current one or original/");
-        return fail();
+        return fail("Witchspace needs your copy of Elite Plus: ELITE.EXE was not found in %s.\n"
+                    "Put this program in the game's folder, or give it with --data DIR.\n",
+                    data ? data : "this program's folder, the current one or original/");
     }
     if (!saves) saves = data; /* the commanders beside the game, as the original kept them */
     size_t n;
     uint8_t *exe = files_slurp(path, &n); /* the game's tables */
-    if (!exe) {
-        fprintf(stderr, "%s: cannot be read\n", path);
-        return fail();
-    }
+    if (!exe) { return fail("%s: cannot be read\n", path); }
     int r = ep_data_load(exe, n);
     free(exe);
-    if (r) {
-        fprintf(stderr, "%s: %s\n", path, ep_data_error(r));
-        return fail();
-    }
+    if (r) { return fail("%s: %s\n", path, ep_data_error(r)); }
     files_find(data, "ELITE.GRF", path, sizeof path);
     uint8_t *grf = files_slurp(path, &n);
     if (grf) ep_data_grf(grf, n);
     free(grf);
     if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
     if (files_init(saves, data) != 0) {
-        fprintf(stderr, "%s: the folder's name is too long\n", strlen(saves) >= strlen(data) ? saves : data);
-        return fail();
+        return fail("%s: the folder's name is too long\n", strlen(saves) >= strlen(data) ? saves : data);
     }
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
-        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-        return fail();
+        return fail("SDL_Init: %s\n", SDL_GetError());
     }
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     win = SDL_CreateWindow("Witchspace", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
@@ -543,10 +567,7 @@ int main(int argc, char **argv)
     tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_W,
                                   SCREEN_H)
               : NULL;
-    if (!tex) {
-        fprintf(stderr, "SDL: %s\n", SDL_GetError());
-        return fail();
-    }
+    if (!tex) { return fail("SDL: %s\n", SDL_GetError()); }
     audio_init();
     screen_init();
 
