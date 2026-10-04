@@ -35,13 +35,19 @@ test: build ## The checks outside the emulator (skipped without original/)
 	ctest --test-dir $(BUILD) --output-on-failure
 
 CLIPS ?= clips
-clips: build ## Short videos of scripted scenes into clips/ (from original/; needs ffmpeg)
+# each scene: a video with sound, and a 6-second looping preview (the GIF keeps the game's own
+# 256 colours exactly) starting this many seconds in
+CLIP_PREVIEW = title:13 launch:1 screens:2 docking:8 hyperspace:7
+clips: build ## Short videos and previews of scripted scenes into clips/ (from original/; needs ffmpeg)
 	mkdir -p $(CLIPS)
 	./$(BUILD)/ep_clips original $(CLIPS)
-	for s in title launch screens docking hyperspace; do \
+	for p in $(CLIP_PREVIEW); do s=$${p%:*}; t=$${p#*:}; \
 		ffmpeg -loglevel error -y -f rawvideo -pix_fmt rgb24 -s 320x200 -r 30 -i $(CLIPS)/$$s.rgb \
 			-i $(CLIPS)/$$s.wav -vf scale=960:720:flags=neighbor -c:v libx264 -pix_fmt yuv420p -crf 20 \
 			-c:a aac -b:a 128k -shortest -movflags +faststart $(CLIPS)/witchspace-$$s.mp4 && \
+		ffmpeg -loglevel error -y -ss $$t -t 6 -f rawvideo -pix_fmt rgb24 -s 320x200 -r 30 -i $(CLIPS)/$$s.rgb \
+			-vf "fps=15,split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=none" \
+			-loop 0 $(CLIPS)/witchspace-$$s.gif && \
 		rm $(CLIPS)/$$s.rgb $(CLIPS)/$$s.wav; done
 
 format: ## Format the C code (clang-format 21) and the Python (ruff)
