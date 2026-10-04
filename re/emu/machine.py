@@ -5,9 +5,10 @@ game with Machine and compare its data segment (or record it) against the C core
 
 The game is started from its entry point like DOS would (PSP below the image, DS = ES = PSP)
 and talks to Python stand-ins for DOS (INT 21h: files from original/ and an in-memory
-directory for saves, memory blocks, vectors, time), the video BIOS (INT 10h, only the mode
-calls) and the mouse driver (INT 33h: none present). Ports: 3dah toggles the retrace bits on
-every read, 60h returns the injected scancode, everything else reads 0.
+directory for saves, find first/next over both, memory blocks, vectors, time), the video
+BIOS (INT 10h, only the mode calls) and the mouse driver (INT 33h: none present). Ports: 3dah
+toggles the retrace bits on every read, 60h returns the injected scancode, everything else
+reads 0.
 
 Time is deterministic: timer interrupts (INT 8, the game's handler at 4a99) are only injected
 where the game waits for them (the frame wait at 3027), and keys only when the game polls for
@@ -15,6 +16,7 @@ one (0276) or between frames, from a script.
 """
 
 import datetime
+import fnmatch
 import os
 import struct
 from collections.abc import Callable, Mapping
@@ -87,6 +89,12 @@ WAITS: Final[dict[int, WaitFn]] = {
 }
 
 
+def _is_8_3(name: str) -> bool:
+    """A DOS 8.3 file name: up to 8 characters, optionally a dot and up to 3 more."""
+    base, dot, ext = name.partition(".")
+    return 0 < len(base) <= 8 and len(ext) <= 3 and "." not in ext and (bool(ext) or not dot)
+
+
 class Exit(Exception):
     """The program's exit (unused: INT 21h/4Ch stops the emulation and sets exit_code)."""
 
@@ -122,7 +130,8 @@ class Machine(Elite):
         self.keys: list[int] = []  # scancodes, delivered at polls
         self.down: int | None = None  # pressed key whose release is still to come
         self.exit_code: int | None = None
-        self.dta = (0, 0)
+        self.dta = (PSP, 0x80)  # DOS starts it in the PSP
+        self.found: list[str] = []  # names still to report by 4Fh (find next)
         self.dac = bytearray(768)
         self.dac_index = 0
         # IVT: every vector at an IRET in the BIOS segment
@@ -143,7 +152,6 @@ class Machine(Elite):
         mu.hook_add(UC_HOOK_CODE, self._key_poll, begin=CS * 16 + KEY_POLL, end=CS * 16 + KEY_POLL)
         self.stop_at: dict[int, StopFn] = {}  # address -> callback(machine) returning True to stop
 
-    # ---- registers ----
     def reg(self, r: int) -> int:
         """Register r (a UC_X86_REG_* id)."""
         v: int = self.mu.reg_read(r)
@@ -261,9 +269,12 @@ class Machine(Elite):
         elif ah == 0x4C:
             self.exit_code = al
             self.mu.emu_stop()
-        elif ah in (0x4E, 0x4F):
-            self.setreg(UC_X86_REG_AX, 0x12)
-            self.carry(True)
+        elif ah == 0x4E:
+            pattern = self.read_str(ds, dx).decode("latin1").upper()
+            self.found = [n for n in self._directory() if fnmatch.fnmatchcase(n, pattern)]
+            self._dos_find_next()
+        elif ah == 0x4F:
+            self._dos_find_next()
         else:
             raise RuntimeError(f"unhandled DOS call {ax:#06x}")
 
@@ -287,6 +298,37 @@ class Machine(Elite):
             h += 1
         self.handles[h] = _Handle(name, 0)
         self.setreg(UC_X86_REG_AX, h)
+        self.carry(False)
+
+    def _directory(self) -> list[str]:
+        """The directory DOS would list: the in-memory files, then original/'s (8.3 names
+        only, in capitals, as DOS shows them)."""
+        names = list(self.files)
+        for entry in sorted(os.listdir(ORIGINAL)):
+            name = entry.upper()
+            if name not in names:
+                names.append(name)
+        return [n for n in names if _is_8_3(n)]
+
+    def _dos_find_next(self) -> None:
+        """4Eh/4Fh: the next match of the search into the DTA (attribute 15h, time 16h, date
+        18h, size 1Ah, name 1Eh); error 12h (no more files) at the end."""
+        if not self.found:
+            self.setreg(UC_X86_REG_AX, 0x12)
+            self.carry(True)
+            return
+        name = self.found.pop(0)
+        data = self.files.get(name)
+        if data is not None:
+            size = len(data)
+        else:
+            size = os.path.getsize(os.path.join(ORIGINAL, name))
+        entry = bytearray(43)
+        entry[0x15] = 0x20  # archive
+        entry[0x1A:0x1E] = struct.pack("<I", size)
+        entry[0x1E : 0x1E + len(name)] = name.encode("latin1")
+        self.mu.mem_write(self.lin(*self.dta), bytes(entry))
+        self.setreg(UC_X86_REG_AX, 0)
         self.carry(False)
 
     def _dos_read_write(self, ah: int, ds: int, dx: int) -> None:
