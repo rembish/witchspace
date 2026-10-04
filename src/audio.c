@@ -1,12 +1,16 @@
 /* The sound (see audio.h): the witchspace frontend's, on SDL2. The speaker's square wave and
  * the chip are mixed in the device's callback; the chip's writes wait in a queue, each marked
- * with the sample it plays from. */
+ * with the sample it plays from. The title's theme, if one was given, is an MP3 decoded in the
+ * callback as it plays (dr_mp3). */
 #include "audio.h"
 
 #include "opl3.h"
 
+#include "dr_mp3.h"
+
 #include <SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define RATE    44100
 #define LATENCY (RATE / 20) /* the chip's writes play this long after they were made */
@@ -25,6 +29,33 @@ static struct {
 static int head, tail; /* under the device's lock */
 static Uint64 played, last_at;
 
+static drmp3 theme;                 /* the theme's decoder, over theme_data */
+static uint8_t *theme_data;         /* the MP3 file, while it is loaded */
+static int theme_on;                /* playing (under the device's lock) */
+static double theme_step;           /* the theme's samples per output sample (its rate over RATE) */
+static double theme_at;             /* where in theme_pcm the next output sample is */
+static int16_t theme_pcm[2 * 1152]; /* decoded frames (interleaved), theme_n of them */
+static int theme_n;
+
+/* the theme's next sample (its channels mixed), from the start again at its end */
+static int theme_sample(void)
+{
+    while (theme_at >= theme_n) {
+        theme_at -= theme_n;
+        theme_n = (int)drmp3_read_pcm_frames_s16(&theme, 1152, theme_pcm);
+        if (!theme_n) { /* the end: again from the start */
+            if (!drmp3_seek_to_pcm_frame(&theme, 0)) return 0;
+            theme_n = (int)drmp3_read_pcm_frames_s16(&theme, 1152, theme_pcm);
+            if (!theme_n) return 0;
+        }
+    }
+    int k = (int)theme_at, ch = (int)theme.channels;
+    int v = theme_pcm[k * ch];
+    if (ch > 1) v = (v + theme_pcm[k * ch + 1]) / 2;
+    theme_at += theme_step;
+    return v;
+}
+
 static void fill(void *u, Uint8 *stream, int len)
 {
     (void)u;
@@ -39,6 +70,7 @@ static void fill(void *u, Uint8 *stream, int len)
         int16_t lr[2];
         OPL3_GenerateResampled(&chip, lr);
         int v = (lr[0] + lr[1]) / 2;
+        if (theme_on) v += theme_sample();
         if (on && hz >= 20 && hz <= 20000) {
             phase += hz / RATE;
             if (phase >= 1) phase -= (int)phase;
@@ -102,7 +134,44 @@ void audio_opl(const uint8_t (*writes)[2], int n, double ago)
     SDL_UnlockAudioDevice(dev);
 }
 
+int audio_theme_load(uint8_t *data, size_t len)
+{
+    if (dev) SDL_LockAudioDevice(dev);
+    if (theme_data) drmp3_uninit(&theme);
+    free(theme_data);
+    theme_data = NULL;
+    theme_on = 0;
+    /* the decoder set up in place: it keeps pointers into itself */
+    int ok = drmp3_init_memory(&theme, data, len, NULL);
+    if (ok && (theme.channels < 1 || theme.channels > 2 || !theme.sampleRate)) {
+        drmp3_uninit(&theme);
+        ok = 0;
+    }
+    if (ok) {
+        theme_data = data;
+        theme_step = (double)theme.sampleRate / RATE;
+        theme_at = theme_n = 0;
+    }
+    if (dev) SDL_UnlockAudioDevice(dev);
+    return ok;
+}
+
+void audio_theme(int play)
+{
+    if (!theme_data || !dev || play == theme_on) return;
+    SDL_LockAudioDevice(dev);
+    if (play) { /* from the start */
+        drmp3_seek_to_pcm_frame(&theme, 0);
+        theme_at = theme_n = 0;
+    }
+    theme_on = play;
+    SDL_UnlockAudioDevice(dev);
+}
+
 void audio_quit(void)
 {
     if (dev) SDL_CloseAudioDevice(dev);
+    if (theme_data) drmp3_uninit(&theme);
+    free(theme_data);
+    theme_data = NULL;
 }

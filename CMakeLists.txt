@@ -46,6 +46,9 @@ target_link_libraries(ep_cmdrdump PRIVATE epcore)
 # The AdLib's chip: Nuked OPL3 (LGPL-2.1+, third_party/nuked-opl3), for the frontend only
 add_library(opl3 STATIC third_party/nuked-opl3/opl3.c)
 target_include_directories(opl3 PUBLIC third_party/nuked-opl3)
+# The title's theme, when one is given: dr_mp3 (public domain, third_party/dr_mp3)
+add_library(drmp3 STATIC third_party/dr_mp3/dr_mp3.c)
+target_include_directories(drmp3 PUBLIC third_party/dr_mp3)
 add_executable(witchspace src/main.c src/screen.c src/grf.c src/audio.c src/files.c)
 if(WIN32) # the manifest: UTF-8 file names (src/witchspace.manifest); a window, not a console
   enable_language(RC)
@@ -53,7 +56,7 @@ if(WIN32) # the manifest: UTF-8 file names (src/witchspace.manifest); a window, 
   target_sources(witchspace PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/witchspace.rc)
   set_target_properties(witchspace PROPERTIES WIN32_EXECUTABLE ON) # no console window (src/main.c)
 endif()
-target_link_libraries(witchspace PRIVATE epcore opl3)
+target_link_libraries(witchspace PRIVATE epcore opl3 drmp3)
 target_compile_definitions(witchspace PRIVATE WS_VERSION="${WS_VERSION}")
 if(EMSCRIPTEN)
   # The web build (web/shell.html): the page gets the game's files first, then calls main.

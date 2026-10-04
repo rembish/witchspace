@@ -10,6 +10,7 @@ and the web site also Emscripten's and musl's.
 |-----------|----------|---------|-------|
 | [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) 1.8 by Nuke.YKT, commit `765ec962e473aeb767e4cba74ffdc8f588ffbfe8`, unmodified | the AdLib's chip (an emulated OPL2), linked statically into the program and the web version | LGPL-2.1-or-later: `LICENSE.Nuked-OPL3.txt` (from `third_party/nuked-opl3/LICENSE`) | `third_party/nuked-opl3` |
 | [SDL2](https://www.libsdl.org/) 2.32.10 by Sam Lantinga and contributors | window, input, sound; linked statically into the release binaries | zlib: `LICENSE.SDL2.txt` | built from source by CMake (`WS_VENDOR_SDL`) |
+| [dr_mp3](https://github.com/mackron/dr_libs) by David Reid, commit `dfe8377631000664666519fdb83da193fd8037f4`, unmodified | the title's theme, when an MP3 is given | public domain (Unlicense) or MIT-0: `third_party/dr_mp3/LICENSE` | `third_party/dr_mp3` |
 | [Emscripten](https://emscripten.org/)'s runtime, with [musl](https://musl.libc.org/) libc | the web version's JavaScript and C library | MIT (or UIUC): `LICENSE.Emscripten.txt`; musl's MIT: `LICENSE.musl.txt` | linked by the Emscripten build |
 | Emscripten's SDL2 port (SDL2 2.32.10) | the web version's window, input, sound | zlib: `LICENSE.SDL2.txt` | fetched and linked by the Emscripten build |
 
@@ -28,6 +29,7 @@ For the web version, build with Emscripten (`make web`).
 
 ## Not included
 
-Witchspace contains no part of Elite Plus. It reads the game's data from your copy, and the web
-version fetches it in your browser. Elite © 1984 David Braben and Ian Bell; Elite Plus © 1991
+Witchspace contains no part of Elite Plus, nor the Elite theme's recording. It reads the
+game's data (and the theme, if given) from your copy, and the web version fetches it in your
+browser. Elite © 1984 David Braben and Ian Bell; Elite Plus © 1991
 Chris Sawyer, Realtime Software, and Bell & Braben.

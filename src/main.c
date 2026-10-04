@@ -4,9 +4,12 @@
  * sounds the PC speaker or the AdLib, and goes from one of the core's loops to the next as
  * their results say (title, station screens, flight, pause, dialogues).
  *
- * usage: witchspace [--data DIR] [--saves DIR] [--speaker] [--protection]
+ * usage: witchspace [--data DIR] [--saves DIR] [--speaker] [--protection] [--theme FILE]
  *   --data DIR     where your copy of the game is: ELITE.EXE, ELITE.GRF, ADBLUE.MID (default:
  *                  this program's folder, then the current one, then original/)
+ *   --theme FILE   an MP3 the title plays instead of its own music (default: B8060000.MP3 or
+ *                  THEME.MP3 beside the game's files, if there is one: the Elite theme from
+ *                  Ian Bell's archive); --no-theme for the original's music
  *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default)
@@ -234,6 +237,29 @@ static void pump(void)
 
 /* ---- time: the timer interrupt as often as the original's ---- */
 
+/* the title's theme in place of its own music: while the core plays that (f.music_on, the
+ * sound not turned off), the speaker's and the chip's sound is held back and the MP3 plays */
+static int theme_loaded;
+
+static void load_theme(const char *file, const char *data)
+{
+    char p[1100];
+    if (!file) {
+        if (files_find(data, "B8060000.MP3", p, sizeof p) || files_find(data, "THEME.MP3", p, sizeof p))
+            file = p;
+        else
+            return;
+    }
+    size_t n;
+    uint8_t *mp3 = files_slurp(file, &n);
+    if (mp3 && audio_theme_load(mp3, n)) {
+        theme_loaded = 1;
+        return;
+    }
+    free(mp3);
+    fprintf(stderr, "%s: not an MP3 that plays: the title's own music instead\n", file);
+}
+
 static void advance(void)
 {
     Uint64 due =
@@ -244,9 +270,11 @@ static void advance(void)
         if (clocks_done + divisor > due) break;
         clocks_done += divisor;
         ep_pit_tick(&g);
-        audio_speaker(g.speaker, g.speaker_on);
+        int themed = theme_loaded && g.f.music_on && !g.f.sound_off;
+        audio_theme(themed);
+        audio_speaker(themed ? 0 : g.speaker, !themed && g.speaker_on);
         if (g.nopl) {
-            audio_opl((const uint8_t (*)[2])g.opl, g.nopl, (double)(due - clocks_done) / PIT_HZ);
+            if (!themed) audio_opl((const uint8_t (*)[2])g.opl, g.nopl, (double)(due - clocks_done) / PIT_HZ);
             g.nopl = 0;
         }
     }
@@ -509,7 +537,8 @@ static int fail(const char *fmt, ...)
 int main(int argc, char **argv)
 {
     const char *data = NULL, *saves = NULL;
-    int protection = 0, adlib = 1;
+    const char *theme = NULL;
+    int protection = 0, adlib = 1, no_theme = 0;
 #ifdef _WIN32
     find_console();
 #endif
@@ -527,6 +556,10 @@ int main(int argc, char **argv)
             adlib = 0;
         else if (!strcmp(argv[k], "--shots") && k + 1 < argc)
             shots = argv[++k];
+        else if (!strcmp(argv[k], "--theme") && k + 1 < argc)
+            theme = argv[++k];
+        else if (!strcmp(argv[k], "--no-theme"))
+            no_theme = 1;
     }
     /* your copy of the game: --data, or the folder this program is in, the current one, or
      * original/ (where the sources keep it) */
@@ -584,6 +617,7 @@ int main(int argc, char **argv)
     }
 #endif
     audio_init();
+    if (!no_theme) load_theme(theme, data);
     screen_init();
 
     uint8_t t[4];
