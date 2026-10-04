@@ -107,7 +107,15 @@ explains trading, combat, the ship's equipment and the missions.
 | `--saves DIR` | where commanders are saved (default: beside the game's files, as the original did) |
 | `--speaker` | the PC speaker instead of the AdLib |
 | `--protection` | ask the original's copy-protection question (off by default) |
+| `--theme FILE` | an MP3 the title plays instead of its own music (see below) |
+| `--no-theme` | the title's own music even when a theme is there |
 | `--version` | print the version |
+
+**The Elite theme at the title.** Ian Bell's
+[Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps a recording of the Elite
+theme (Aidan Bell's, arranged by C. Abbott): `b8060000.mp3`. Put it beside the game's files
+(or name it `THEME.MP3`) and the title plays it instead of the AdLib's (or the speaker's)
+Blue Danube; everything else sounds as the original. In the browser, add it on the page.
 
 ## Status
 
@@ -178,6 +186,12 @@ The notes on the original:
 | Ghidra (headless) | decompiling `ELITE.EXE` (16-bit real mode); names in `re/ghidra/names.txt` |
 | DOSBox-X, Xvfb, xdotool, ffmpeg | running the original for reference, screenshots |
 | Emscripten | the web build |
+
+## Thanks
+
+To [Ian Bell's Elite pages](http://www.iancgbell.clara.net/elite/), Elite's co-author's, which
+keep Elite Plus (as sold, and the copy the Internet Archive mirrors), the Elite theme, and the
+history around them; and to the Internet Archive, which keeps the original's manual.
 
 ## License
 
