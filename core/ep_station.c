@@ -97,7 +97,7 @@ uint16_t ep_rating_text(const ep_game *g, uint16_t kills)
     do {
         at = (uint16_t)(at + 2);
         k++;
-    } while (kills >= ep_ds_word(g, at));
+    } while (k < 8 && kills >= ep_ds_word(g, at)); /* past the last, Elite's, 60000: still Elite */
     return ep_ds_word(g, (uint16_t)(0x8ec1 + 2 * k));
 }
 
@@ -681,7 +681,7 @@ uint8_t ep_list_poll(ep_game *g, int mode)
         row--;
         key = 0xff;
     }
-    if (key == 0x50 && row != (uint8_t)(m[0] - 1)) {
+    if (key == 0x50 && row + 1 < m[0]) { /* not past the last row (an empty list has none) */
         row++;
         key = 0xff;
     }
@@ -1102,7 +1102,7 @@ int ep_equipment_buy(ep_game *g)
     ep_flight *f = &g->f;
     uint8_t *c = g->cmdr.b;
     int row = f->list_row;
-    if (row == 0xff) return EP_WAIT_NONE;
+    if (row == 0xff || row >= f->list_count) return EP_WAIT_NONE;
     if (row == 0) { /* fuel */
         if (f->mission == 1) {
             box_note(g, 0x8dad);
@@ -1185,7 +1185,7 @@ int ep_equipment_sell(ep_game *g)
 {
     ep_flight *f = &g->f;
     int row = f->list_row;
-    if (row == 0xff || !*owned(g, row)) return EP_WAIT_NONE;
+    if (row == 0xff || row >= f->list_count || !*owned(g, row)) return EP_WAIT_NONE;
     if (row == 2 && g->cmdr.b[EP_CMDR_CARGO_USED] > 0x14) {
         box_note(g, 0x8d6a);
         return EP_WAIT_NONE;
@@ -1807,7 +1807,7 @@ static int entry_key(ep_game *g, uint8_t key)
     }
     if (key < 0x20 || key > 0x7a) return 0;
     if (!(key == '-' || (key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z'))) return 0; /* 0e87 */
-    if (*count == *entry_b(g, 0x9a2)) return 0;
+    if (*count >= *entry_b(g, 0x9a2)) return 0;
     (*count)++;
     *entry_b(g, (uint16_t)(0x9a3 + *count)) = key;
     *entry_b(g, (uint16_t)(0x9a4 + *count)) = 0;
@@ -1919,8 +1919,8 @@ int ep_save_screen(ep_game *g)
     uint8_t *e = entry_b(g, 0x9a4), *name = &g->cmdr.b[EP_CMDR_NAME];
     int n = 0;
     uint8_t c;
-    do e[n] = c = name[n]; /* up to a space or the end */
-    while (++n < 16 && c && c != ' ');
+    do e[n] = c = name[n]; /* up to a space or the end, at most the 8 the entry takes */
+    while (++n < 9 && c && c != ' ');
     e[n - 1] = 0;
     *entry_b(g, 0x9a3) = (uint8_t)(n - 1);
     *entry_b(g, 0x9a2) = 8;

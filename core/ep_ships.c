@@ -1093,9 +1093,10 @@ void ep_ai_frame(ep_game *g)
     mission4(g);
     mission5(g);
     mission6(g);
-    uint8_t gov = g->cmdr.b[EP_CMDR_CURRENT + EP_SYSREC_GOVERNMENT];
+    /* a government is 0..7; a commander's file could say more (masked, as the prices do) */
+    uint8_t gov = g->cmdr.b[EP_CMDR_CURRENT + EP_SYSREC_GOVERNMENT] & 7;
     f->spawn_gov8 = (uint16_t)(gov * 8);
-    f->spawn_row = (uint16_t)(f->danger_gov * 4);
+    f->spawn_row = (uint16_t)((f->danger_gov & 7) * 4);
     const uint8_t *limit = &ep_spawn_limit[0][0] + f->spawn_row;
     const uint16_t *chance = &ep_spawn_chance[0][0] + f->spawn_gov8 / 2;
     if (!f->hyperspace) {

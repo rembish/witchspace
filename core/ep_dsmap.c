@@ -345,7 +345,11 @@ int ep_ds_text(const ep_game *g, uint16_t addr, uint8_t *out, int max)
         int extra = c == 1 ? 1 : c == 2 ? 4 : 0;
         for (; extra && n < max; extra--, n++) out[n] = ep_ds_byte(g, (uint16_t)(addr + n));
     }
-    return n;
+    /* no end within out (a crafted commander's text): cut short, its last bytes zeroed, so
+       that those that scan for the end (ep_text_width steps over a code's bytes) find it */
+    int keep = max > 5 ? max - 5 : 0;
+    memset(out + keep, 0, (size_t)(max - keep));
+    return keep;
 }
 
 int ep_ds_header_text(const ep_game *g, uint16_t addr, uint8_t *out, int max)
