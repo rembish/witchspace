@@ -16,6 +16,9 @@
 #include "ep_station.h"
 #include "ep_tables.h"
 #include "ep_travel.h"
+#include "ep_trade.h"
+#include "ep_objects.h"
+#include "ep_frame.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -196,6 +199,89 @@ static void protection(void)
     CHECK(!protection_answer("ELITE"));
 }
 
+/* ---- the original's gameplay bugs, as it has them and mended (g->fixes) ---- */
+
+/* six Alien Items scooped (a Thargon each: held +1, tonnes +1), sold, then food bought until
+ * the hold is full: the tonnes it takes */
+static int hold_after_alien_items(uint8_t fixes)
+{
+    docked();
+    g.fixes = fixes;
+    uint8_t *c = g.cmdr.b;
+    ep_commander_set_cash(&g.cmdr, 1000000);
+    c[EP_CMDR_EQUIPMENT + 1] = 1; /* the cargo bay extension: 35 t */
+    for (int k = 0; k < 17; k++) c[EP_CMDR_CARGO + 2 * k] = 0;
+    c[EP_CMDR_CARGO + 2 * 16] = 6;
+    c[EP_CMDR_CARGO_USED] = 6;
+    for (int k = 0; k < 6; k++) ep_trade_sell(&g, 16);
+    c[EP_CMDR_CARGO + 1] = 200; /* food on offer */
+    int n = 0;
+    while (ep_trade_buy(&g, 0) == EP_TRADE_OK) n++;
+    return n;
+}
+
+static void hold(void)
+{
+    CHECK(hold_after_alien_items(0) == 29); /* the original's: a tonne lost for each */
+    CHECK(hold_after_alien_items(EP_FIX_HOLD) == 35);
+    /* a commander the bug left short (a tonne counted, the hold empty), mended on loading */
+    docked();
+    g.fixes = EP_FIX_HOLD;
+    for (int k = 0; k < 17; k++) g.cmdr.b[EP_CMDR_CARGO + 2 * k] = 0;
+    g.cmdr.b[EP_CMDR_CARGO + 2 * 3] = 2;
+    g.cmdr.b[EP_CMDR_CARGO_USED] = 3;
+    ep_hold_recount(&g);
+    CHECK(g.cmdr.b[EP_CMDR_CARGO_USED] == 2);
+}
+
+static int32_t object_pos(const ep_object *o, int k)
+{
+    uint16_t lo = (uint16_t)(o->b[EP_OBJ_POS + 2 * k] | o->b[EP_OBJ_POS + 2 * k + 1] << 8);
+    int32_t v = (int32_t)((uint32_t)o->b[EP_OBJ_POS_HI + k] << 16 | lo);
+    return (int32_t)((uint32_t)v << 8) >> 8; /* 24 bits, signed */
+}
+
+static void set_object_pos(ep_object *o, int k, int32_t v)
+{
+    o->b[EP_OBJ_POS + 2 * k] = (uint8_t)v;
+    o->b[EP_OBJ_POS + 2 * k + 1] = (uint8_t)(v >> 8);
+    o->b[EP_OBJ_POS_HI + k] = (uint8_t)(v >> 16);
+}
+
+/* launched, then put `behind` the station (the side away from its slot) and the docking
+ * computer engaged: 1 docked, 0 not (dead) */
+static int dock_from_behind(uint8_t fixes, int32_t behind)
+{
+    docked();
+    g.fixes = fixes;
+    ep_key_event(&g, 0x3b); /* F1: launch */
+    ep_key_event(&g, 0xbb);
+    ep_station_idle(&g);
+    for (int k = 0; k < 200; k++) ep_flight_frame(&g);
+    ep_object *st = &g.space.obj[2];
+    int32_t delta[3] = { -object_pos(st, 0), -object_pos(st, 1), behind - object_pos(st, 2) };
+    for (int i = 0; i < 3; i++) /* the station, the planet and the sun moved with it */
+        for (int k = 0; k < 3; k++)
+            set_object_pos(&g.space.obj[i], k, object_pos(&g.space.obj[i], k) + delta[k]);
+    for (int i = 3; i < EP_OBJECTS; i++) g.space.obj[i].b[EP_OBJ_FLAGS] &= 0xfe; /* no other ships */
+    g.f.autopilot_in = 0;
+    g.f.autopilot_step = 0;
+    g.f.autopilot = 1;
+    for (int k = 0; k < 8000; k++) {
+        int r = ep_flight_frame(&g);
+        if (r == EP_FRAME_DOCKED) return 1;
+        if (r != EP_FRAME_NEXT || g.f.dead) return 0;
+    }
+    return 0;
+}
+
+static void docking(void)
+{
+    CHECK(!dock_from_behind(0, 12000)); /* the original's: straight through the station */
+    CHECK(dock_from_behind(EP_FIX_DOCKING, 12000));
+    CHECK(dock_from_behind(EP_FIX_DOCKING, 800));
+}
+
 static const struct {
     const char *name;
     void (*run)(void);
@@ -206,7 +292,9 @@ static const struct {
                { "endless_text", endless_text },
                { "government", government },
                { "music", music },
-               { "protection", protection } };
+               { "protection", protection },
+               { "hold", hold },
+               { "docking", docking } };
 
 int main(int argc, char **argv)
 {
