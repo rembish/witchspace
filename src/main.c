@@ -4,10 +4,10 @@
  * sounds the PC speaker or the AdLib, and goes from one of the core's loops to the next as
  * their results say (title, station screens, flight, pause, dialogues).
  *
- * usage: eliteplus [--data DIR] [--saves DIR] [--adlib] [--protection]
+ * usage: eliteplus [--data DIR] [--saves DIR] [--speaker] [--protection]
  *   --data DIR     where ELITE.GRF and ADBLUE.MID are (your own copy; default original/)
  *   --saves DIR    where commanders are saved (default .)
- *   --adlib        an AdLib for the sound (default the PC speaker)
+ *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default) */
 #include "audio.h"
 #include "files.h"
@@ -443,7 +443,7 @@ static void step(void)
 int main(int argc, char **argv)
 {
     const char *data = "original", *saves = ".";
-    int protection = 0, adlib = 0;
+    int protection = 0, adlib = 1;
     for (int k = 1; k < argc; k++) {
         if (!strcmp(argv[k], "--data") && k + 1 < argc)
             data = argv[++k];
@@ -451,8 +451,8 @@ int main(int argc, char **argv)
             saves = argv[++k];
         else if (!strcmp(argv[k], "--protection"))
             protection = 1;
-        else if (!strcmp(argv[k], "--adlib"))
-            adlib = 1;
+        else if (!strcmp(argv[k], "--speaker"))
+            adlib = 0;
         else if (!strcmp(argv[k], "--shots") && k + 1 < argc)
             shots = argv[++k];
     }

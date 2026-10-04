@@ -46,9 +46,9 @@ cmake -S . -B build && cmake --build build -j       # needs SDL2 (apt install li
 ./build/eliteplus --data original                  # the folder with your ELITE.GRF
 ```
 
-Options: `--saves DIR` (where commanders are saved, default the current folder), `--adlib`
-(the AdLib instead of the PC speaker), `--protection` (ask the novella question). Alt+Enter toggles full screen. The keys are the
-original's; a game controller acts as the joystick.
+Options: `--saves DIR` (where commanders are saved, default the current folder), `--speaker`
+(the PC speaker instead of the AdLib), `--protection` (ask the novella question). Alt+Enter
+toggles full screen. The keys are the original's; a game controller acts as the joystick.
 
 ## Layout
 
