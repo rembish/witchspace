@@ -97,10 +97,14 @@ add_executable(ep_flowdump tests/flowdump.c)
 target_link_libraries(ep_flowdump PRIVATE epcore)
 add_executable(ep_datadump tests/datadump.c)
 target_link_libraries(ep_datadump PRIVATE epcore)
+add_executable(ep_badinput tests/badinput.c src/grf.c) # needs no game files: broken inputs rejected
+target_link_libraries(ep_badinput PRIVATE epcore)
+target_include_directories(ep_badinput PRIVATE src)
 add_executable(ep_flow tests/flow.c)
 target_link_libraries(ep_flow PRIVATE epcore)
 enable_testing()
 add_test(NAME flow COMMAND ep_flow)
+add_test(NAME badinput COMMAND ep_badinput)
 
 add_executable(ep_subsys tests/subsys.c tests/statemap.c)
 target_link_libraries(ep_subsys PRIVATE epcore)
@@ -121,7 +125,7 @@ set_tests_properties(flow PROPERTIES SKIP_RETURN_CODE 77)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   foreach(t witchspace ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump
             ep_planetdump ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_clips ep_bootdump ep_flowdump ep_flow
-            ep_subsys)
+            ep_subsys ep_badinput)
     target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
     if(WS_WERROR)
       target_compile_options(${t} PRIVATE -Werror)
