@@ -2124,7 +2124,9 @@ static int protection_key(ep_game *g, uint8_t key)
     if (!r) return EP_WAIT_TEXT;
     /* 1474: Esc leaves DI 0, the hash then of ds:0000 (empty here) */
     uint16_t h = r < 0 ? 0 : ep_protection_hash(entry_b(g, 0x9a4));
-    g->f.protection_failed = h != g->f.prot_hash;
+    /* 1492: bp = ((ds:09d9 - h) & 1ffh) - 0ch is stored over cs:03ad, and only c3 00 (a ret)
+       lets the title go on: the word's hash is the stored one less 0cfh */
+    g->f.protection_failed = ((g->f.prot_hash - h) & 0x1ff) != 0xcf;
     g->f.station_step = ST_NONE;
     return EP_WAIT_NONE;
 }

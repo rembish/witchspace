@@ -14,6 +14,7 @@
 #include "ep_ships.h"
 #include "ep_sound.h"
 #include "ep_station.h"
+#include "ep_tables.h"
 #include "ep_travel.h"
 
 #include <stdio.h>
@@ -170,6 +171,31 @@ static void music(void)
     silent_song(eot, sizeof eot); /* a track with only its end */
 }
 
+/* the copy protection's word: page 2, paragraph 1, line 1, word 7 of the novella is EMBERS
+ * (the release's printed list of codes); its record from the game's table, then the word
+ * typed. The check was a guess, plain equality, until the release as sold showed it */
+static int protection_answer(const char *word)
+{
+    docked();
+    uint16_t at = 0x5070;
+    while (ep_ds_initial[at] && !((ep_ds_initial[at] & 0x3f) == 2 && (ep_ds_initial[at + 1] & 0x3f) == 0x09 &&
+                                  (ep_ds_initial[at + 2] & 7) == 7))
+        at = (uint16_t)(at + 3);
+    uint8_t r0 = ep_ds_initial[at], r1 = ep_ds_initial[at + 1], r2 = ep_ds_initial[at + 2];
+    g.f.prot_hash = (uint16_t)((r2 >> 3) | (r1 & 0xc0) >> 1 | (r0 & 0x40) << 1 | (r0 & 0x80) << 1);
+    int w = ep_protection_ask(&g);
+    for (const char *c = word; *c && w == EP_WAIT_TEXT; c++) w = ep_station_key(&g, (uint8_t)*c);
+    w = ep_station_key(&g, 0x0d);
+    return w == EP_WAIT_NONE && !g.f.protection_failed;
+}
+
+static void protection(void)
+{
+    CHECK(protection_answer("EMBERS"));
+    CHECK(!protection_answer("EMBER"));
+    CHECK(!protection_answer("ELITE"));
+}
+
 static const struct {
     const char *name;
     void (*run)(void);
@@ -179,7 +205,8 @@ static const struct {
                { "rating", rating },
                { "endless_text", endless_text },
                { "government", government },
-               { "music", music } };
+               { "music", music },
+               { "protection", protection } };
 
 int main(int argc, char **argv)
 {
