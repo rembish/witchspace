@@ -6,6 +6,9 @@ Each release's section is also its GitHub release's notes.
 
 ## [0.1.4] — 2026-10-04
 
+- **The game as sold in 1991 works.** Only copies with the copy protection patched out were
+  accepted; the original release (as Ian Bell's Elite archive keeps it) differs from them only
+  there, and now plays too.
 - **An icon.** A green wireframe ship, made for Witchspace, for the program, its window and
   taskbar, and the web page's tab.
 - **Windows: no console window.** Started from Explorer, the game no longer opens a console
