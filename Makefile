@@ -24,6 +24,7 @@ build: ## The game and the test tools (warnings are errors)
 	cmake -S . -B $(BUILD) -DWS_WERROR=ON
 	cmake --build $(BUILD) -j
 
+web: SHELL := /bin/bash # emsdk_env.sh finds its folder only from bash
 web: ## The browser version (Emscripten: build-web/witchspace.html)
 	. $(EMSDK_ENV) >/dev/null && emcmake cmake -S . -B $(BUILD_WEB) -DCMAKE_BUILD_TYPE=Release
 	. $(EMSDK_ENV) >/dev/null && cmake --build $(BUILD_WEB) -j --target witchspace

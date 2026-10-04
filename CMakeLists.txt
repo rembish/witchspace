@@ -59,6 +59,7 @@ if(EMSCRIPTEN)
     -sEXIT_RUNTIME=0 -sFORCE_FILESYSTEM=1 -lidbfs.js "-sEXPORTED_RUNTIME_METHODS=['callMain','FS','IDBFS']"
     --shell-file ${CMAKE_CURRENT_BINARY_DIR}/shell.html)
   configure_file(web/shell.html shell.html @ONLY) # with the version filled in
+  set_property(TARGET witchspace APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/shell.html)
   set_target_properties(witchspace PROPERTIES SUFFIX ".html")
 else()
   option(WS_VENDOR_SDL "Build SDL2 from source and link it statically (for redistributable binaries)" OFF)
