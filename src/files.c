@@ -4,6 +4,9 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+#ifdef _WIN32
+#include <windows.h> /* MoveFileExA */
+#endif
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -72,10 +75,21 @@ static int read_file(void *ctx, const char *name, uint8_t *buf, int max)
     return n;
 }
 
-/* A commander is written whole or not at all: to NAME.tmp, checked to the last flush, then put in
- * place of the old one (which stays as it was if anything fails). In the browser the file is in
- * memory at once and kept in the browser's storage after (FS.syncfs); if that fails, the page
- * says so (Module.saveFailed in web/shell.html). */
+/* A commander is written to NAME.tmp, checked through fflush and fclose, then put in place of the
+ * old one in one step (rename; MoveFileEx on Windows, whose rename does not replace a file); if
+ * any of that fails the old commander is left as it was and the write returns -1. (A checked
+ * write and replacement, not a promise against power loss: nothing asks the disk to sync.) In
+ * the browser the file is in memory at once and kept in the browser's storage after
+ * (FS.syncfs); if that fails, the page says so (Module.saveFailed in web/shell.html). */
+static int replace(const char *from, const char *to)
+{
+#ifdef _WIN32
+    return MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) ? 0 : -1;
+#else
+    return rename(from, to);
+#endif
+}
+
 static int write_file(void *ctx, const char *name, const uint8_t *bytes, int len)
 {
     (void)ctx;
@@ -87,11 +101,8 @@ static int write_file(void *ctx, const char *name, const uint8_t *bytes, int len
     int ok = fwrite(bytes, 1, (size_t)len, f) == (size_t)len;
     ok = fflush(f) == 0 && ok;
     ok = fclose(f) == 0 && ok;
-#ifdef _WIN32
-    if (ok) remove(p); /* rename does not replace a file there */
-#endif
-    if (!ok || rename(tmp, p) != 0) {
-        remove(tmp);
+    if (!ok || replace(tmp, p) != 0) {
+        remove(tmp); /* only ever the new copy: the old commander was not touched */
         return -1;
     }
 #ifdef __EMSCRIPTEN__

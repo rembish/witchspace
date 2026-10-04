@@ -103,12 +103,19 @@ target_include_directories(ep_badinput PRIVATE src)
 add_executable(ep_screencheck tests/screencheck.c src/screen.c src/grf.c) # pixels the renderer puts down
 target_link_libraries(ep_screencheck PRIVATE epcore)
 target_include_directories(ep_screencheck PRIVATE src)
+if(NOT WIN32) # POSIX folders and permissions; the Windows replacement is the same call's other branch
+  add_executable(ep_savecheck tests/savecheck.c src/files.c) # saves keep the old commander on failure
+  target_include_directories(ep_savecheck PRIVATE src core)
+endif()
 add_executable(ep_flow tests/flow.c)
 target_link_libraries(ep_flow PRIVATE epcore)
 enable_testing()
 add_test(NAME flow COMMAND ep_flow)
 add_test(NAME badinput COMMAND ep_badinput)
 add_test(NAME screencheck COMMAND ep_screencheck)
+if(NOT WIN32)
+  add_test(NAME savecheck COMMAND ep_savecheck ${CMAKE_CURRENT_BINARY_DIR}/savecheck.tmpdir)
+endif()
 
 add_executable(ep_subsys tests/subsys.c tests/statemap.c)
 target_link_libraries(ep_subsys PRIVATE epcore)
