@@ -2045,7 +2045,8 @@ static int load_key(ep_game *g, uint8_t key)
         }
         f->screen_shown = 0xff;
         g->space.in_flight = 1;
-        ep_music_stop(g); /* 4d55, 4ac0 */
+        ep_music_stop(g); /* 4d55 */
+        ep_effects_on(g); /* 4ac0 */
         f->leave = 3;
         return EP_WAIT_NONE;
     default: break;
@@ -2284,7 +2285,8 @@ void ep_new_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8
 int ep_start_game(ep_game *g, uint8_t hour, uint8_t minute, uint8_t second, uint8_t hundredths)
 {
     ep_flight *f = &g->f;
-    ep_music_stop(g); /* 4d55, 4ac0: the title music stops */
+    ep_music_stop(g); /* 4d55: the title music stops */
+    ep_effects_on(g); /* 4ac0 */
     ep_new_game(g, hour, minute, second, hundredths);
     g->space.in_flight = 1;
     f->screen_shown = 0xff;

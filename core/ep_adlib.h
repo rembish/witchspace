@@ -23,13 +23,31 @@ void ep_adlib_music(ep_game *g);
 /* 0045: the music off (7dc: every voice off, the chip reset) */
 void ep_adlib_stop(ep_game *g);
 
-/* 1819: the game's own timer interrupt back (5555h) */
+/* 1819: the game's own timer interrupt back (5555h), the effects started again (1930) */
 void ep_adlib_game_timer(ep_game *g);
 
 /* 0df8: one tick of the music's timer interrupt */
 void ep_adlib_tick(ep_game *g);
 
-/* one tick of the timer: the interrupt installed (the game's, or the music's) */
+/* one tick of the timer: the interrupt installed (the game's, the music's, or the effects') */
 void ep_pit_tick(ep_game *g);
+
+/* d74 (and the effects' 2315): a write to the chip, into g->opl */
+void ep_opl(ep_game *g, uint8_t reg, uint8_t val);
+
+/* The effects in flight (1842..262e): a small interpreter of the driver's effect programs
+ * (bank cs:0ea0), ten voices of the chip, its state in the driver's segment (g->adlib.fx). */
+
+/* 1930: the effects' start: the chip's waveforms and rhythm off, every voice silent */
+void ep_adfx_init(ep_game *g);
+
+/* 17c6: the effects' timer interrupt (16c1, at 555h) in place of the game's */
+void ep_adfx_install(ep_game *g);
+
+/* 185a: effect `id` queued (16 places), started on the effects' next step */
+void ep_adfx_queue(ep_game *g, uint8_t id);
+
+/* 16c1: one tick of the effects' timer interrupt (the game's clock every 16th) */
+void ep_adfx_tick(ep_game *g);
 
 #endif

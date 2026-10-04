@@ -42,6 +42,8 @@ void ep_launch_sound(ep_game *g);
  * from the options (EP_EV_MUSIC that) */
 void ep_music_start(ep_game *g);
 void ep_music_stop(ep_game *g);
+/* 4ac0: flight's sound: on an AdLib the music off and the effects' timer in (17c6) */
+void ep_effects_on(ep_game *g);
 void ep_music_switch(ep_game *g, uint8_t off);
 
 /* 4d8e: the title music again once it has ended (the speaker) */

@@ -275,6 +275,8 @@ typedef struct ep_game ep_game;
 /* the AdLib music driver's state (ep_adlib.h) */
 #define EP_ADLIB_DS      0xb5b7 /* its data: ds:b5b7..bccf */
 #define EP_ADLIB_DS_SIZE 0x719
+#define EP_FX_CS         0x1390 /* the effects' variables and voices in the driver's segment */
+#define EP_FX_SIZE       0x300
 typedef struct {
     uint8_t drv[EP_ADLIB_DS_SIZE];
     uint16_t countdown; /* cs:0da7: ticks to the next event */
@@ -282,13 +284,14 @@ typedef struct {
     uint16_t divisor;   /* cs:0daa: the timer's */
     uint16_t clock_acc; /* cs:0dac/0dae: toward the game's clock, 5555h a tick */
     uint16_t clock_acc_hi;
-    uint16_t bios_acc;    /* cs:0db0 */
-    uint8_t left_bl;      /* BL as the frequency routine leaves it */
-    uint8_t caller_cl;    /* CL the game had when it stopped the music */
-    uint8_t song[0x2a50]; /* ADBLUE.MID, read by 003b to segment 16e4 (ds:be40), up to 1989h */
+    uint16_t bios_acc;      /* cs:0db0 */
+    uint8_t left_bl;        /* BL as the frequency routine leaves it */
+    uint8_t caller_cl;      /* CL the game had when it stopped the music */
+    uint8_t song[0x2a50];   /* ADBLUE.MID, read by 003b to segment 16e4 (ds:be40), up to 1989h */
+    uint8_t fx[EP_FX_SIZE]; /* the effects' state: cs:1390..168f (ep_adfx.c) */
 } ep_adlib;
 
-enum { EP_INT8_GAME = 0, EP_INT8_MUSIC }; /* the timer interrupt installed */
+enum { EP_INT8_GAME = 0, EP_INT8_MUSIC, EP_INT8_FX }; /* the timer interrupt installed */
 #define EP_MAX_OPL 8192
 
 /* Where the original busy-waits on the timer (301a: the frame shown two ticks after the last;

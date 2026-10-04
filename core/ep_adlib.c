@@ -36,7 +36,7 @@ static uint8_t song(const ep_game *g, uint16_t at)
 }
 
 /* d74: a write to the chip */
-static void opl(ep_game *g, uint8_t reg, uint8_t val)
+void ep_opl(ep_game *g, uint8_t reg, uint8_t val)
 {
     if (g->nopl < EP_MAX_OPL) {
         g->opl[g->nopl][0] = reg;
@@ -70,7 +70,7 @@ static void rhythm_reg(ep_game *g)
 {
     uint8_t v = (uint8_t)((uint8_t)(rb(g, 0xb73a) << 7) | (uint8_t)(rb(g, 0xb73b) << 6) |
                           (uint8_t)(rb(g, 0xb73d) << 5) | rb(g, 0xb743));
-    opl(g, 0xbd, v);
+    ep_opl(g, 0xbd, v);
 }
 
 /* c7d: a voice's frequency and key: the note plus the pitch bend (2000h: none), through the
@@ -99,8 +99,8 @@ static void voice_note(ep_game *g, uint8_t voice, uint8_t note, uint16_t pitch, 
     }
     uint8_t r = rb(g, 0xb73e);
     g->adlib.left_bl = (uint8_t)(oct << 2); /* what BL is left as */
-    opl(g, (uint8_t)(0xa0 + r), (uint8_t)f);
-    opl(g, (uint8_t)(0xb0 + r), (uint8_t)((((uint16_t)f >> 8) & 3) + (uint8_t)(oct << 2) + rb(g, 0xb742)));
+    ep_opl(g, (uint8_t)(0xa0 + r), (uint8_t)f);
+    ep_opl(g, (uint8_t)(0xb0 + r), (uint8_t)((((uint16_t)f >> 8) & 3) + (uint8_t)(oct << 2) + rb(g, 0xb742)));
 }
 
 /* a26 (on 0) and 9aa (on 1): a note off or on in a voice; the rhythm voices (6 and up, in
@@ -140,11 +140,11 @@ static void operator_set(ep_game *g, uint8_t slot, uint8_t voice, uint16_t rec)
         r[k] = (uint8_t)(rb(g, (uint16_t)(rec + k)) & mask[k]);
         wb(g, (uint16_t)(rec + k), r[k]);
     }
-    opl(g, (uint8_t)(0x40 + off), (uint8_t)(r[0] << 6 | r[8]));
-    opl(g, (uint8_t)(0x60 + off), (uint8_t)(r[3] << 4 | r[6]));
-    opl(g, (uint8_t)(0x80 + off), (uint8_t)(r[4] << 4 | r[7]));
-    opl(g, (uint8_t)(0x20 + off), (uint8_t)(r[9] << 7 | r[10] << 6 | r[5] << 5 | r[11] << 4 | r[1]));
-    opl(g, (uint8_t)(0xe0 + off), r[13]);
+    ep_opl(g, (uint8_t)(0x40 + off), (uint8_t)(r[0] << 6 | r[8]));
+    ep_opl(g, (uint8_t)(0x60 + off), (uint8_t)(r[3] << 4 | r[6]));
+    ep_opl(g, (uint8_t)(0x80 + off), (uint8_t)(r[4] << 4 | r[7]));
+    ep_opl(g, (uint8_t)(0x20 + off), (uint8_t)(r[9] << 7 | r[10] << 6 | r[5] << 5 | r[11] << 4 | r[1]));
+    ep_opl(g, (uint8_t)(0xe0 + off), r[13]);
 }
 
 /* b48: a voice's instrument: its operators (one in rhythm mode for some), the feedback (c32) */
@@ -153,8 +153,8 @@ static void instrument_set(ep_game *g, uint16_t voice, uint16_t rec, uint16_t re
     uint16_t bx = (uint16_t)((rb(g, 0xb73d) ? 0xbcb7 : 0xbca5) + 2 * voice);
     operator_set(g, rb(g, bx), (uint8_t)voice, rec);
     if ((int8_t)rb(g, (uint16_t)(bx + 1)) < 0) return;
-    opl(g, (uint8_t)(0xc0 + rb(g, 0xb73e)),
-        (uint8_t)((uint8_t)(rb(g, (uint16_t)(rec + 2)) << 1) | (rb(g, (uint16_t)(rec + 0x0c)) ^ 1)));
+    ep_opl(g, (uint8_t)(0xc0 + rb(g, 0xb73e)),
+           (uint8_t)((uint8_t)(rb(g, (uint16_t)(rec + 2)) << 1) | (rb(g, (uint16_t)(rec + 0x0c)) ^ 1)));
     operator_set(g, rb(g, (uint16_t)(bx + 1)), (uint8_t)voice, rec2);
 }
 
@@ -173,10 +173,10 @@ static int melodic_voices(const ep_game *g) { return rb(g, 0xb73d) ? 5 : 8; }
 /* a91: the chip reset; its loop (a signed comparison) stops after register 1 */
 static void chip_reset(ep_game *g)
 {
-    opl(g, 1, 0);
-    opl(g, 4, 0x60);
-    opl(g, 4, 0x80);
-    opl(g, 1, 0x20);
+    ep_opl(g, 1, 0);
+    ep_opl(g, 4, 0x60);
+    ep_opl(g, 4, 0x80);
+    ep_opl(g, 1, 0x20);
 }
 
 /* a75: every voice off, with the note and velocity BL and CL hold: for the first what the
@@ -297,7 +297,7 @@ void ep_adlib_music(ep_game *g)
     wb(g, 0xb73d, rb(g, (uint16_t)(0xbd98 + s)));
     chip_reset(g);
     rhythm_reg(g); /* c48 */
-    opl(g, 8, (uint8_t)(rb(g, 0xb73c) << 6));
+    ep_opl(g, 8, (uint8_t)(rb(g, 0xb73c) << 6));
     for (int v = 0; v <= melodic_voices(g); v++) instrument_set(g, (uint16_t)v, 0xb9bf, 0xb9cd); /* ab5 */
     if (rb(g, 0xb73d)) rhythm_instruments(g);
     for (int v = 0; v <= melodic_voices(g); v++) { /* b0f */
@@ -335,6 +335,7 @@ void ep_adlib_stop(ep_game *g)
 void ep_adlib_game_timer(ep_game *g)
 {
     g->int8 = EP_INT8_GAME;
+    ep_adfx_init(g); /* 1930 */
     g->pit = 0x5555;
 }
 
@@ -366,6 +367,8 @@ void ep_pit_tick(ep_game *g)
 {
     if (g->int8 == EP_INT8_MUSIC)
         ep_adlib_tick(g);
+    else if (g->int8 == EP_INT8_FX)
+        ep_adfx_tick(g);
     else
         ep_timer_tick(g);
 }

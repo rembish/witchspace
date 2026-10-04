@@ -32,7 +32,10 @@ static void speaker_start(ep_game *g, uint16_t seq)
 void ep_sound(ep_game *g, uint8_t id)
 {
     ep_event_add(g, EP_EV_SOUND, id);
-    if (!speaker(g)) return;
+    if (!speaker(g)) { /* 4ccd: an AdLib's effects take the number as it is */
+        if (g->f.sound_device == 1 && !g->f.sound_off && id) ep_adfx_queue(g, id);
+        return;
+    }
     uint8_t n = id;
     if (!(n & 0x80)) {
         n = ep_ds_initial[0x45c0 + n]; /* xlat */
@@ -113,6 +116,18 @@ void ep_music_stop(ep_game *g)
         ep_sound(g, 0);
     else
         ep_adlib_stop(g); /* 0045 */
+}
+
+void ep_effects_on(ep_game *g)
+{
+    if (g->f.sound_device == 0) { /* a Roland: */
+        ep_adlib_stop(g);         /* 0045 */
+        g->adlib.drv[0xb5b8 - EP_ADLIB_DS] = 1;
+        return; /* 008f, its effects: not ported */
+    }
+    if (g->f.sound_device != 1) return;
+    ep_adlib_stop(g);   /* 0045 */
+    ep_adfx_install(g); /* 17c6 */
 }
 
 void ep_music_switch(ep_game *g, uint8_t off)

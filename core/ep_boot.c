@@ -50,6 +50,7 @@ void ep_boot(ep_game *g, uint8_t video, uint8_t sound, uint8_t minute, uint8_t s
     uint8_t protection = g->protection;
     memset(g, 0, sizeof *g);
     ep_ds_load(g, ds);
+    memcpy(g->adlib.fx, ep_drv_initial + EP_FX_CS, EP_FX_SIZE); /* the driver's segment as loaded */
     g->io = io;
     g->wait = wait;
     g->frontend = frontend;
