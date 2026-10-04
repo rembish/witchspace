@@ -86,8 +86,10 @@ def c_header(im: Image.Image) -> str:
     body = ",\n    ".join(rows)
     return (
         "/* Witchspace's window icon, made by tools/make_icon.py from assets/icon.png: do not edit. */\n"
+        "// clang-format off\n"
         f"#define ICON_SIZE {im.width}\n"
         f"static const unsigned char icon_rgba[{len(data)}] = {{\n    {body}\n}};\n"
+        "// clang-format on\n"
     )
 
 
