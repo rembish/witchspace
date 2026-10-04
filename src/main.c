@@ -604,6 +604,7 @@ int main(int argc, char **argv)
     win = SDL_CreateWindow("Witchspace", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
                            SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
+    if (win && !ren) ren = SDL_CreateRenderer(win, -1, 0); /* no graphics driver: in software */
     tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_W,
                                   SCREEN_H)
               : NULL;
