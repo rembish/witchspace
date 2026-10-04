@@ -658,8 +658,8 @@ static int run(ep_game *g, uint8_t id)
     case 0x12: ep_chart_home(g); return EP_CMD_STAY;
     case 0x0c: ep_market_buy(g); return EP_CMD_STAY;
     case 0x13: ep_equipment_screen(g); return EP_CMD_SCREEN;
-    case 0x21: ep_equipment_buy(g); return EP_CMD_STAY;
-    case 0x22: ep_equipment_sell(g); return EP_CMD_STAY;
+    case 0x21: return ep_equipment_buy(g) ? EP_CMD_SCREEN : EP_CMD_STAY; /* a mount to pick: a dialogue */
+    case 0x22: return ep_equipment_sell(g) ? EP_CMD_SCREEN : EP_CMD_STAY;
     case 0x20: ep_market_sell(g); return EP_CMD_STAY;
     case 0x19:
     case 0x1a:
