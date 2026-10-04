@@ -1,6 +1,7 @@
 /* The test tools' copy of the original's tables, loaded before main: ELITE.EXE and ELITE.GRF
- * from $EP_ORIGINAL (default: the source tree's original/). Without them a tool exits 77
- * (skipped). Linked into every test tool, so their mains find the tables loaded. */
+ * from $EP_ORIGINAL (default: the source tree's original/). Without ELITE.EXE a tool exits 77
+ * (skipped); with one that is not Elite Plus's it fails (exits 1), so a wrong copy is not
+ * mistaken for a missing one. Linked into every test tool, so their mains find the tables loaded. */
 #include "ep_tables.h"
 
 #include <stdio.h>
@@ -42,9 +43,13 @@ __attribute__((constructor)) static void load(void)
     free(exe);
     if (r) {
         fprintf(stderr, "%s/ELITE.EXE: %s\n", dir, ep_data_error(r));
-        exit(77);
+        exit(1);
     }
     uint8_t *grf = slurp(dir, "ELITE.GRF", &n);
-    if (grf) ep_data_grf(grf, n);
+    r = grf ? ep_data_grf(grf, n) : 0;
     free(grf);
+    if (r) {
+        fprintf(stderr, "%s/ELITE.GRF: not Elite Plus's pictures\n", dir);
+        exit(1);
+    }
 }

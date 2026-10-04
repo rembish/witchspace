@@ -125,7 +125,8 @@ target_link_libraries(ep_subsys PRIVATE epcore)
 target_include_directories(ep_subsys PRIVATE tests)
 
 # The test tools read the original's tables from your copy (tests/testdata.c; EP_ORIGINAL
-# overrides the folder); without it they exit 77, which ctest counts as skipped.
+# overrides the folder); without it they exit 77, which ctest
+# counts as skipped, and with a copy that is not Elite Plus they fail.
 add_library(eptestdata OBJECT tests/testdata.c)
 target_link_libraries(eptestdata PRIVATE epcore)
 target_compile_definitions(eptestdata PRIVATE EP_SOURCE_ORIGINAL="${CMAKE_CURRENT_SOURCE_DIR}/original")
