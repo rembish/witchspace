@@ -43,12 +43,15 @@ uint8_t ep_spawn_limit[8][4];
 uint16_t ep_spawn_chance[8][4];
 uint8_t ep_commander0[EP_COMMANDER_SIZE];
 
-/* the release this was reconstructed from: its load image (unpacked), FNV-1a */
+/* the release this was reconstructed from (V3.1): its load image (unpacked), FNV-1a. Copies
+ * differ only in four bytes of code at 0000:149a, the copy protection's comparison, patched
+ * out with nops (3013df64) or with xchg bp,bp; cmc; cmc (6ae033fe, the Internet Archive's);
+ * no table is there. */
 #define IMAGE_SIZE 153360
-#define IMAGE_HASH 0x3013df64u
-#define DS         0xb000  /* segment 0b00 */
-#define SS         0x1c0c0 /* segment 1c0c: the ships' models */
-#define DRV        0x22700 /* segment 2270: the music driver */
+static const uint32_t known[] = { 0x3013df64u, 0x6ae033feu };
+#define DS  0xb000  /* segment 0b00 */
+#define SS  0x1c0c0 /* segment 1c0c: the ships' models */
+#define DRV 0x22700 /* segment 2270: the music driver */
 
 static uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
 
@@ -202,7 +205,9 @@ int ep_data_load(const uint8_t *exe, size_t len)
     }
     uint32_t h = 0x811c9dc5u;
     for (size_t k = 0; k < IMAGE_SIZE; k++) h = (h ^ img[k]) * 0x01000193u;
-    int ok = h == IMAGE_HASH && fill(img);
+    int ok = 0;
+    for (size_t k = 0; k < sizeof known / sizeof known[0]; k++)
+        if (h == known[k]) ok = fill(img);
     free(buf);
     return ok ? EP_DATA_OK : EP_DATA_VERSION;
 }
