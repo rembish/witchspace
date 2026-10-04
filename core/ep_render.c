@@ -228,6 +228,13 @@ void ep_render_clipped_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0
     p->pt[3] = y1;
 }
 
+void ep_render_dust(ep_render *r, uint8_t colour, int16_t x, int16_t y)
+{
+    if (r->nprim >= EP_MAX_PRIMS) return;
+    ep_render_pixel(r, colour, x, y);
+    r->prim[r->nprim - 1].kind = EP_PRIM_DUST;
+}
+
 void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y)
 {
     if (r->nprim >= EP_MAX_PRIMS) return;

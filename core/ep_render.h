@@ -42,8 +42,10 @@ enum {
     EP_PRIM_TEXT = 12,
     EP_PRIM_RECT = 14,
     EP_PRIM_SPANS = 16, /* a filled circle: pt[0] its first span in g->circles (unsigned), pt[1] how many */
-    EP_PRIM_BLIP = 18   /* a scanner blip (screen): colour the object's type, pt[0] x, pt[1] the
+    EP_PRIM_BLIP = 18,  /* a scanner blip (screen): colour the object's type, pt[0] x, pt[1] the
                          * foot's row, pt[2] the stick's height (signed); the head is 2 wide */
+    EP_PRIM_DUST = 20   /* a dust particle (view), a pixel whose colour (0..15) is not a game colour:
+                         * 2989 takes its low 3 bits into its own table of MCGA pixels (ds:2656) */
 };
 
 typedef struct {
@@ -103,6 +105,8 @@ void ep_render_clipped_line(ep_render *r, uint8_t colour, int16_t x0, int16_t y0
 
 /* a dust pixel (2973): colour is the particle's colour byte, one point */
 void ep_render_pixel(ep_render *r, uint8_t colour, int16_t x, int16_t y);
+/* a dust particle at (x, y): EP_PRIM_DUST */
+void ep_render_dust(ep_render *r, uint8_t colour, int16_t x, int16_t y);
 
 /* a sprite (3411): colour is the sprite number, one point */
 void ep_render_sprite(ep_render *r, uint8_t sprite, int16_t x, int16_t y);

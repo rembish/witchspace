@@ -172,7 +172,7 @@ static void draw(ep_game *g, int i, int16_t x, int16_t y)
     }
     int16_t sx = screen_x(px);
     if ((uint16_t)sx >= 0x130 || py >= 0x7c) return;
-    ep_render_pixel(&g->render, (uint8_t)(g->f.dust[7 * i + COLOUR] & 0x0f), sx, py);
+    ep_render_dust(&g->render, (uint8_t)(g->f.dust[7 * i + COLOUR] & 0x0f), sx, py); /* 2973 */
 }
 
 /* 51ac: how far a particle moves per frame (the larger, the slower) */
