@@ -236,10 +236,11 @@ int ep_data_grf(const uint8_t *grf, size_t len)
                         (uint32_t)grf[13] << 24);
     int count = grf[14] | grf[15] << 8;
     if (count > EP_SPRITES) count = EP_SPRITES;
+    uint8_t width[EP_SPRITES] = { 0 }; /* kept only if the whole file reads: none of a broken one */
     for (int i = 0; i < count; i++) {
         if (p + 3 > len) return 1;
         size_t w = (size_t)(grf[p] | grf[p + 1] << 8) & 0x7fff, h = grf[p + 2];
-        ep_sprite_width[i] = (uint8_t)w;
+        width[i] = (uint8_t)w;
         p += 3;
         for (size_t k = 0; k < w * h;) { /* 33a6: n + 1 bytes as they are, or a byte 1 - n times */
             if (p >= len) return 1;
@@ -253,6 +254,7 @@ int ep_data_grf(const uint8_t *grf, size_t len)
             }
         }
     }
+    memcpy(ep_sprite_width, width, (size_t)count);
     return 0;
 }
 

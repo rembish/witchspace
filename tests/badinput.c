@@ -123,6 +123,9 @@ static void grf_cases(void)
     b[10] = 16, b[14] = 3; /* three pictures, the first 10 x 10, then nothing */
     b[16] = 10, b[17] = 0, b[18] = 10;
     expect(!grf_parse(b, 19), "GRF cut short");
+    /* the core's widths: all of a file or none of it (the first picture's read, then the cut) */
+    memset(ep_sprite_width, 0x55, sizeof ep_sprite_width);
+    expect(ep_data_grf(b, 19) != 0 && ep_sprite_width[0] == 0x55, "a cut GRF leaves the widths as they were");
     for (int k = 0; k < 20000; k++) {
         size_t len = rnd() % 1024;
         for (size_t i = 0; i < len; i++) b[i] = (uint8_t)rnd();
