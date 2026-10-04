@@ -51,6 +51,8 @@ extern const uint8_t ep_glyph_width[0x5b];
 extern const uint8_t ep_sprite_width[EP_SPRITES];
 #define EP_DS_INITIAL 0xbe34
 extern const uint8_t ep_ds_initial[EP_DS_INITIAL];
+#define EP_DRV_SIZE 0x3010
+extern const uint8_t ep_drv_initial[EP_DRV_SIZE];
 uint8_t ep_ds_static(uint16_t addr);
 extern const uint8_t ep_key_rows[6][12];
 extern const uint8_t ep_icon_sprite[37];
