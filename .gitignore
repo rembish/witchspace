@@ -4,6 +4,7 @@ original/
 # Builds
 build/
 build-web/
+build-win/
 build-local/
 build-ubsan/
 build2/
