@@ -32,9 +32,10 @@ emulated OPL2), and keyboard, joystick and mouse controls. The copy protection i
 for (`--protection`).
 
 Not planned: the Roland's music and effects, and the 16-colour EGA/VGA screen modes (the
-AdLib and the 256-colour MCGA mode cover them). One edge case behaves approximately, the
-docking computer started within a step of its docking point; it and a case shown never to
-happen in play are described in [re/FLIGHT.md](re/FLIGHT.md).
+AdLib and the 256-colour MCGA mode cover them). One bug of the original, the docking
+computer's divide by zero within a step of its docking point (both hang there), is handled
+without the original's stray sprite; it and a case shown never to happen in play are
+described in [re/FLIGHT.md](re/FLIGHT.md).
 
 ## Playing
 

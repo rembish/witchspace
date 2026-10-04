@@ -570,7 +570,7 @@ static void autopilot(ep_game *g)
             f->ap_passes = 0;
             return;
         }
-        if (!q) q = 1; /* a divide error in the original (closer than one step) */
+        if (!q) q = 1; /* the original's divide error (closer than one step): re/FLIGHT.md */
         for (int k = 0; k < 3; k++) f->velocity[k] = (int16_t)(p[k] / (int16_t)q);
         ep_player_move(g);
         return;

@@ -200,11 +200,21 @@ Findings:
 
   Nothing else between them and 77e0 writes DL. The harness runs the original's drawing
   (observed, not replaced), or its DL would be wrong.
-- **Docking computer divide by zero.** It divides by zero closer than one step to its
-  docking point (a969: m < speed gives BX = 0). The divide error resumes at the stale
-  `ds:01f8`, usually the compass's (48c9/48e7): the compass's tail runs with stray
-  registers, draws a sprite and returns past the rest of the step. The core divides by 1
-  instead. Its roll match stores the 11-bit sign-extended angle.
+- **Docking computer divide by zero, a bug of the original.** Flying to the point before
+  the slot, it divides the distance by the speed for the steps left (a963) and then the
+  offset by that (a973). It handles one step left (`dec ax; je`), not none: closer than
+  one step, BX = 0 and the division faults. The divide error resumes at the stale
+  `ds:01f8`, usually the compass's (48c9/48e7): the compass's tail runs with the docking
+  computer's registers, draws a sprite and returns past the rest of the step.
+  - Reaching it needs the approach (step 4) to start within 4 units of the point, an
+    invisible spot 2000 units before the slot. 3,900 simulated dockings never did; 41 of
+    2,000,000 random direct approaches did, every one starting that close. Switching the
+    computer off and on at the point does not get there either: the pitch toward a point
+    the ship is on never ends (step 3), in the original and the core alike.
+  - Once there, the original faults every frame and never leaves step 4. The core divides
+    by 1 instead: the ship moves onto the point, and then stays in step 4 the same way,
+    without the stray sprite.
+  - Its roll match stores the 11-bit sign-extended angle.
 - **`find_nearest`** (5fe1) would keep the caller's BP if no system qualified. That cannot
   happen in play:
   - Zoomed, a system must lie in the window around the chart's centre (±13h, ±10h). The
