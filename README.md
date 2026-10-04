@@ -106,7 +106,7 @@ explains trading, combat, the ship's equipment and the missions.
 | `--data DIR` | where the game's files are (default: this program's folder, then the current one, then `original/`) |
 | `--saves DIR` | where commanders are saved (default: beside the game's files, as the original did) |
 | `--speaker` | the PC speaker instead of the AdLib |
-| `--protection` | ask the original's copy-protection question (off by default) |
+| `--protection` | ask the original's copy-protection question (off by default): a word from the novella *Imprint* that came with the game. Ian Bell's [Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps the novella (`b1022010.zip`) and the release's list of the answers (`PRTCODES.TXT` in `b1022000.zip`; a few of its entries have slips, see `re/NOTES.md`) |
 | `--theme FILE` | an MP3 the title plays instead of its own music (see below) |
 | `--no-theme` | the title's own music even when a theme is there |
 | `--version` | print the version |

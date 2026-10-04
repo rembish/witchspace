@@ -182,15 +182,22 @@ The question: "Please type in the word at the following location in the Elite+ N
   is `h = (2h + (c − 'A')) & 1ff`.
 - **The effect.** A `ret` (`c3 00`) is written over the first instruction of the menu
   routine at `03ad` (reached from `032a 0332 0363 0367 039b`).
-  - In this copy the store is unconditional: `mov bp,[09d9]` is immediately overwritten by
-    `mov bp,00c3`, followed by four `nop`s where the comparison presumably was. So any
+  - As sold (`b1022000` in Ian Bell's Elite archive), `1492` computes
+    `bp = (([09d9] - h) & 1ff) - 0c` and stores it there: the word is right when its hash
+    is the stored one less `0cf` (mod 200h), and a wrong word writes something else.
+    Checked against the printed list of codes in the same zip (`PRTCODES.TXT`): all 219
+    records, once the list's own slips are put right (six places with two numbers swapped
+    or mistyped, five words misspelt: bounced, distinction, spilt, swung, canisters).
+  - In the patched copies the store is unconditional: `mov bp,[09d9]` is immediately
+    overwritten by `mov bp,00c3` and four `nop`s (or `xchg bp,bp; cmc; cmc`). So any
     answer passes.
   - Unpatched, the title's key bar (`05ac`) finds no `c3 00` at `cs:03ad` and jumps to
     `00ba`: back to DOS.
 - **Port.** Ported in `core/ep_boot.c` behind `g->protection`, off by default. The pick (and
   its RNG step) always runs; the question is asked only when the option is on, and a wrong
-  word sets `f.protection_failed` (the title then quits). The check is the hash comparison
-  that the no-ops replaced.
+  word sets `f.protection_failed` (the title then quits). The check is the release's own
+  (above); until the release as sold was found it was a guess, plain equality, which
+  refused the right words.
 
 ## System descriptions
 
