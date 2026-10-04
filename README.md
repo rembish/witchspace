@@ -29,7 +29,10 @@ The page asks where the game's three files should come from: your own copy, or t
 preserved by the [Internet Archive](https://archive.org/details/b1022001) (a mirror of the
 one on [Ian Bell's Elite pages](http://www.iancgbell.clara.net/elite/pc/index.htm), Elite's
 co-author's), which it downloads for you once you agree. The files stay in your browser for
-the next visit.
+the next visit, and so do your commanders: import saved games (`.CDR` files, or a zip of
+them, such as George Hooper's
+[saves for each mission](https://web.archive.org/web/20071030094630/http://www.hooplah.com/encounters/util/elpmiss.zip))
+and export yours on the page, or drop files on the game while you play.
 
 ## Play on your computer
 

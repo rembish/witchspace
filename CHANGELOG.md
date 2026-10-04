@@ -4,6 +4,12 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [Unreleased]
+
+- **Commanders in the browser.** The web page imports saved games (`.CDR` files, or a zip of
+  them: George Hooper's saves for each of the missions, for one) and exports yours as a zip;
+  files dropped on the game while it plays are imported too.
+
 ## [0.1.5] — 2026-10-04
 
 - **The copy protection takes the right word.** Every copy the port was made from had the
