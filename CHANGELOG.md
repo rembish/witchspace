@@ -9,6 +9,15 @@ Each release's section is also its GitHub release's notes.
 - **The game as sold in 1991 works.** Only copies with the copy protection patched out were
   accepted; the original release (as Ian Bell's Elite archive keeps it) differs from them only
   there, and now plays too.
+- **The Elite theme at the title.** Ian Bell's Elite archive keeps a recording of the Elite
+  theme (Aidan Bell's, arranged by C. Abbott). Give it (`b8060000.mp3` beside the game's
+  files, or on the web page) and the title plays it instead of the Blue Danube; `--no-theme`
+  keeps the original's music. Witchspace does not include the recording.
+- **Ian Bell's zips on the web page.** The page takes his archive's zips as they are, so the
+  game as sold plays in the browser too; the download is credited as his copy, through the
+  Internet Archive's mirror.
+- **No graphics driver, no problem.** Where no accelerated renderer is available (some
+  virtual machines, remote desktops), the game draws in software instead of not starting.
 - **An icon.** A green wireframe ship, made for Witchspace, for the program, its window and
   taskbar, and the web page's tab.
 - **Windows: no console window.** Started from Explorer, the game no longer opens a console
