@@ -4,6 +4,15 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [0.1.3] — 2026-10-04
+
+- **Windows: game folders with non-ASCII names.** A copy of the game under, say,
+  `C:\Users\Jürgen\Games` was never found: the program now uses UTF-8 file names (Windows 10
+  1903 or later). CI builds the Windows version on every change and checks such a folder.
+- **Sound after a stall.** When the sound device stopped asking for samples for a while (the
+  system suspending it), the AdLib's writes could be lost and a note left sounding; they are
+  all kept now.
+
 ## [0.1.2] — 2026-10-04
 
 Fixes from a code audit for edge cases: the game's own bugs, not the original's.
@@ -82,6 +91,7 @@ desktop and in the browser.
 
 Not planned: the Roland LAPC-1's music and effects, and the 16-colour EGA/VGA screen modes.
 
+[0.1.3]: https://github.com/rembish/witchspace/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rembish/witchspace/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rembish/witchspace/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rembish/witchspace/releases/tag/v0.1.0
