@@ -9,6 +9,15 @@ Hex numbers refer to the original program. A 4-digit hex value such as `4c98` is
 offset in segment `0000` of the unpacked `ELITE.EXE`; `ds:xxxx` is an address in its data
 segment. See `re/NOTES.md` for the details.
 
+## The original's data
+
+The core has none of the game's data built in. Before anything else the frontend reads the
+player's `ELITE.EXE` and gives its bytes to `ep_data_load` (`core/ep_tables.h`): the release
+as shipped (EXEPACK-compressed) or unpacked. It unpacks it, checks that it is the release this
+was reconstructed from, and fills the tables (texts, models, prices, the data segment as
+loaded). `ep_data_grf` reads the pictures' widths from `ELITE.GRF` (the core keeps what the
+blit leaves in a register). Both take bytes; the core still does no I/O.
+
 ## State
 
 Everything lives in one `ep_game` (`core/ep_game.h`). `ep_boot` fills it the way the

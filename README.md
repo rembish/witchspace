@@ -1,9 +1,11 @@
-# Elite Plus (1991) — decompilation & port
+# Witchspace — a free reimplementation of Elite Plus (1991)
 
 Elite Plus is the PC version of Elite by David Braben and Ian Bell, written in assembly for
 DOS by Chris Sawyer (Realtime Software); the executable calls itself "Release: V3.1 August
-1990". This project reconstructs the game from `ELITE.EXE` as portable C and runs it with a
-new SDL2 frontend. No original game files are included.
+1990". Witchspace reconstructs that game from `ELITE.EXE` as portable C and runs it with a
+new SDL2 frontend. It is free and contains none of the original: the game's tables, texts
+and models are read from your copy of `ELITE.EXE` when it starts. The name is the game's
+own word for the space between the stars.
 
 ## How it works
 
@@ -39,18 +41,22 @@ described in [re/FLIGHT.md](re/FLIGHT.md).
 
 ## Playing
 
-You need your own copy of the DOS release; the frontend takes its pictures from
-`ELITE.GRF` (without it the game runs with placeholders) and the AdLib's music from
-`ADBLUE.MID`.
+You need your own copy of the DOS release (V3.1, as released or unpacked). The game reads
+its tables from `ELITE.EXE`, its pictures from `ELITE.GRF` (without it the game runs with
+placeholders) and the AdLib's music from `ADBLUE.MID`.
 
 ```sh
 cmake -S . -B build && cmake --build build -j       # needs SDL2 (apt install libsdl2-dev)
-./build/eliteplus --data original                  # the folder with your ELITE.GRF
+cp build/witchspace /path/to/your/elite-plus/       # into the game's folder
+/path/to/your/elite-plus/witchspace
 ```
 
-Options: `--saves DIR` (where commanders are saved, default the current folder), `--speaker`
-(the PC speaker instead of the AdLib), `--protection` (ask the novella question). Alt+Enter
-toggles full screen. The keys are the original's; a game controller acts as the joystick.
+The game looks for its files (in any case: `ELITE.EXE` or `elite.exe`) in its own folder,
+then the current one, then `original/`; `--data DIR` points elsewhere. Commanders are saved
+beside the game's files, as the original did (`--saves DIR` for another folder). Other
+options: `--speaker` (the PC speaker instead of the AdLib), `--protection` (ask the novella
+question). Alt+Enter toggles full screen. The keys are the original's; a game controller
+acts as the joystick.
 
 ## Layout
 
@@ -80,14 +86,14 @@ The notes:
 
 ```sh
 python3 -m venv ~/tools/venv --system-site-packages && ~/tools/venv/bin/pip install unicorn capstone
-~/tools/venv/bin/python re/tools/gen_tables.py      # regenerate core/ep_tables.c from original/
+~/tools/venv/bin/python re/tools/gen_tables.py --check build/ep_datadump   # the loader vs the tables
 ~/tools/venv/bin/python re/emu/corpus.py            # game states from the original (git-ignored)
 ~/tools/venv/bin/python re/emu/subtest.py frame --fuzz 4   # one routine vs the core (see ROUTINES)
 ~/tools/venv/bin/python re/emu/boottest.py          # start-up, original booted vs the core
 ~/tools/venv/bin/python re/emu/flowtest.py 5        # title to first flight frame, vs the core
 ~/tools/venv/bin/python re/emu/titletest.py 600     # title frames, vs the core
 ~/tools/venv/bin/python re/emu/play.py              # the original in the harness, in a window
-ctest --test-dir build                              # core checks outside the emulator
+ctest --test-dir build                              # core checks outside the emulator (needs original/)
 re/ghidra/run.sh                                    # Ghidra project, decompiled C and listing
 ```
 
@@ -101,7 +107,8 @@ re/ghidra/run.sh                                    # Ghidra project, decompiled
 ## Credits
 
 Elite © 1984 David Braben and Ian Bell. Elite Plus © 1991 Chris Sawyer, Realtime Software,
-and Bell & Braben. This is an unofficial fan reimplementation for preservation; no original
-game files are distributed. Font: Exo 2 (SIL OFL). Text rendering: stb_truetype (public
+and Bell & Braben; Elite is a trademark of Frontier Developments. Witchspace is an unofficial
+fan reimplementation for preservation, not affiliated with them; no original game files or
+data are distributed. Font: Exo 2 (SIL OFL). Text rendering: stb_truetype (public
 domain). The AdLib's chip: [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) by Nuke.YKT
 (LGPL-2.1+, in `third_party/nuked-opl3`).
