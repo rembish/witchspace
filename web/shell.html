@@ -259,7 +259,10 @@
         if (document.body.className === 'playing') toast(text, !err && imported); else status(text, !!err || !imported);
         show();
       });
-    }).catch(function (e) { status('Could not read those files (' + e.message + ').', true); });
+    }).catch(function (e) {
+      var text = 'Could not read those files (' + e.message + ').';
+      if (document.body.className === 'playing') toast(text); else status(text, true); // seen either way
+    });
   }
 
   // the commanders as one zip to save (stored, not compressed: they are 226 bytes each)
