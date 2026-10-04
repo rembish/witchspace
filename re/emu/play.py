@@ -17,7 +17,7 @@ import time
 import tkinter as tk
 from typing import Final
 
-from PIL import Image  # type: ignore[import-not-found]  # Pillow: a system package, not a dependency
+from PIL import Image  # Pillow: a dev dependency (pyproject.toml)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from machine import Machine  # noqa: E402
@@ -138,7 +138,7 @@ def main() -> None:
             return
         im = Image.frombytes("P", (320, 200), bytes(m.mu.mem_read(0xA0000, 320 * 200)))
         im.putpalette([v * 255 // 63 for v in m.dac])
-        im = im.convert("RGB").resize((320 * a.scale, 200 * a.scale), Image.NEAREST)
+        im = im.convert("RGB").resize((320 * a.scale, 200 * a.scale), Image.Resampling.NEAREST)
         ppm = b"P6 %d %d 255\n" % im.size + im.tobytes()
         photo = tk.PhotoImage(data=ppm, format="PPM")
         label.configure(image=photo)

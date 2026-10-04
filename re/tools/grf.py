@@ -198,7 +198,9 @@ def cmd_sheet(data: bytes) -> None:
             if not (img[1] and img[2]) or img[1] * img[2] > 64000 - 1:
                 continue
             w, h, rgb = to_rgb(img, pal)
-            cells.append((i, Image.frombytes("RGB", (w, h), rgb).resize((w * 2, h * 2), Image.NEAREST)))
+            cells.append(
+                (i, Image.frombytes("RGB", (w, h), rgb).resize((w * 2, h * 2), Image.Resampling.NEAREST))
+            )
         sheet_w, x, y, row_h, placed = 1400, 0, 0, 0, []
         for i, im in cells:
             if x + im.width + 8 > sheet_w:
@@ -214,7 +216,7 @@ def cmd_sheet(data: bytes) -> None:
         sheet.save(os.path.join(out, f"sheet-{name}.png"))
     title = images(data, 1)[TITLE_IMAGE]
     w, h, rgb = to_rgb(title, pals.title)
-    Image.frombytes("RGB", (w, h), rgb).resize((w * 3, h * 3), Image.NEAREST).save(
+    Image.frombytes("RGB", (w, h), rgb).resize((w * 3, h * 3), Image.Resampling.NEAREST).save(
         os.path.join(out, "title-mcga.png")
     )
     print(f"wrote {out}/sheet-vga.png, sheet-mcga.png, title-mcga.png")

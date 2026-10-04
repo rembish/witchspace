@@ -190,7 +190,7 @@ class Machine(Elite):
     def screenshot(self, path: str) -> None:
         """Save the mode 13h screen (a000:0000) with the current DAC as a PNG."""
         # Pillow is not a dependency of the tools (a system package, viewers only).
-        from PIL import Image  # type: ignore[import-not-found]
+        from PIL import Image
 
         pix = bytes(self.mu.mem_read(0xA0000, 320 * 200))
         im = Image.frombytes("P", (320, 200), pix)
