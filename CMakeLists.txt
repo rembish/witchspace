@@ -37,14 +37,7 @@ target_link_libraries(ep_titledump PRIVATE epcore)
 add_executable(ep_cmdrdump tests/cmdrdump.c)
 target_link_libraries(ep_cmdrdump PRIVATE epcore)
 
-# The port: SDL2 frontend over the core. The font is embedded, so the binary has no runtime
-# asset paths.
-set(FONT_SRC ${CMAKE_CURRENT_SOURCE_DIR}/assets/Exo2.ttf)
-set(FONT_C ${CMAKE_CURRENT_BINARY_DIR}/font_data.c)
-add_custom_command(
-  OUTPUT ${FONT_C}
-  COMMAND ${CMAKE_COMMAND} -DIN=${FONT_SRC} -DOUT=${FONT_C} -DNAME=font_ttf -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
-  DEPENDS ${FONT_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake)
+# The frontend: SDL2 over the core. Text uses the original's own glyphs (from ELITE.EXE).
 find_package(SDL2 REQUIRED)
 # The AdLib's chip: Nuked OPL3 (LGPL-2.1+, third_party/nuked-opl3), for the frontend only
 add_library(opl3 STATIC third_party/nuked-opl3/opl3.c)
