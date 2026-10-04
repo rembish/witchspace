@@ -108,6 +108,32 @@ class Division(NamedTuple):
 _DIVS: dict[int, Division] | None = None  # div/idiv sites of segment 0000, found once per process
 
 
+def _retried_divisions(img: bytes | bytearray, known: dict[int, Division]) -> dict[int, Division]:
+    """Divisions only reached from the divide-error handler, which the control-flow recovery
+    cannot see: the clipping routines store a resume address in ds:01f8 (mov word [01f8], imm:
+    c7 06 f8 01), divide, and on overflow resume there to scale down and divide again
+    (1b1f..1b2d). That second division can fault too (docking in a mission did). The straight
+    code after each resume address, up to a jump or return, is searched for them."""
+    import capstone  # untyped (no stubs)
+
+    code = bytes(img[:0x10000])
+    dis = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_16)
+    dis.detail = True
+    found: dict[int, Division] = {}
+    at = code.find(b"\xc7\x06\xf8\x01")
+    while at >= 0:
+        resume = int.from_bytes(code[at + 4 : at + 6], "little")
+        for i in dis.disasm(code[resume : resume + 64], resume):
+            if i.mnemonic in ("ret", "retf", "iret", "jmp"):
+                break
+            if i.mnemonic in ("div", "idiv") and i.address not in known:
+                op = i.operands[0]
+                if op.type == capstone.x86.X86_OP_REG:
+                    found[i.address] = Division(i.mnemonic == "idiv", DivReg(i.reg_name(op.reg), op.size))
+        at = code.find(b"\xc7\x06\xf8\x01", at + 1)
+    return found
+
+
 class Elite:
     """The original's image in a Unicorn 8086, with helpers to call its routines and to read and
     write its data segment."""
@@ -248,6 +274,7 @@ class Elite:
                         op.size,
                     )
                 divs[off] = Division(i.mnemonic == "idiv", src)
+        divs.update(_retried_divisions(img, divs))
         return divs
 
     def _reg(self, name: str) -> int:
