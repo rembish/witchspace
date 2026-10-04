@@ -72,20 +72,33 @@ static int read_file(void *ctx, const char *name, uint8_t *buf, int max)
     return n;
 }
 
+/* A commander is written whole or not at all: to NAME.tmp, checked to the last flush, then put in
+ * place of the old one (which stays as it was if anything fails). In the browser the file is in
+ * memory at once and kept in the browser's storage after (FS.syncfs); if that fails, the page
+ * says so (Module.saveFailed in web/shell.html). */
 static int write_file(void *ctx, const char *name, const uint8_t *bytes, int len)
 {
     (void)ctx;
-    char p[1100];
+    char p[1100], tmp[1110];
     path(p, sizeof p, name);
-    FILE *f = fopen(p, "wb");
+    snprintf(tmp, sizeof tmp, "%s.tmp", p);
+    FILE *f = fopen(tmp, "wb");
     if (!f) return -1;
-    int n = (int)fwrite(bytes, 1, (size_t)len, f);
-    fclose(f);
+    int ok = fwrite(bytes, 1, (size_t)len, f) == (size_t)len;
+    ok = fflush(f) == 0 && ok;
+    ok = fclose(f) == 0 && ok;
+#ifdef _WIN32
+    if (ok) remove(p); /* rename does not replace a file there */
+#endif
+    if (!ok || rename(tmp, p) != 0) {
+        remove(tmp);
+        return -1;
+    }
 #ifdef __EMSCRIPTEN__
     emscripten_run_script(
-        "FS.syncfs(false, function(err) {})"); /* the commander kept in the browser's storage */
+        "FS.syncfs(false, function(err) { if (err && Module.saveFailed) Module.saveFailed(err); })");
 #endif
-    return n;
+    return len;
 }
 
 /* *.CDR, as DOS matches it: names in capitals, 8.3 */

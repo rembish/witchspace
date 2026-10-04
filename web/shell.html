@@ -24,6 +24,8 @@
   label.check { display: block; margin-top: 10px; }
   #status { min-height: 1.5em; color: var(--accent); }
   #status.error { color: #ff7a7a; }
+  #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: 90vw;
+           background: #401016; color: #ffd0d0; border-radius: 8px; padding: 8px 14px; display: none; }
   kbd { background: #1d2850; border-radius: 4px; padding: 0 5px; font-size: 13px; }
   a { color: var(--accent); }
   small { color: var(--dim); }
@@ -31,6 +33,7 @@
 </head>
 <body>
 <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="toast"></div>
 <div id="intro">
   <h1>WITCHSPACE</h1>
   <p>A free reimplementation of <i>Elite Plus</i> (1991), the PC version of Elite.</p>
@@ -59,6 +62,7 @@
   </div>
 
   <p id="status"></p>
+  <p><button class="quiet" id="anyway" hidden>Play this time anyway</button></p>
 
   <div class="box">
     <h2>Keys</h2>
@@ -85,7 +89,24 @@
     $('status').className = error ? 'error' : '';
   }
 
-  function persist(done) { FS.syncfs(false, function (err) { if (err) status('Could not store the files: ' + err, true); done(); }); }
+  // the files kept in the browser's storage; if that fails, say so and let the player choose to
+  // play this time only (the files are in memory until the page closes)
+  function persist(done) {
+    FS.syncfs(false, function (err) {
+      if (!err) { status(''); done(); return; }
+      status('This browser would not keep the files (' + err + '): they are gone when the page closes.', true);
+      $('anyway').hidden = false;
+      $('anyway').onclick = function () { $('anyway').hidden = true; status(''); done(); };
+    });
+  }
+
+  // a commander could not be kept in the browser's storage (src/files.c)
+  function toast(text) {
+    var t = $('toast');
+    t.textContent = text;
+    t.style.display = 'block';
+    setTimeout(function () { t.style.display = 'none'; }, 8000);
+  }
 
   function have(name) { try { FS.stat('/game/' + name); return true; } catch (e) { return false; } }
 
@@ -106,13 +127,17 @@
     print: function (t) { console.log(t); },
     // the game's own messages (a missing or unknown file) shown on the page
     printErr: function (t) { console.warn(t); document.body.className = ''; status(t, true); },
+    saveFailed: function (err) { toast('The commander was saved, but this browser would not keep it (' + err + '): it is gone when the page closes.'); },
     setStatus: function (t) { if (t) status(t); },
     onRuntimeInitialized: function () {
       FS.mkdir('/game');
       FS.mkdir('/saves');
       FS.mount(IDBFS, {}, '/game');
       FS.mount(IDBFS, {}, '/saves');
-      FS.syncfs(true, function () { status(''); show(); });
+      FS.syncfs(true, function (err) {
+        status(err ? 'Could not read this browser\'s storage (' + err + '): files from earlier visits are not available.' : '', !!err);
+        show();
+      });
     }
   };
 
@@ -127,7 +152,7 @@
         return r.arrayBuffer();
       }).then(function (b) { FS.writeFile('/game/' + name, new Uint8Array(b)); });
     })).then(function () {
-      persist(function () { status(''); start(); });
+      persist(start);
     }).catch(function (e) {
       status('The download failed (' + e.message + '). Try again later, or use your own files.', true);
       $('download').disabled = false;
@@ -144,7 +169,9 @@
     })).then(function () {
       var missing = NEEDED.filter(function (n) { return !have(n); });
       if (missing.length) { status('Still needed: ' + missing.join(', '), true); return; }
-      persist(function () { status(''); start(); });
+      persist(start);
+    }).catch(function (e) {
+      status('Could not read those files (' + e.message + ').', true);
     });
   });
 
