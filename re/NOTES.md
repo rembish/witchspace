@@ -420,6 +420,19 @@ and an absent mouse.
   80 per frame in slot 2 (`ds:775e`) in front of a planet. MCGA palette cycling runs once
   per retrace in `3b3e` (colours from a1h, `ds:1444`). The title picture has its own palette
   (`ds:1744`, loaded at `3b7f`), which is why `grf.py` shows it with wrong colours.
+- **Files.** The game's own files come from `original/`; others (saves) are kept in memory.
+  The Load screen lists them with find first/next (INT 21h 4Eh/4Fh, `*.CDR`, after setting
+  its DTA with 1Ah): attribute 20h at DTA+15h, size at +1Ah, the NUL-ended 8.3 name at +1Eh.
+- **Divisions resumed after a fault.** The clipping routines store a resume address in
+  `ds:01f8`, divide, and on overflow the divide-error handler (`00d6`) resumes there to scale
+  down and divide again. Those second divisions (11, from `17ba` to `2494`) are reached only
+  from the handler, so the control-flow recovery misses them; `eliteemu.py` finds them from
+  the resume addresses and hooks them as it does the others.
+- **Missions** (`missions.py`, `corpus.py --saves DIR`): real v3.1 saves (George Hooper's,
+  one per mission) loaded through the game's Load screen, then a jump to the selected
+  system, the station approached and docked with the docking computer, the briefing read
+  and a launch into the mission, collecting states on the way: 125 for the eight saves (five
+  of them reach their briefing). All 53 comparisons agree on them.
 
 ## Circles (planets, sun) and the RNG in rendering
 

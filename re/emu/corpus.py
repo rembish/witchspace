@@ -1,6 +1,7 @@
 """Collect game states from the running original, for subsystem tests.
 
 usage: corpus.py [flights] [frames] [every] [outdir]
+       corpus.py --saves DIR [frames] [every] [outdir]   (missions.py: commander saves flown)
 
 Each flight boots the original in machine.py (P, M, a word), starts the game, launches from
 Lave and flies `frames` frames with random held keys (arrows, fire, faster/slower), saving the
@@ -93,6 +94,17 @@ def fly(seed: int, frames: int, every: int, outdir: str) -> list[str]:
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["--saves"]:
+        # imported here: missions.py builds on this module
+        from missions import collect_saves
+
+        args = sys.argv[2:]
+        frames = int(args[1]) if len(args) > 1 else 100
+        every = int(args[2]) if len(args) > 2 else 20
+        outdir = args[3] if len(args) > 3 else os.path.join(HERE, "corpus")
+        os.makedirs(outdir, exist_ok=True)
+        print(f"saved {collect_saves(args[0], frames, every, outdir)} states in {outdir}")
+        return
     flights = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     frames = int(sys.argv[2]) if len(sys.argv) > 2 else 400
     every = int(sys.argv[3]) if len(sys.argv) > 3 else 10
