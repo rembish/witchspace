@@ -384,7 +384,7 @@ void ep_explode(ep_game *g, ep_object *o)
         ep_object *s = ep_free_ship_slot(g); /* can be the ship's own slot, now free */
         if (!s) continue;
         uint8_t mission = o->b[EP_OBJ_FLAGS1E] & 0x20; /* read before the copy, as the original */
-        memcpy(s->b, o->b, sizeof s->b);
+        if (s != o) memcpy(s->b, o->b, sizeof s->b);   /* its own slot: already the same */
         ep_ship_init(s, 3);
         s->b[0x33] = 3;
         s->b[EP_OBJ_FLAGS1E] = (uint8_t)(8 | mission << 1);

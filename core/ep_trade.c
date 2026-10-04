@@ -69,7 +69,7 @@ uint16_t ep_trade_sell(ep_game *g, int row)
 
 static uint16_t equipment_price(const ep_game *g, int row)
 {
-    uint16_t price[EP_EQUIPMENT], sell[EP_EQUIPMENT];
+    uint16_t price[EP_EQUIPMENT] = { 0 }, sell[EP_EQUIPMENT]; /* rows not offered here: 0 */
     ep_equipment_prices(current(g, EP_SYSREC_GOVERNMENT), current(g, EP_SYSREC_ECONOMY),
                         current(g, EP_SYSREC_TECH), g->cmdr.b + EP_CMDR_FUEL, price, sell);
     return price[row];
