@@ -4,7 +4,7 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
-## [Unreleased]
+## [0.1.6] — 2026-10-04
 
 - **Two bugs of 1991, mended.** Players reported both in the 1990s; the reconstruction
   explains them and Witchspace now mends them: the hold lost a tonne of room for good with
@@ -14,6 +14,9 @@ Each release's section is also its GitHub release's notes.
 - **Commanders in the browser.** The web page imports saved games (`.CDR` files, or a zip of
   them: George Hooper's saves for each of the missions, for one) and exports yours as a zip;
   files dropped on the game while it plays are imported too.
+- **Fixes from an outside review.** `make wintest` sees a failing Windows tool fail, `make -j
+  difftest` compares only after the build (with that build's tool), and a commander import
+  that fails while playing says so over the game.
 
 ## [0.1.5] — 2026-10-04
 
@@ -134,6 +137,7 @@ desktop and in the browser.
 
 Not planned: the Roland LAPC-1's music and effects, and the 16-colour EGA/VGA screen modes.
 
+[0.1.6]: https://github.com/rembish/witchspace/releases/tag/v0.1.6
 [0.1.5]: https://github.com/rembish/witchspace/releases/tag/v0.1.5
 [0.1.4]: https://github.com/rembish/witchspace/releases/tag/v0.1.4
 [0.1.3]: https://github.com/rembish/witchspace/releases/tag/v0.1.3

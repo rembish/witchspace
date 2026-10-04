@@ -7,7 +7,7 @@
 #   make py-check                format check, lint, strict type check
 [project]
 name = "witchspace-tools"
-version = "0.1.5"
+version = "0.1.6"
 description = "Reverse-engineering and differential-test tools for Witchspace"
 requires-python = ">=3.12"
 license = "BSD-3-Clause"
