@@ -4,6 +4,27 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [0.1.2] — 2026-10-04
+
+Fixes from a code audit for edge cases: the game's own bugs, not the original's.
+
+- **Lasers.** Buying a second laser when more than one mount was free took the money but never
+  asked where to fit it (and selling one left it mounted). The mount dialogue opens again.
+- **No hang without the music.** With the AdLib (the default), a missing `ADBLUE.MID`, or a
+  MIDI file whose first track has no time in it, froze the title. The title runs without the
+  music now.
+- **Edited commander files.** A commander's checksum is easy to remake, so a save can say
+  anything. A name filling all its 9 bytes, a government or tech level out of range, 65535
+  kills, or a text with no end made the game read or write outside its memory, or hang. Each
+  now stays inside the game's memory, doing what the original does wherever that is safe, and
+  a new test (`ep_edgecheck`) checks every one, under the sanitizers too.
+- **Drawing.** A model's line starting far outside the view was not drawn at all, and a large
+  polygon could be filled wrongly on Windows and in the browser.
+- **In the browser** a warning (no sound, damaged pictures) no longer hides the game: it shows
+  as a note while you play.
+- **Smaller things.** A `--data` or `--saves` folder name too long to keep is refused rather
+  than cut short; a game controller unplugged and plugged in again works again.
+
 ## [0.1.1] — 2026-10-04
 
 Fixes from an outside review (Codex): safer file handling, a fidelity fix, and stricter checks.
@@ -61,5 +82,6 @@ desktop and in the browser.
 
 Not planned: the Roland LAPC-1's music and effects, and the 16-colour EGA/VGA screen modes.
 
+[0.1.2]: https://github.com/rembish/witchspace/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rembish/witchspace/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rembish/witchspace/releases/tag/v0.1.0

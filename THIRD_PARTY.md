@@ -17,7 +17,7 @@ and the web site also Emscripten's and musl's.
 
 The LGPL lets you change the library and use your changed version with Witchspace. The
 complete source of each release is public at its tag (for example
-<https://github.com/rembish/witchspace/tree/v0.1.1>). To relink with your own version of Nuked
+<https://github.com/rembish/witchspace/tree/v0.1.2>). To relink with your own version of Nuked
 OPL3, replace `third_party/nuked-opl3/opl3.c` and `opl3.h` and build as the README says:
 
 ```sh
