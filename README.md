@@ -112,10 +112,11 @@ explains trading, combat, the ship's equipment and the missions.
 | `--version` | print the version |
 
 **The Elite theme at the title.** Ian Bell's
-[Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps a recording of the Elite
-theme (Aidan Bell's, arranged by C. Abbott): `b8060000.mp3`. Put it beside the game's files
-(or name it `THEME.MP3`) and the title plays it instead of the AdLib's (or the speaker's)
-Blue Danube; everything else sounds as the original. In the browser, add it on the page.
+[Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps recordings of the Elite
+theme (Aidan Bell's, in two arrangements by C. Abbott): `b8060000.mp3` and `b8060010.mp3`.
+Put one beside the game's files (or name it `THEME.MP3`) and the title plays it instead of
+the AdLib's (or the speaker's) Blue Danube; everything else sounds as the original. In the
+browser, add it on the page.
 
 ## Status
 

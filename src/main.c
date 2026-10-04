@@ -7,9 +7,9 @@
  * usage: witchspace [--data DIR] [--saves DIR] [--speaker] [--protection] [--theme FILE]
  *   --data DIR     where your copy of the game is: ELITE.EXE, ELITE.GRF, ADBLUE.MID (default:
  *                  this program's folder, then the current one, then original/)
- *   --theme FILE   an MP3 the title plays instead of its own music (default: B8060000.MP3 or
- *                  THEME.MP3 beside the game's files, if there is one: the Elite theme from
- *                  Ian Bell's archive); --no-theme for the original's music
+ *   --theme FILE   an MP3 the title plays instead of its own music (default: B8060000.MP3,
+ *                  B8060010.MP3 or THEME.MP3 beside the game's files, if there is one: the
+ *                  Elite theme from Ian Bell's archive); --no-theme for the original's music
  *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default)
@@ -245,7 +245,8 @@ static void load_theme(const char *file, const char *data)
 {
     char p[1100];
     if (!file) {
-        if (files_find(data, "B8060000.MP3", p, sizeof p) || files_find(data, "THEME.MP3", p, sizeof p))
+        if (files_find(data, "B8060000.MP3", p, sizeof p) || files_find(data, "B8060010.MP3", p, sizeof p) ||
+            files_find(data, "THEME.MP3", p, sizeof p))
             file = p;
         else
             return;
