@@ -755,6 +755,7 @@ void ep_market_rows(ep_game *g)
 #define MOVE(x, y) (PUT(2), PUT(x), PUT((x) >> 8), PUT(y), PUT((y) >> 8)) /* text code 2: move */
     uint16_t names = 0xabe0, units = 0xac82, y = 0x1d;
     uint8_t *cargo = &g->cmdr.b[EP_CMDR_CARGO];
+    f->list_count = 0; /* 8eac: ds:acb0 counts the 17 rows down, left 0 (the equipment list's count) */
     for (int k = 0; k < 17; k++) {
         int last = k == 16;
         uint8_t c;
