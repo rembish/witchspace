@@ -44,11 +44,12 @@ uint16_t ep_spawn_chance[8][4];
 uint8_t ep_commander0[EP_COMMANDER_SIZE];
 
 /* the release this was reconstructed from (V3.1): its load image (unpacked), FNV-1a. Copies
- * differ only in four bytes of code at 0000:149a, the copy protection's comparison, patched
- * out with nops (3013df64) or with xchg bp,bp; cmc; cmc (6ae033fe, the Internet Archive's);
- * no table is there. */
+ * differ only in seven bytes of code at 0000:1497, the copy protection's comparison: as sold
+ * (456fa837, Ian Bell's archive's b1022000), or patched out with nops (3013df64) or with
+ * xchg bp,bp; cmc; cmc (6ae033fe, the Internet Archive's and Ian Bell's b1022001); no table is
+ * there, and the reconstruction's own protection (--protection) does not read it. */
 #define IMAGE_SIZE 153360
-static const uint32_t known[] = { 0x3013df64u, 0x6ae033feu };
+static const uint32_t known[] = { 0x456fa837u, 0x3013df64u, 0x6ae033feu };
 #define DS  0xb000  /* segment 0b00 */
 #define SS  0x1c0c0 /* segment 1c0c: the ships' models */
 #define DRV 0x22700 /* segment 2270: the music driver */
