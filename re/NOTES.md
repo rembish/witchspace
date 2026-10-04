@@ -163,6 +163,11 @@ the system data.
 
 - **Chart position.** `5e95` → `ds:8318/8319`: x = w1hi, y = w0hi / 2 (galaxy chart).
 - **Checked:** `re/emu/galaxytest.py` compares all 8 × 256 systems with `core/ep_galaxy.c`.
+- **Against the classic universe.** Ian Bell's Text Elite 1.5 (his archive's `b9101315.zip`,
+  the BBC version's algorithms in C) gives the same 2048 names, x positions and governments;
+  y is the same halved, and the economy the same numbered the other way (`7 − e`). Tech
+  level, population, productivity and radius are Elite Plus's own (the formulas above): tech
+  agrees for only 269 systems, population for 111.
 
 ## Copy protection (ported later as an opt-in, off by default)
 
@@ -523,7 +528,8 @@ and an absent mouse.
   | `8357–8364` | equipment counts (`8357` missiles, `835c` fuel scoops, …) |
   | `8367` | cash (32-bit tenths) |
   | `836b` | legal status |
-  | `836c/836e` | rating / kills **[verify]** |
+  | `836c` | kills (word), counted in flight |
+  | `836e` | kills when last docked: the rating shown; docking (`8b72`) announces a promotion when the two are in different ranks (2, 4, 9, 20, 35, 90, 155, 1000 kills: Elite) |
   | `8370` | name |
   | `8379` | cargo, 17 × (held, on offer) |
   | `839c–83b9` | flight and mission state (many fields, see the reference counts) |
@@ -531,7 +537,9 @@ and an absent mouse.
 
   A system record holds: name, `+0a` index, `+0b` distance word, `+0d` government, `+0e`
   economy, `+0f` tech, population, species, productivity, radius, description seeds.
-- **Checked:** `re/emu/cmdrtest.py` (checksums of 6000 blocks; default block).
+- **Checked:** `re/emu/cmdrtest.py` (checksums of 6000 blocks; default block). George
+  Hooper's v3.1 saves (one per mission, and one a kill from Elite: `elpmiss.zip` on his
+  archived Elite pages) all load, with their checksums, cash and kills as the game shows them.
 
 ## Objects in flight (`update_objects` complete except scooping)
 
