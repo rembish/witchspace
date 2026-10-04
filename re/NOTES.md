@@ -429,10 +429,16 @@ and an absent mouse.
   from the handler, so the control-flow recovery misses them; `eliteemu.py` finds them from
   the resume addresses and hooks them as it does the others.
 - **Missions** (`missions.py`, `corpus.py --saves DIR`): real v3.1 saves (George Hooper's,
-  one per mission) loaded through the game's Load screen, then a jump to the selected
-  system, the station approached and docked with the docking computer, the briefing read
-  and a launch into the mission, collecting states on the way: 125 for the eight saves (five
-  of them reach their briefing). All 53 comparisons agree on them.
+  one per mission) loaded through the game's Load screen and flown as a player would: a
+  jump, the station approached and docked with the docking computer (refuelling at each
+  stop), the briefing read, then on to where the mission happens, found with the chart's
+  find (F9) over several jumps: the masked ship's convoy, the stolen police Viper, the
+  Thargoids at the besieged station and on the plans' delivery, the asteroids, and the
+  supernova's escape by galactic jump. 230 states; keys reach the game ahead of pending
+  timer ticks, so steering taps land on time. They found one difference: the market list
+  (`8ea2`) counts its rows down in `ds:acb0` (the equipment list's count) and leaves it 0,
+  which the core did not; now it does, and all 53 comparisons agree on them (690 cases
+  each).
 
 ## Circles (planets, sun) and the RNG in rendering
 
