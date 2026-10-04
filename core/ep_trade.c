@@ -34,13 +34,28 @@ static void earn(ep_game *g, uint32_t amount)
     ep_cash_text(&g->cmdr);
 }
 
+int ep_goods_in_tonnes(const ep_game *g, int row)
+{
+    return row < 13 || (row == 16 && (g->fixes & EP_FIX_HOLD));
+}
+
+void ep_hold_recount(ep_game *g)
+{
+    uint8_t *c = g->cmdr.b;
+    if (!(g->fixes & EP_FIX_HOLD) || c[0xc0]) return; /* ds:839b: mission 1's cargo aboard */
+    unsigned t = 0;
+    for (int row = 0; row < EP_GOODS; row++)
+        if (ep_goods_in_tonnes(g, row)) t += c[EP_CMDR_CARGO + 2 * row];
+    c[EP_CMDR_CARGO_USED] = (uint8_t)(t > 0xff ? 0xff : t);
+}
+
 uint16_t ep_trade_buy(ep_game *g, int row)
 {
     if (row < 0 || row >= EP_GOODS) return EP_TRADE_NOTHING;
     uint8_t *c = cargo(g, row);
     if (!c[1]) return EP_TRADE_NOTHING;
     uint8_t space = g->cmdr.b[EP_CMDR_EQUIPMENT + 1] == 1 ? 0x23 : 0x14; /* cargo bay ext. */
-    if (row >= 13) {                     /* rows 13.. take no room in the hold (not counted in CARGO_USED) */
+    if (!ep_goods_in_tonnes(g, row)) {   /* rows 13.. take no room in the hold (not counted in CARGO_USED) */
         if (c[1] >= 0xfa) return 0xad3e; /* (the original tests what is on offer) */
     } else if (space <= g->cmdr.b[EP_CMDR_CARGO_USED]) {
         return 0xad2e; /* CARGO BAY FULL */
@@ -48,7 +63,7 @@ uint16_t ep_trade_buy(ep_game *g, int row)
     if (!ep_pay(g, ep_goods_buy_price(g, row))) return 0xad50; /* not enough cash */
     c[0]++;
     c[1]--;
-    if (row < 13) g->cmdr.b[EP_CMDR_CARGO_USED]++;
+    if (ep_goods_in_tonnes(g, row)) g->cmdr.b[EP_CMDR_CARGO_USED]++;
     return EP_TRADE_OK;
 }
 
@@ -60,7 +75,7 @@ uint16_t ep_trade_sell(ep_game *g, int row)
     earn(g, ep_sell_price(ep_goods_buy_price(g, row)));
     c[0]--;
     if (++c[1] == 0) c[1]--; /* what is on offer stops at ffh */
-    if (row < 13) g->cmdr.b[EP_CMDR_CARGO_USED]--;
+    if (ep_goods_in_tonnes(g, row)) g->cmdr.b[EP_CMDR_CARGO_USED]--;
     /* 98d4: illegal goods raise the legal status */
     uint8_t l = (uint8_t)(ep_goods_tech_adj[row][2] + g->cmdr.b[EP_CMDR_LEGAL]);
     if (l) g->cmdr.b[EP_CMDR_LEGAL] = l;

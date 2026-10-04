@@ -151,6 +151,8 @@ typedef struct {
     int16_t death_vel[3];       /* ds:76b7: the way the ship was flying when it blew up, x 40 */
     uint16_t ap_roll;           /* ds:af59: the roll the docking computer turns to */
     uint8_t ap_passes;          /* ds:af5b: lining-up passes done (two each) */
+    uint8_t ap_detour;          /* EP_FIX_DOCKING: flying first to ap_aside (not the original's) */
+    int16_t ap_aside[3];        /* EP_FIX_DOCKING: that point, from the station */
     uint8_t sound_off;          /* ds:45e7 */
     uint8_t launching;          /* ds:ae21: 1 from the launch on, 0 at the station */
     uint8_t fuel_text[0x1e];    /* ds:8e14: "Fuel: x.y Light Years" with its digits (8e2d) */
@@ -304,11 +306,20 @@ enum { EP_INT8_GAME = 0, EP_INT8_MUSIC, EP_INT8_FX }; /* the timer interrupt ins
  * far (a frame is complete; it may then empty the output). NULL: time stands still (tests). */
 typedef void (*ep_wait_fn)(ep_game *g, uint32_t until, int show);
 
+/* The original's gameplay bugs the core can mend (g->fixes; none unless the frontend asks, so
+ * the differential tests compare the original's behaviour) */
+enum {
+    EP_FIX_HOLD = 1,    /* Alien Items take room in the hold as they are counted (re/NOTES.md) */
+    EP_FIX_DOCKING = 2, /* the docking computer goes round the station, not through it (re/FLIGHT.md) */
+    EP_FIXES_ALL = EP_FIX_HOLD | EP_FIX_DOCKING,
+};
+
 struct ep_game {
     const ep_io *io;         /* NULL: no files */
     ep_wait_fn wait;         /* NULL: no waiting */
     void *frontend;          /* the frontend's, for the callbacks */
     uint8_t protection;      /* 1: the copy protection is asked (ep_boot.h); off by default */
+    uint8_t fixes;           /* EP_FIX_*: the original's bugs mended (the frontend's choice; 0: as 1991) */
     ep_commander cmdr;       /* ds:82db */
     ep_commander cmdr_saved; /* ds:83be: a second copy (the commander as last saved or docked) */
     ep_space space;          /* ds:76de objects, 76b5 count, 76be rotation slots, 76d8 angles ... */

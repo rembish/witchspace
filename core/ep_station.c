@@ -2102,6 +2102,7 @@ static int load_key(ep_game *g, uint8_t key)
     memcpy(c, data, (size_t)r);
     ep_sync_from_commander(g);
     int good = r == EP_COMMANDER_SIZE && ep_commander_valid(&g->cmdr);
+    if (good) ep_hold_recount(g); /* EP_FIX_HOLD: a hold the bug left short (then sealed again) */
     if (r == EP_COMMANDER_SIZE) ep_commander_seal(&g->cmdr); /* 77c5 stores the sum it made */
     text_header(g, good ? 0x05c8 : 0x063d);
     f->station_step = good ? ST_LOAD_GOOD : ST_LOAD_BAD;

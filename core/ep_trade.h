@@ -24,6 +24,13 @@ int ep_pay(ep_game *g, uint32_t amount);
  * (96de: room in the hold, cash) or sold (9781: illegal goods raise the legal status, ds:92a1's
  * third byte). EP_TRADE_OK, EP_TRADE_NOTHING or a message's address. */
 uint16_t ep_trade_buy(ep_game *g, int row);
+
+/* Whether a commodity takes room in the hold (counted in its tonnes, ds:839c): rows 0..12 in
+ * the original; with EP_FIX_HOLD Alien Items (16) too, as scooping them counts them */
+int ep_goods_in_tonnes(const ep_game *g, int row);
+/* EP_FIX_HOLD: the tonnes counted again from what is held (a loaded commander's, which the
+ * original's bug may have left too high); not while mission 1's refugees fill the hold */
+void ep_hold_recount(ep_game *g);
 uint16_t ep_trade_sell(ep_game *g, int row);
 
 /* Equipment row (0 fuel .. 13 military laser, see ep_equipment): bought if allowed and paid

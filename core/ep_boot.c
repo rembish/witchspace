@@ -47,7 +47,7 @@ void ep_boot(ep_game *g, uint8_t video, uint8_t sound, uint8_t minute, uint8_t s
     const ep_io *io = g->io; /* the frontend's settings stay */
     ep_wait_fn wait = g->wait;
     void *frontend = g->frontend;
-    uint8_t protection = g->protection;
+    uint8_t protection = g->protection, fixes = g->fixes;
     memset(g, 0, sizeof *g);
     ep_ds_load(g, ds);
     memcpy(g->adlib.fx, ep_drv_initial + EP_FX_CS, EP_FX_SIZE); /* the driver's segment as loaded */
@@ -55,6 +55,7 @@ void ep_boot(ep_game *g, uint8_t video, uint8_t sound, uint8_t minute, uint8_t s
     g->wait = wait;
     g->frontend = frontend;
     g->protection = protection;
+    g->fixes = fixes;
     g->rng = ep_rng_init(); /* 0047 */
     ep_rng_seed(&g->rng, (uint8_t)(hundredths ^ second ^ minute));
     g->f.sound_mode = 5;                       /* 49b4 */
