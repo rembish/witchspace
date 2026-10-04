@@ -51,8 +51,8 @@ ee0d9a9d4b388f3af3ed6ec6aadd38a27823c1eee614af4bf378227e98364081  ADBLUE.MID
 
 - **Sound driver.** The second code segment `2270` (Ghidra `3270`) drives the MPU-401 (ports
   `330/331`, Roland LAPC1) and the AdLib (`388/389`). It is far-called; its entry
-  `2270:0000` saves all registers and loads DS = `0b00`. Most of its 12 KB is driver data
-  (only ~23% decodes as code reached from the game).
+  `2270:0000` saves all registers and loads DS = `0b00`. Much of its 12 KB is data: the
+  effects' programs, instruments and tables (see [The AdLib](#the-adlib-segment-2270)).
 
 ## Static analysis tooling
 
@@ -727,3 +727,38 @@ The flight loop (`a027`, top `a040`) calls, in order:
   - the title music restarts once its sequence ends (`4d8e`).
 - **Port.** Ported in `core/ep_sound.c`; the speaker's output for the frontend is
   `g->speaker` (divisor) and `g->speaker_on`.
+
+### The AdLib (segment `2270`)
+
+The driver has two independent parts: a MIDI player for the title music and a small
+interpreter for the effects in flight. Both write the OPL2 through `388h/389h`. The game
+calls a handful of far entries:
+
+| Entry | What it does | Called from |
+|-------|--------------|-------------|
+| `003b` | read the song (`31a`: `ADBLUE.MID`, a Roland's `BLUTEST.MID`) to `ds:be40` | start-up (`4f03`) |
+| `0000` | the title music on (`73f`); `ds:b5b7` 0 takes the Roland path | `4d21` |
+| `0045` | the music off (`7dc`) | `4d21`, `4d55`, `4ac0` |
+| `1819` | the game's timer interrupt back (5555h), the effects reset (`1930`) | `4d21` |
+| `17c6` | the effects' timer interrupt (`16c1`, 555h) | `4ac0` (into flight) |
+| `185a` | an effect queued (16 places at `cs:13de`) | `4c98` |
+| `008f`, `0116` | the Roland's music and effects (MPU-401, not ported) | `4ac0`, `4c98` |
+
+- **Music.** Its interrupt (`0df8`) runs at the song's rate (`0x123321 / (tempo * 96 / 60)`)
+  and steps through the MIDI events (`7ff`). It calls the game's clock (`4a50`) every 5555h
+  of its divisor, so the game keeps its 55 Hz.
+- **Effects.** The bank (`cs:0ea0`, 28 effects) holds programs. An effect's first word gives
+  its voice (0–9) and priority: a lower priority does not take a voice that is playing.
+  Programs are notes (a byte under 80h and a length) and commands (80h + n, the table at
+  `cs:263e`): loops, calls, jumps, instruments (`cs:26eb`), pitch sweeps, vibrato, volume
+  and speed. Each voice has a 43h-byte record at `cs:13ee`, stepped every 12th tick of
+  `16c1` at its own speed. Every 16th tick is the game's interrupt (`4a99`), so in flight the
+  game's clock runs at 1193182 / 5550h Hz, 0.03% faster than on the speaker.
+- **What the game uses.** 21 of the 52 command routines. Effect 10h starts effects
+  80h–82h, past the bank, and runs whatever their pointers land on; only the speaker is ever
+  sent 10h. The unused commands (detune, velocity, a register stepped through a table,
+  random lengths, the drum levels, voice 0's buzz) are ported but never run with this bank.
+- **Port.** `core/ep_adlib.c` (music) and `core/ep_adfx.c` (effects). The effects' state is
+  the driver segment's `cs:1390..168f` (`g->adlib.fx`); the rest of the segment is read from
+  the executable (`ep_drv_initial`). The chip's writes go to `g->opl` for the frontend.
+  `adlib_music` and `adlib_fx` in `re/emu/subtest.py` check them against the driver.

@@ -27,12 +27,12 @@ new SDL2 frontend. No original game files are included.
 The game is complete and playable: title, new game, every station screen and dialogue,
 flight (combat, the ship AI, scooping, docking, hyperspace and witchspace), the pause menu
 and options, saving and loading commanders, the PC speaker's music and effects, the AdLib's
-title music (its driver plays the original's `ADBLUE.MID` on an emulated OPL2), and keyboard,
-joystick and mouse controls. The copy protection is reconstructed too, but off unless asked
+music and effects (its driver plays the original's `ADBLUE.MID` and effect programs on an
+emulated OPL2), and keyboard, joystick and mouse controls. The copy protection is reconstructed too, but off unless asked
 for (`--protection`).
 
-Not done yet: the AdLib's sound effects in flight (silent for now), and the 16-colour EGA/VGA
-screen modes (the frontend shows the 256-colour MCGA mode). Two rare
+Not done yet: the Roland's music and effects (the AdLib's are done), and the 16-colour
+EGA/VGA screen modes (the frontend shows the 256-colour MCGA mode). Two rare
 edge cases still behave approximately; they are described in [re/FLIGHT.md](re/FLIGHT.md).
 
 ## Playing

@@ -92,7 +92,8 @@ after each tick, `g->speaker` is the PIT divisor and `g->speaker_on` says whethe
 With an AdLib (`f.sound_device` = 1) the core runs the original's music driver: after each
 tick, `g->opl[0 .. g->nopl)` are the writes it made to the OPL2 chip (register, value), in
 order. The frontend plays them on an emulated chip and sets `g->nopl` to 0. While the music
-plays, the timer runs at the song's rate (the driver keeps the game's clock at 55 Hz).
+plays, the timer runs at the song's rate; in flight, the effects' interrupt runs at 555h
+(about 874 Hz). Either way the driver keeps the game's clock at about 55 Hz.
 
 ## Loops
 
