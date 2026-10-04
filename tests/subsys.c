@@ -12,6 +12,7 @@
 #include "ep_commands.h"
 #include "ep_station.h"
 #include "ep_adlib.h"
+#include "ep_tables.h"
 #include "ep_sound.h"
 #include "ep_boot.h"
 #include "ep_title.h"
@@ -148,6 +149,14 @@ int main(int argc, char **argv)
         fclose(f);
         static ep_game g;
         state_load(&g, ds);
+        char side[1100]; /* IN.cs: the effects' state in the driver's segment (cs:1390..), if given */
+        snprintf(side, sizeof side, "%s.cs", argv[2]);
+        FILE *cs = fopen(side, "rb");
+        memcpy(g.adlib.fx, ep_drv_initial + EP_FX_CS, EP_FX_SIZE);
+        if (cs) {
+            if (fread(g.adlib.fx, 1, EP_FX_SIZE, cs) != EP_FX_SIZE) return 2;
+            fclose(cs);
+        }
         g.in.joy_present = g.in.mouse_present = ds[0xff40]; /* the devices, as subtest.py fakes them */
         g.in.joy_x = (uint16_t)(ds[0xff41] | ds[0xff42] << 8);
         g.in.joy_y = (uint16_t)(ds[0xff43] | ds[0xff44] << 8);
@@ -259,6 +268,27 @@ int main(int argc, char **argv)
             const ep_adlib *a = &g.adlib;
             printf("drv %d,%d,%d,%d,%d,%d\n", a->countdown, a->busy, a->divisor, a->clock_acc,
                    a->clock_acc_hi, a->bios_acc);
+        } else if (!strcmp(argv[1], "adlib_fx")) {
+            /* the effects installed (17c6); 32 times: ds:ff10 + 2k ticks, then effect ds:ff11 + 2k
+             * queued (185a); then 2000 ticks. The chip's writes after each tick. */
+            ep_adfx_install(&g);
+            for (int k = 0; k <= 32; k++) {
+                for (int t = k < 32 ? ds[0xff10 + 2 * k] : 2000; t >= 0; t--) {
+                    for (int n = 0; n < g.nopl; n++) printf("opl %d,%d\n", g.opl[n][0], g.opl[n][1]);
+                    g.nopl = 0;
+                    if (t) ep_adfx_tick(&g);
+                }
+                if (k < 32) ep_adfx_queue(&g, ds[0xff11 + 2 * k]);
+            }
+            printf("pit %d int8 %d\n", g.pit, g.int8);
+            uint8_t fx[EP_FX_SIZE]; /* as subtest.py's fx_lines: cs:13c1..13c8 left out */
+            memcpy(fx, g.adlib.fx, sizeof fx);
+            memset(fx + 0x13c1 - EP_FX_CS, 0, 8);
+            for (int k = 0; k < EP_FX_SIZE; k += 16) {
+                printf("cs %04x: ", EP_FX_CS + k);
+                for (int n = 0; n < 16; n++) printf("%02x", fx[k + n]);
+                printf("\n");
+            }
         } else if (!strcmp(argv[1], "key_event")) {
             for (int k = 0; k < 8; k++) ep_key_event(&g, ds[0xff10 + k]);
         } else if (!strcmp(argv[1], "define_keys") || !strcmp(argv[1], "joystick") ||
@@ -418,6 +448,12 @@ int main(int argc, char **argv)
         for (int k = 0; k < g.nevents; k++) printf("event %d:%d\n", g.event[k].kind, g.event[k].arg);
         for (int k = 0; k < nwritten; k++) printf("%s\n", written[k]);
         state_store(&g, ds);
+        if (cs) {
+            snprintf(side, sizeof side, "%s.cs", argv[3]);
+            cs = fopen(side, "wb");
+            if (!cs || fwrite(g.adlib.fx, 1, EP_FX_SIZE, cs) != EP_FX_SIZE) return 2;
+            fclose(cs);
+        }
     } else {
         fprintf(stderr, "usage: subsys mask OUT | subsys NAME IN OUT\n");
         return 2;

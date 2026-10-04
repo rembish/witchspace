@@ -1,8 +1,9 @@
-/* The title music on an AdLib, to a WAV file, to listen to.
- *   musicwav DATA SECONDS OUT.wav
+/* The title music on an AdLib, or its effects, to a WAV file, to listen to.
+ *   musicwav DATA SECONDS OUT.wav [fx]
  * The core started as the original starts with an AdLib (ADBLUE.MID read from DATA), the
- * music on, the timer ticked at 1193182 / its divisor Hz; the chip's writes played by Nuked
- * OPL3 at the sample each was made. */
+ * music on (or, with fx, flight's sound and every effect the game plays, one every 1.5 s), the
+ * timer ticked at 1193182 / its divisor Hz; the chip's writes played by Nuked OPL3 at the
+ * sample each was made. */
 #include "ep_adlib.h"
 #include "ep_boot.h"
 #include "ep_sound.h"
@@ -37,7 +38,8 @@ static void le(FILE *f, uint32_t v, int n)
 
 int main(int argc, char **argv)
 {
-    if (argc != 4) return 2;
+    if (argc != 4 && argc != 5) return 2;
+    int fx = argc == 5 && !strcmp(argv[4], "fx");
     data = argv[1];
     uint32_t samples = (uint32_t)(atof(argv[2]) * RATE);
     static ep_game g;
@@ -45,6 +47,11 @@ int main(int argc, char **argv)
     g.io = &io;
     ep_boot(&g, 2, 1, 0, 0, 0);
     ep_music_start(&g);
+    if (fx) ep_effects_on(&g); /* 4ac0 */
+    static const uint8_t played[] = { 1,    2,    3,    4,    5,    6,    7,    8,    9,
+                                      0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x11, 0x12, 0x13,
+                                      0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b };
+    unsigned next = 0;
     OPL3_Reset(&chip, RATE);
     FILE *f = fopen(argv[3], "wb");
     if (!f) return 2;
@@ -62,6 +69,10 @@ int main(int argc, char **argv)
     le(f, samples * 2, 4);
     double clocks = 0, peak = 0; /* the timer's input clock at the next tick */
     for (uint32_t s = 0; s < samples; s++) {
+        if (fx && s % (RATE * 3 / 2) == 0 && next < sizeof played) {
+            printf("%5.1f s: effect %02x\n", (double)s / RATE, played[next]);
+            ep_sound(&g, played[next++]);
+        }
         while (clocks <= s * (1193182.0 / RATE)) {
             for (int k = 0; k < g.nopl; k++) OPL3_WriteReg(&chip, g.opl[k][0], g.opl[k][1]);
             g.nopl = 0;

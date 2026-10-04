@@ -97,6 +97,7 @@ ROUTINES = {
     "protection_pick": (0x32B8, {}, {}),
     "timer": (0x4A50, {}, {}),
     "adlib_music": (0x14A8, {}, {}),
+    "adlib_fx": (0x14A8, {}, {}),
     "define_keys": (0x0674, {}, {}),
     "joystick": (0x0736, {}, {}),
     "mouse": (0x0779, {}, {}),
@@ -637,6 +638,30 @@ def adlib(img, rng=None):
     img[DS * 16 + 0x45E7] = 0
 
 
+def adlib_fx(img, rng=None):
+    """An AdLib; at ds:ff10, 32 times the ticks to wait and the effect to queue (of the bank's 28;
+    not 10h, which only the speaker is sent: it starts effects 80h..82h, past the bank, and runs
+    what their pointers land on)."""
+    adlib(img)
+    rng = random.Random(bytes(img[DS * 16:DS * 16 + 0x100]) + bytes(img[DS * 16 + 0x45DC:DS * 16 + 0x4600]))
+    ids = [n for n in range(28) if n != 0x10]
+    alone = rng.random() < 0.35  # each effect on its own, long enough to play out
+    order = rng.sample(ids, len(ids)) + rng.sample(ids, 5)
+    for k in range(32):
+        img[DS * 16 + 0xFF10 + 2 * k] = 255 if alone else rng.choice([0, 1, 3, 12, 24, 40, 100, 255, rng.randrange(256)])
+        img[DS * 16 + 0xFF11 + 2 * k] = order[k] if alone else rng.choice(ids)
+
+
+FX_CS = 0x1390  # the effects' state in the driver's segment, 300h bytes
+
+
+def fx_lines(mem):
+    """The effects' state as lines to compare (cs:13c1..13c8, the vectors kept, left out)."""
+    mem = bytearray(mem)
+    mem[0x13C1 - FX_CS:0x13C9 - FX_CS] = bytes(8)
+    return [f"cs {FX_CS + k:04x}: {mem[k:k + 16].hex()}" for k in range(0, len(mem), 16)]
+
+
 def speaker_world(img, rng):
     """The speaker part way through a sequence, a note, a pattern, a rest or a loop."""
     w = lambda a, v, n=1: img.__setitem__(slice(DS * 16 + a, DS * 16 + a + n), (v & (256 ** n - 1)).to_bytes(n, "little"))
@@ -1071,7 +1096,7 @@ FUZZ = {
 }
 
 
-PREPARE = {"adlib_music": adlib}  # applied to every state, fuzzed or not
+PREPARE = {"adlib_music": adlib, "adlib_fx": adlib_fx}  # applied to every state, fuzzed or not
 
 
 def fuzz(image, rng):
@@ -1458,6 +1483,29 @@ def run_original(image, addr, regs, exits=None):
                 sounds.append(f"pit {pit[-2] | pit[-1] << 8}")
             cs = lambda o, n=2: int.from_bytes(e.mu.mem_read(drv + o, n), "little")
             sounds.append(f"drv {cs(0xDA7)},{cs(0xDA9, 1)},{cs(0xDAA)},{cs(0xDAC)},{cs(0xDAE)},{cs(0xDB0)}")
+        elif NAME == "adlib_fx":  # the effects installed (17c6), the schedule at ds:ff10, 2000 ticks more
+            drv = (LOAD + 0x2270) * 16
+            seg = (LOAD + 0x2270).to_bytes(2, "little")
+            e.mu.mem_write(CS * 16 + 0x14A8, b"\x9a\xc6\x17" + seg + b"\xc3")  # lcall 17c6
+            e.mu.mem_write(CS * 16 + 0x14B0, b"\x9c\x9a\xc1\x16" + seg + b"\xc3")  # pushf; lcall 16c1
+            e.mu.mem_write(CS * 16 + 0x14B8, b"\x9a\x5a\x18" + seg + b"\xc3")  # lcall 185a (AL)
+            e.mu.hook_add(UC_HOOK_CODE, lambda mu, ad, sz, u: mu.reg_write(UC_X86_REG_IP, 0x4ABF),  # no BIOS
+                          begin=CS * 16 + 0x4AB4, end=CS * 16 + 0x4AB4)
+            e.call(0x14A8)
+            for k in range(33):
+                for _ in range(image[DS * 16 + 0xFF10 + 2 * k] if k < 32 else 2000):
+                    e.call(0x14B0)
+                if k < 32:
+                    e.call(0x14B8, ax=image[DS * 16 + 0xFF11 + 2 * k])
+            reg = None
+            for port, v in e.ports:
+                if port == 0x388:
+                    reg = v
+                elif port == 0x389:
+                    sounds.append(f"opl {reg},{v}")
+            pit = [v for p, v in e.ports if p == 0x40]
+            sounds.append(f"pit {pit[-2] | pit[-1] << 8} int8 2")
+            sounds.extend(fx_lines(e.mu.mem_read(drv + FX_CS, 0x300)))
         elif NAME == "key_event":  # the interrupt for each of 8 bytes from port 60h (ds:ff10); its iret a ret
             e.hook(0x0274, lambda e, r: None)
             for k in range(8):
@@ -1518,6 +1566,8 @@ def main():
             want_prims = [l for l in want_prims if l != "end"]
         inf, outf = os.path.join(tmp, "in"), os.path.join(tmp, "out")
         open(inf, "wb").write(before)
+        if NAME == "adlib_fx":  # the driver's segment's part the core keeps outside the data segment
+            open(inf + ".cs", "wb").write(image[(LOAD + 0x2270) * 16 + FX_CS:(LOAD + 0x2270) * 16 + FX_CS + 0x300])
         out = subprocess.run([TOOL, NAME, inf, outf], capture_output=True, text=True, check=True).stdout
         got, got_prims = open(outf, "rb").read(), out.splitlines()
         if NAME in ("commands",):  # drawing is checked per screen; here state and events
