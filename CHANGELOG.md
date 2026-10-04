@@ -6,6 +6,11 @@ Each release's section is also its GitHub release's notes.
 
 ## [Unreleased]
 
+- **Two bugs of 1991, mended.** Players reported both in the 1990s; the reconstruction
+  explains them and Witchspace now mends them: the hold lost a tonne of room for good with
+  every Alien Item scooped and sold (and a loaded commander's hold is counted again), and the
+  docking computer flew through the station when it started from behind it. `--original`
+  plays them as they were.
 - **Commanders in the browser.** The web page imports saved games (`.CDR` files, or a zip of
   them: George Hooper's saves for each of the missions, for one) and exports yours as a zip;
   files dropped on the game while it plays are imported too.

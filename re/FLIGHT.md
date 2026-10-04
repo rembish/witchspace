@@ -230,6 +230,10 @@ Findings:
     near −z. The original, run in the emulator frame by frame with the station 12000 away:
     from (0,0,−1) it flies into the station and dies; from the side or the front it docks.
     The core does the same.
+  - **Mended** unless `--original` (`EP_FIX_DOCKING`): when the straight line passes within
+    800 of the station's centre, the computer first flies to a point 2000 beside the station
+    on the ship's side, level with its centre, then on as before. 3000 of 3000 random
+    directions dock (at 13000 and at 3000), and from 800 straight behind.
 - **`find_nearest`** (5fe1) would keep the caller's BP if no system qualified. That cannot
   happen in play:
   - Zoomed, a system must lie in the window around the chart's centre (±13h, ±10h). The

@@ -726,7 +726,10 @@ The flight loop (`a027`, top `a040`) calls, in order:
   Thargoids, in witchspace and their missions), and three of his mission saves carry
   `839c` = 1 with an empty hold. Checked in the emulator (the original's sell at `9781` on
   Alien Items leaves `839c` as it was) and in the core, which keeps it (`ep_trade.c`,
-  `ep_world.c`): six sold, then 29 tonnes fit.
+  `ep_world.c`): six sold, then 29 tonnes fit. **Mended** unless `--original`
+  (`EP_FIX_HOLD`): Alien Items count as tonnes when bought and sold too, and a loaded
+  commander's tonnes are counted again from the hold (not while mission 1's refugees fill
+  it).
 - **Equipment** (`932f`):
   - Fuel (row 0; mission 1 refuses with `8dad`; ≥ fbh refuses with `adaa`): a full tank
     costs `((255 − fuel)·7 · price) >> 8`; otherwise it buys what the low word of the cash

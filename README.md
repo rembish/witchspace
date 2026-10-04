@@ -110,9 +110,17 @@ explains trading, combat, the ship's equipment and the missions.
 | `--saves DIR` | where commanders are saved (default: beside the game's files, as the original did) |
 | `--speaker` | the PC speaker instead of the AdLib |
 | `--protection` | ask the original's copy-protection question (off by default): a word from the novella *Imprint* that came with the game. Ian Bell's [Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps the novella (`b1022010.zip`) and the release's list of the answers (`PRTCODES.TXT` in `b1022000.zip`; a few of its entries have slips, see `re/NOTES.md`) |
+| `--original` | the original's gameplay bugs as they were in 1991 (see below) |
 | `--theme FILE` | an MP3 the title plays instead of its own music (see below) |
 | `--no-theme` | the title's own music even when a theme is there |
 | `--version` | print the version |
+
+**Two bugs of 1991, mended.** Players reported them in the 1990s and the reconstruction
+explains them (`re/NOTES.md`, `re/FLIGHT.md`): the hold lost a tonne of room for good with
+every Alien Item scooped and sold, and the docking computer flew through the station when it
+started from behind it. Witchspace mends both (a loaded commander's hold is counted again);
+`--original` plays them as they were. The comparisons with the original always run the
+original's behaviour.
 
 **The Elite theme at the title.** Ian Bell's
 [Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps recordings of the Elite
