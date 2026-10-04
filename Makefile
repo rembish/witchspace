@@ -37,7 +37,7 @@ test: build ## The checks outside the emulator (skipped without original/)
 CLIPS ?= clips
 # each scene: a video with sound, and a 6-second looping preview (the GIF keeps the game's own
 # 256 colours exactly) starting this many seconds in
-CLIP_PREVIEW = title:13 launch:1 screens:2 docking:8 hyperspace:7
+CLIP_PREVIEW = title:13 launch:1 screens:2 docking:8 hyperspace:7 combat:1
 clips: build ## Short videos and previews of scripted scenes into clips/ (from original/; needs ffmpeg)
 	mkdir -p $(CLIPS)
 	./$(BUILD)/ep_clips original $(CLIPS)

@@ -3,7 +3,7 @@
  * the AdLib's sound played by Nuked OPL3.
  *   ep_clips DATA OUTDIR [SCENE...]
  * writes OUTDIR/SCENE.rgb (320 x 200 RGB frames, 30 a second) and OUTDIR/SCENE.wav (44100 Hz
- * mono) for each scene: title, launch, screens, docking, hyperspace (all by default).
+ * mono) for each scene: title, launch, screens, docking, hyperspace, combat (all by default).
  * `make clips` turns them into video (ffmpeg); see the Makefile. */
 #include "ep_adlib.h"
 #include "ep_boot.h"
@@ -12,6 +12,9 @@
 #include "ep_sound.h"
 #include "ep_station.h"
 #include "ep_tables.h"
+#include "ep_commander.h"
+#include "ep_objects.h"
+#include "ep_ships.h"
 #include "ep_title.h"
 #include "grf.h"
 #include "opl3.h"
@@ -275,13 +278,88 @@ static void scene_hyperspace(void)
     fly(300);
 }
 
+/* the pirate's camera position now (on screen or not): its position turned the player's way */
+static void camera_of(const ep_object *o, int16_t c[3])
+{
+    for (int k = 0; k < 3; k++)
+        c[k] = (int16_t)(o->b[EP_OBJ_POS + 2 * k] | o->b[EP_OBJ_POS + 2 * k + 1] << 8);
+    ep_rotate_by_player(&g.space, c);
+}
+
+/* a pirate is alive while its slot is active and still a pirate's (class 5) */
+static int pirate_alive(const ep_object *o) { return (o->b[EP_OBJ_FLAGS] & 1) && o->b[0x33] == 5; }
+
+/* A fight. The start is staged: out past the station, a beam laser in front, and a pirate Cobra
+ * Mk III (spawn entry 22) 5000 ahead, facing us, set up as the spawner does (spawn_common,
+ * spawn_pirate: 7c59). From there it is the game: the pirate's AI, both lasers, the damage, the
+ * explosion. A simple pilot rolls and pitches toward it and fires once it is close enough to
+ * see; the clip ends a few seconds after it blows up. */
+static void scene_combat(void)
+{
+    launch(0);
+    hold_key(0x50, 1); /* climbing away from the planet, out past the station */
+    fly(50);
+    hold_key(0x50, 0);
+    fly(60);
+    g.cmdr.b[EP_CMDR_LASER_TYPES] = (uint8_t)((g.cmdr.b[EP_CMDR_LASER_TYPES] & ~3) | 1); /* a beam laser */
+    ep_object *p = ep_claim_slot(&g);
+    if (!p) return;
+    ep_ship_init(p, 22);
+    int16_t v[3]; /* straight ahead: the camera rotation's inverse (its transpose) on (0, 0, 5000) */
+    for (int k = 0; k < 3; k++) {
+        int16_t e[3] = { 0, 0, 0 };
+        e[k] = 10000;
+        ep_rotate_by_player(&g.space, e);
+        v[k] = (int16_t)(e[2] / 2);
+    }
+    for (int k = 0; k < 3; k++) {
+        p->b[EP_OBJ_POS + 2 * k] = (uint8_t)v[k];
+        p->b[EP_OBJ_POS + 2 * k + 1] = (uint8_t)((uint16_t)v[k] >> 8);
+        p->b[EP_OBJ_POS_HI + k] = v[k] < 0 ? 0xff : 0;
+    }
+    uint16_t a, c;
+    ep_aim(&g, (int16_t)-v[0], (int16_t)-v[1], (int16_t)-v[2], &a, &c); /* facing us */
+    p->b[0x0a] = (uint8_t)a;
+    p->b[0x0b] = (uint8_t)(a >> 8);
+    p->b[0x0c] = (uint8_t)c;
+    p->b[0x0d] = (uint8_t)(c >> 8);
+    p->b[0x33] = 5;    /* a pirate */
+    p->b[0x30] = 0x30; /* its aggression */
+    ep_ship_velocity(&g, p);
+
+    start_recording();
+    static const uint8_t keys[5] = { 0x4b, 0x4d, 0x48, 0x50, 0x39 }; /* roll left, right, dive, climb, fire */
+    int after = -1;
+    for (int t = 0; t < 1200 && after != 0; t++, after -= after > 0) {
+        int want[5] = { 0 }, alive = pirate_alive(p);
+        if (alive) {
+            int16_t cam[3];
+            camera_of(p, cam);
+            int x = cam[0], y = cam[1], z = cam[2], ax = abs(x), ay = abs(y);
+            if (z <= 0) {
+                want[3] = 1; /* behind: climb over toward it */
+            } else {
+                /* roll it onto the vertical, then pitch it into the sights (held while far off,
+                 * pulsed near, against the turn's momentum); fire when close and lined up */
+                if (ax > z / 12 && ax > ay / 6) want[(x > 0) == (y > 0) ? 0 : 1] = 1;
+                if (ay > z / 6 && (ay > z / 2 || t % 3 == 0)) want[y > 0 ? 3 : 2] = 1;
+                want[4] = z < 1800 && ax < z / 4 && ay < z / 4;
+            }
+        }
+        for (int k = 0; k < 5; k++) hold_key(keys[k], want[k]);
+        if (fly(1) != EP_FRAME_NEXT) break;
+        if (alive && !pirate_alive(p) && after < 0) after = 150; /* the explosion, then the end */
+    }
+    for (int k = 0; k < 5; k++) hold_key(keys[k], 0);
+}
+
 static const struct {
     const char *name;
     void (*play)(void);
     double last; /* seconds: only the scene's end is kept (0: all of it; < 0: from start_recording) */
 } scenes[] = {
     { "title", scene_title, 0 },      { "launch", scene_launch, 0 },          { "screens", scene_screens, 0 },
-    { "docking", scene_docking, 16 }, { "hyperspace", scene_hyperspace, -1 },
+    { "docking", scene_docking, 16 }, { "hyperspace", scene_hyperspace, -1 }, { "combat", scene_combat, -1 },
 };
 
 static void le(FILE *f, uint32_t v, int n)
@@ -345,7 +423,7 @@ static int run(const char *dir, int k)
 int main(int argc, char **argv)
 {
     if (argc < 3) {
-        fprintf(stderr, "usage: ep_clips DATA OUTDIR [title|launch|screens|docking|hyperspace...]\n");
+        fprintf(stderr, "usage: ep_clips DATA OUTDIR [title|launch|screens|docking|hyperspace|combat...]\n");
         return 2;
     }
     data = argv[1];
