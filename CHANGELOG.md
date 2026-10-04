@@ -4,6 +4,18 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [0.1.4] — 2026-10-04
+
+- **An icon.** A green wireframe ship, made for Witchspace, for the program, its window and
+  taskbar, and the web page's tab.
+- **Windows: no console window.** Started from Explorer, the game no longer opens a console
+  window beside its own. If it cannot start (no `ELITE.EXE` beside it), a message box says
+  why; from a console it still writes there.
+- **For developers: the Windows version tested on Windows.** From WSL, `make wintest`
+  cross-builds it and runs the tests, a save's replacement and the game itself on Windows;
+  `make windifftest` holds the Windows build to the original routine by routine
+  (`docs/windows-testing.md`).
+
 ## [0.1.3] — 2026-10-04
 
 - **Windows: game folders with non-ASCII names.** A copy of the game under, say,
@@ -91,6 +103,7 @@ desktop and in the browser.
 
 Not planned: the Roland LAPC-1's music and effects, and the 16-colour EGA/VGA screen modes.
 
+[0.1.4]: https://github.com/rembish/witchspace/releases/tag/v0.1.4
 [0.1.3]: https://github.com/rembish/witchspace/releases/tag/v0.1.3
 [0.1.2]: https://github.com/rembish/witchspace/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rembish/witchspace/releases/tag/v0.1.1
