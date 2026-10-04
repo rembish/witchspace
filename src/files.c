@@ -82,7 +82,8 @@ static int write_file(void *ctx, const char *name, const uint8_t *bytes, int len
     int n = (int)fwrite(bytes, 1, (size_t)len, f);
     fclose(f);
 #ifdef __EMSCRIPTEN__
-    EM_ASM(FS.syncfs(false, function(err){})); /* the commander kept in the browser's storage */
+    emscripten_run_script(
+        "FS.syncfs(false, function(err) {})"); /* the commander kept in the browser's storage */
 #endif
     return n;
 }

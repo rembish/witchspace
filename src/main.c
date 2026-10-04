@@ -10,6 +10,7 @@
  *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default)
+ *   --version      print the version and stop
  *   --shots DIR    every 25th picture shown saved as a PPM file in DIR, for checking */
 #include "audio.h"
 #include "files.h"
@@ -466,7 +467,10 @@ int main(int argc, char **argv)
             data = argv[++k];
         else if (!strcmp(argv[k], "--saves") && k + 1 < argc)
             saves = argv[++k];
-        else if (!strcmp(argv[k], "--protection"))
+        else if (!strcmp(argv[k], "--version")) {
+            printf("Witchspace %s\n", WS_VERSION);
+            return 0;
+        } else if (!strcmp(argv[k], "--protection"))
             protection = 1;
         else if (!strcmp(argv[k], "--speaker"))
             adlib = 0;

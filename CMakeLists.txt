@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(witchspace C)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION WS_VERSION LIMIT_COUNT 1) # the one place it is set
+project(witchspace VERSION ${WS_VERSION} LANGUAGES C)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -47,6 +48,7 @@ add_library(opl3 STATIC third_party/nuked-opl3/opl3.c)
 target_include_directories(opl3 PUBLIC third_party/nuked-opl3)
 add_executable(witchspace src/main.c src/screen.c src/grf.c src/audio.c src/files.c)
 target_link_libraries(witchspace PRIVATE epcore opl3)
+target_compile_definitions(witchspace PRIVATE WS_VERSION="${WS_VERSION}")
 if(EMSCRIPTEN)
   # The web build (web/shell.html): the page gets the game's files first, then calls main.
   # ASYNCIFY lets the frontend's waits (SDL_Delay) give the browser its turn; IDBFS keeps
@@ -55,11 +57,25 @@ if(EMSCRIPTEN)
   target_compile_options(witchspace PRIVATE ${SDL_FLAGS})
   target_link_options(witchspace PRIVATE ${SDL_FLAGS} -sASYNCIFY -sALLOW_MEMORY_GROWTH=1 -sINVOKE_RUN=0
     -sEXIT_RUNTIME=0 -sFORCE_FILESYSTEM=1 -lidbfs.js "-sEXPORTED_RUNTIME_METHODS=['callMain','FS','IDBFS']"
-    --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+    --shell-file ${CMAKE_CURRENT_BINARY_DIR}/shell.html)
+  configure_file(web/shell.html shell.html @ONLY) # with the version filled in
   set_target_properties(witchspace PROPERTIES SUFFIX ".html")
 else()
-  find_package(SDL2 REQUIRED)
-  target_link_libraries(witchspace PRIVATE SDL2::SDL2)
+  option(WS_VENDOR_SDL "Build SDL2 from source and link it statically (for redistributable binaries)" OFF)
+  if(WS_VENDOR_SDL)
+    include(FetchContent)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    set(SDL2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(SDL2
+      URL https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.tar.gz)
+    FetchContent_MakeAvailable(SDL2)
+    target_link_libraries(witchspace PRIVATE SDL2::SDL2-static)
+  else()
+    find_package(SDL2 REQUIRED)
+    target_link_libraries(witchspace PRIVATE SDL2::SDL2)
+  endif()
   if(TARGET SDL2::SDL2main)
     target_link_libraries(witchspace PRIVATE SDL2::SDL2main)
   endif()
