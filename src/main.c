@@ -309,8 +309,8 @@ static void present(void)
     screen_rgba(rgba);
     if (shots && presents++ % 25 == 0) shot();
     SDL_UpdateTexture(tex, NULL, rgba, SCREEN_W * 4);
-    int w, h;
-    SDL_GetRendererOutputSize(ren, &w, &h);
+    int w = 0, h = 0;
+    if (SDL_GetRendererOutputSize(ren, &w, &h) != 0) SDL_GetWindowSize(win, &w, &h);
     SDL_Rect dst; /* 320 x 200 shown 4:3, as on the monitors of the time */
     if (w * 3 > h * 4) {
         dst.h = h;
@@ -355,10 +355,10 @@ static void pace(void)
 static void time_of_day(uint8_t t[4])
 {
     time_t now = time(NULL);
-    struct tm *tm = localtime(&now);
-    t[0] = (uint8_t)tm->tm_hour;
-    t[1] = (uint8_t)tm->tm_min;
-    t[2] = (uint8_t)tm->tm_sec;
+    struct tm *tm = localtime(&now); /* NULL if the clock cannot be read: midnight */
+    t[0] = (uint8_t)(tm ? tm->tm_hour : 0);
+    t[1] = (uint8_t)(tm ? tm->tm_min : 0);
+    t[2] = (uint8_t)(tm ? tm->tm_sec : 0);
     t[3] = (uint8_t)(SDL_GetTicks() / 10 % 100);
 }
 
@@ -591,9 +591,13 @@ int main(int argc, char **argv)
     if (r) return fail("%s: %s\n", path, ep_data_error(r));
     files_find(data, "ELITE.GRF", path, sizeof path);
     uint8_t *grf = files_slurp(path, &n);
-    if (grf) ep_data_grf(grf, n);
+    /* the core's widths and the screen's pictures from the same file, or neither */
+    int pictures = grf && !ep_data_grf(grf, n) && grf_load(path);
     free(grf);
-    if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
+    if (!pictures) {
+        memset(ep_sprite_width, 0, sizeof ep_sprite_width);
+        fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
+    }
     if (files_init(saves, data) != 0) {
         return fail("%s: the folder's name is too long\n", strlen(saves) >= strlen(data) ? saves : data);
     }
