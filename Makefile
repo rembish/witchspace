@@ -5,11 +5,12 @@ BUILD     ?= build
 BUILD_WEB ?= build-web
 EMSDK_ENV ?= $(HOME)/tools/emsdk/emsdk_env.sh
 UV        ?= uv
+BUILD_WIN ?= build-win
 C_FILES    = core/*.c core/*.h src/*.c src/*.h tests/*.c
 
 VERSION   := $(shell cat VERSION)
 
-.PHONY: help version-check build web run test clips difftest difftest-run format format-check data-check py-sync py-format py-check check
+.PHONY: help version-check build web run test clips difftest difftest-run windows wintest windifftest format format-check data-check py-sync py-format py-check check
 
 help: ## This list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
@@ -64,12 +65,22 @@ data-check: build ## The core's loader against an independent extraction of the 
 
 difftest: build difftest-run ## Every reconstructed routine against the original (about an hour); fails if any differs
 
+windows: ## The Windows version and test tools, cross-built with MinGW-w64 (build-win/)
+	cmake -S . -B $(BUILD_WIN) -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake -DWS_VENDOR_SDL=ON -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(BUILD_WIN) -j
+
+wintest: windows ## From WSL: the Windows build's tests, and the game, run on Windows
+	tests/wintest.sh $(BUILD_WIN)
+
+windifftest: wintest ## From WSL: every routine against the original, with the Windows build
+	$(MAKE) difftest-run SUBSYS=$(CURDIR)/$(BUILD_WIN)/ep_subsys-wsl
+
 difftest-run: # the comparisons themselves (tests/difftest_runner.sh checks that failures fail)
 	@cd re/emu || exit 1; \
 	names=$$($(UV) run subtest.py --list) || { echo "difftest: could not list the routines"; exit 1; }; \
 	[ -n "$$names" ] || { echo "difftest: no routines listed"; exit 1; }; \
 	failed=""; for t in $$names; do \
-		out=$$($(UV) run subtest.py $$t --fuzz 2 --show 2 2>&1); status=$$?; \
+		out=$$($(UV) run subtest.py $$t $(if $(SUBSYS),'corpus/*.bin' $(SUBSYS)) --fuzz 2 --show 2 2>&1); status=$$?; \
 		echo "$$out" | tail -1; [ $$status = 0 ] || failed="$$failed $$t"; done; \
 	if [ -n "$$failed" ]; then echo "difftest FAILED:$$failed"; exit 1; else echo "difftest: all passed"; fi
 

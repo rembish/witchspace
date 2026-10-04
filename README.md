@@ -140,7 +140,7 @@ never to happen in play.
 | `web/` | The browser page around the Emscripten build |
 | `tests/` | Small programs the differential tests drive; `ep_flow`; `ep_datadump` |
 | `re/` | Reverse engineering: notes, tools (`re/tools`), the emulator harness (`re/emu`) |
-| `docs/` | How a frontend uses the core |
+| `docs/` | How a frontend uses the core; testing the Windows version |
 | `third_party/` | Nuked OPL3, the AdLib's chip |
 
 Everyday commands are in the Makefile (`make help`):
@@ -150,13 +150,15 @@ make build        # the game and the test tools, warnings as errors
 make web          # the browser version (needs Emscripten)
 make check        # formatting, Python lint and types, the tests, the data check
 make difftest     # every reconstructed routine against the original (about an hour)
+make wintest      # from WSL: the Windows build's tests, run on Windows (docs/windows-testing.md)
 make clips        # the videos and previews above, from your copy (needs ffmpeg)
 ```
 
 The tools in `re/` are Python 3.12, typed and checked with ruff and mypy; `uv sync --extra dev`
 makes their environment. They need your copy of the game in `original/` (git-ignored, never
 distributed). CI checks everything that does not need the game: the build with gcc and
-clang, the web build, formatting, and the Python tooling.
+clang, the Windows build as released, the web build, formatting, and the Python tooling.
+Testing the Windows version from WSL: [docs/windows-testing.md](docs/windows-testing.md).
 
 The notes on the original:
 

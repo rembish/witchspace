@@ -109,10 +109,8 @@ target_include_directories(ep_badinput PRIVATE src)
 add_executable(ep_screencheck tests/screencheck.c src/screen.c src/grf.c) # pixels the renderer puts down
 target_link_libraries(ep_screencheck PRIVATE epcore)
 target_include_directories(ep_screencheck PRIVATE src)
-if(NOT WIN32) # POSIX folders and permissions; the Windows replacement is the same call's other branch
-  add_executable(ep_savecheck tests/savecheck.c src/files.c) # saves keep the old commander on failure
-  target_include_directories(ep_savecheck PRIVATE src core)
-endif()
+add_executable(ep_savecheck tests/savecheck.c src/files.c) # saves keep the old commander on failure
+target_include_directories(ep_savecheck PRIVATE src core)
 add_executable(ep_edgecheck tests/edgecheck.c) # edge cases from a code audit, kept fixed
 target_link_libraries(ep_edgecheck PRIVATE epcore)
 add_executable(ep_flow tests/flow.c)
@@ -122,8 +120,8 @@ add_test(NAME flow COMMAND ep_flow)
 add_test(NAME badinput COMMAND ep_badinput)
 add_test(NAME screencheck COMMAND ep_screencheck)
 add_test(NAME edgecheck COMMAND ep_edgecheck)
+add_test(NAME savecheck COMMAND ep_savecheck ${CMAKE_CURRENT_BINARY_DIR}/savecheck.tmpdir)
 if(NOT WIN32)
-  add_test(NAME savecheck COMMAND ep_savecheck ${CMAKE_CURRENT_BINARY_DIR}/savecheck.tmpdir)
   # make difftest fails when a comparison fails or the routines cannot be listed (a fake uv)
   add_test(NAME difftest_runner COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/difftest_runner.sh
            ${CMAKE_CURRENT_SOURCE_DIR})

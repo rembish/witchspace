@@ -1,7 +1,8 @@
 /* Saving a commander through the frontend's files (src/files.c) keeps the old one whenever the
  * new one cannot be put in place, and leaves no temporary file: a fresh save, a replacement, a
  * replacement that cannot happen (a folder where the file should be), and a folder that cannot
- * be written. Needs no game files.
+ * be written (not on Windows). Needs no game files. The replacement is rename() on POSIX and
+ * MoveFileExA on Windows (src/files.c): this checks both.
  *   ep_savecheck [scratch folder] */
 #include "files.h"
 
@@ -9,7 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir(d, mode) _mkdir(d)
+#define rmdir          _rmdir
+#else
 #include <unistd.h>
+#endif
 
 static int failures;
 static char dir[1024], p[1100], tmp[1110];
@@ -69,7 +76,9 @@ int main(int argc, char **argv)
     expect(!exists(tmp), "a failed replacement leaves no temporary file");
     rmdir(p);
 
-    /* a folder that cannot be written (not as root, which may write anyway) */
+    /* a folder that cannot be written (not as root, which may write anyway; Windows has no
+       read-only folders, its attribute is the shell's) */
+#ifndef _WIN32
     if (geteuid() != 0) {
         chmod(dir, 0555);
         snprintf(p, sizeof p, "%s/JAMESON.CDR", dir);
@@ -77,6 +86,7 @@ int main(int argc, char **argv)
         expect(contents(p, got, sizeof got) == 6 && !strcmp(got, "second"), "the old commander is kept");
         chmod(dir, 0755);
     }
+#endif
 
     snprintf(p, sizeof p, "%s/JAMESON.CDR", dir);
     remove(p);
