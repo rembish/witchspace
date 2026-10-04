@@ -458,8 +458,49 @@ static void station_seen(ep_game *g, int ahead, int16_t p[3])
     const ep_object *o = &g->space.obj[2];
     for (int k = 0; k < 3; k++)
         p[k] = (int16_t)(o->b[EP_OBJ_POS + 2 * k] | o->b[EP_OBJ_POS + 2 * k + 1] << 8);
-    if (ahead) p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
+    if (ahead && g->f.ap_detour) /* EP_FIX_DOCKING: first beside the station */
+        for (int k = 0; k < 3; k++) p[k] = (int16_t)(p[k] + g->f.ap_aside[k]);
+    else if (ahead)
+        p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
     ep_rotate_by_player(&g->space, p);
+}
+
+/* EP_FIX_DOCKING: the original flies straight to the point 2000 in front of the slot (+z), so
+ * from behind the station it flies through it (re/FLIGHT.md). When that line passes within
+ * 800 of the station's centre (its box is 275 each way), the docking computer first goes to a
+ * point 2000 beside the station on the ship's side, level with its centre, then on as before. */
+static void ap_plan_detour(ep_game *g)
+{
+    ep_flight *f = &g->f;
+    const ep_object *st = &g->space.obj[2];
+    f->ap_detour = 0;
+    if (!(g->fixes & EP_FIX_DOCKING)) return;
+    int64_t s[3], p[3];
+    for (int k = 0; k < 3; k++)
+        s[k] = (int16_t)(st->b[EP_OBJ_POS + 2 * k] | st->b[EP_OBJ_POS + 2 * k + 1] << 8);
+    p[0] = s[0], p[1] = s[1], p[2] = s[2] + 0x7d0;
+    /* the point of the line from the ship (0) to p nearest the station, as t/pp of the way */
+    int64_t sp = s[0] * p[0] + s[1] * p[1] + s[2] * p[2], pp = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
+    if (pp <= 0) return;
+    if (sp < 0) sp = 0;
+    if (sp > pp) sp = pp;
+    int64_t d2 = 0;
+    for (int k = 0; k < 3; k++) {
+        int64_t d = s[k] - p[k] * sp / pp;
+        d2 += d * d;
+    }
+    if (d2 >= 800 * 800) return;
+    /* beside it: from the station towards the ship, across its axis */
+    int64_t ax = -s[0], ay = -s[1], sq = ax * ax + ay * ay, len = sq, next = (sq + 1) / 2;
+    while (next < len) { /* the integer square root, by Newton's steps down to it */
+        len = next;
+        next = (len + sq / len) / 2;
+    }
+    if (!len) ax = 1, ay = 0, len = 1;
+    f->ap_aside[0] = (int16_t)(2000 * ax / len);
+    f->ap_aside[1] = (int16_t)(2000 * ay / len);
+    f->ap_aside[2] = 0;
+    f->ap_detour = 1;
 }
 
 /* abbe, then the roll that puts the station straight above or below (a815, a9c6) */
@@ -535,6 +576,7 @@ static void autopilot(ep_game *g)
         }
         f->autopilot_step = 1;
         f->ap_passes = 0;
+        ap_plan_detour(g);
         return;
     case 1:
         ap_choose_roll(g, 1);
@@ -558,7 +600,10 @@ static void autopilot(ep_game *g)
         int16_t p[3];
         for (int k = 0; k < 3; k++)
             p[k] = (int16_t)(st->b[EP_OBJ_POS + 2 * k] | st->b[EP_OBJ_POS + 2 * k + 1] << 8);
-        p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
+        if (f->ap_detour)
+            for (int k = 0; k < 3; k++) p[k] = (int16_t)(p[k] + f->ap_aside[k]);
+        else
+            p[2] = (int16_t)(uint16_t)((uint16_t)p[2] + 0x7d0);
         uint16_t m = magnitude(p[0], p[1], p[2]);
         ap_speed_up_or_down(f, m >= 0x15e);
         uint16_t q = (uint16_t)(f->speed ? m / f->speed : 0);
@@ -567,8 +612,13 @@ static void autopilot(ep_game *g)
             f->moved = 1;
             for (int k = 0; k < 3; k++) f->velocity[k] = p[k];
             ep_player_move(g);
-            f->autopilot_step = 5;
             f->ap_passes = 0;
+            if (f->ap_detour) { /* beside the station: now to the point in front of the slot */
+                f->ap_detour = 0;
+                f->autopilot_step = 1;
+                return;
+            }
+            f->autopilot_step = 5;
             return;
         }
         if (!q) q = 1; /* the original's divide error (closer than one step): re/FLIGHT.md */
