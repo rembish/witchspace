@@ -1,6 +1,6 @@
 /* Run one reconstructed subsystem on a state from the original, for re/emu/subtest.py.
- *   subsys mask OUT            write the mask of data-segment bytes the core models
- *   subsys NAME IN OUT         load IN (64 KB data segment), run NAME, store into OUT;
+ *   ep_subsys mask OUT         write the mask of data-segment bytes the core models
+ *   ep_subsys NAME IN OUT      load IN (64 KB data segment), run NAME, store into OUT;
  *                              primitives drawn go to stdout, one per line */
 #include "statemap.h"
 

@@ -1,5 +1,7 @@
 /* Checks of the core's flow that the difftests cannot reach (the original's timer does not
- * run under the emulator): the title's waits end by the clock as well as by a key. */
+ * run under the emulator): the title's waits end by the clock as well as by a key, and
+ * defining keys waits for a key held from before to be let go. Run by ctest (ep_flow); prints
+ * each failed check and exits 1. */
 #include "ep_sound.h"
 #include "ep_station.h"
 #include "ep_title.h"

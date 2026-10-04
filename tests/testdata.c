@@ -1,6 +1,6 @@
 /* The test tools' copy of the original's tables, loaded before main: ELITE.EXE and ELITE.GRF
  * from $EP_ORIGINAL (default: the source tree's original/). Without them a tool exits 77
- * (skipped). */
+ * (skipped). Linked into every test tool, so their mains find the tables loaded. */
 #include "ep_tables.h"
 
 #include <stdio.h>

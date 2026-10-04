@@ -1,5 +1,5 @@
 /* The title music on an AdLib, or its effects, to a WAV file, to listen to.
- *   musicwav DATA SECONDS OUT.wav [fx]
+ *   ep_musicwav DATA SECONDS OUT.wav [fx]
  * The core started as the original starts with an AdLib (ADBLUE.MID read from DATA), the
  * music on (or, with fx, flight's sound and every effect the game plays, one every 1.5 s), the
  * timer ticked at 1193182 / its divisor Hz; the chip's writes played by Nuked OPL3 at the

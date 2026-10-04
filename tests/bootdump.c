@@ -1,5 +1,5 @@
 /* Start the core as the original starts, for re/emu/boottest.py.
- *   bootdump VIDEO SOUND MINUTE SECOND HUNDREDTHS WORD OUT
+ *   ep_bootdump VIDEO SOUND MINUTE SECOND HUNDREDTHS WORD OUT
  * writes the data segment as the core models it (the protection's question answered with
  * WORD; the music read from EP_ORIGINAL) */
 #include "ep_boot.h"

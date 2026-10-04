@@ -1,5 +1,5 @@
 /* Drive the core from the title through a new game to the launch, for re/emu/flowtest.py.
- *   flowdump FRAMES HOUR MINUTE SECOND HUNDREDTHS IN OUT
+ *   ep_flowdump FRAMES HOUR MINUTE SECOND HUNDREDTHS IN OUT
  * IN: the data segment at the title's first frame. Space comes in title frame FRAMES, F1 at the
  * status screen's first pass. Writes the data segment as the core models it to OUT. */
 #include "ep_commands.h"
