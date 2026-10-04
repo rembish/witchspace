@@ -19,3 +19,6 @@ __pycache__/
 assets-local/
 re/ghidra/entries.txt
 re/emu/corpus/
+
+# Python environment (uv sync)
+.venv/
