@@ -26,8 +26,10 @@ not in this repository).
 **[rembish.github.io/witchspace](https://rembish.github.io/witchspace/)**
 
 The page asks where the game's three files should come from: your own copy, or the copy
-preserved by the [Internet Archive](https://archive.org/details/b1022001), which it downloads
-for you once you agree. The files stay in your browser for the next visit.
+preserved by the [Internet Archive](https://archive.org/details/b1022001) (a mirror of the
+one on [Ian Bell's Elite pages](http://www.iancgbell.clara.net/elite/pc/index.htm), Elite's
+co-author's), which it downloads for you once you agree. The files stay in your browser for
+the next visit.
 
 ## Play on your computer
 
@@ -40,12 +42,15 @@ for you once you agree. The files stay in your browser for the next visit.
    | `ADBLUE.MID` | the AdLib's title music |
 
    Upper or lower case both work; the other files of the original are not needed. To check
-   your copy (`sha256sum`), two copies of `ELITE.EXE` are known to work; they differ only in
-   how the copy protection was patched out:
+   your copy (`sha256sum`), three copies of `ELITE.EXE` are known to work: the game as sold,
+   and two with the copy protection patched out (they differ only there). Ian Bell's
+   [Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps the first two
+   (`b1022000.zip`, `b1022001.zip`):
 
    ```
-   6d7e748345f31e41cd8c90fc739a2c23fed32a277fc9b3e530f5d6c6bae86ef5  ELITE.EXE
-   9c257f53909c8335cfd240c8be6d94128361fe8906ef781de774d3434a959668  ELITE.EXE  (the Internet Archive's)
+   237b1be342c5dba6565fbd17c851595f605005d69873436daeefaf4d221fee43  ELITE.EXE  (as sold)
+   9c257f53909c8335cfd240c8be6d94128361fe8906ef781de774d3434a959668  ELITE.EXE  (patched; the Internet Archive's)
+   6d7e748345f31e41cd8c90fc739a2c23fed32a277fc9b3e530f5d6c6bae86ef5  ELITE.EXE  (patched)
    900fb787f5e7ed905e6931f1b522085a88a538b4e61396aed4ba329e05593b22  ELITE.GRF
    ee0d9a9d4b388f3af3ed6ec6aadd38a27823c1eee614af4bf378227e98364081  ADBLUE.MID
    ```
