@@ -67,6 +67,7 @@ Primitives (`core/ep_render.h`) are what the original draws, never pixels:
 | `TRI`, `QUAD` | 3 or 4 corners, filled, game colour | the 3D view (304 x 124 at 8, 9) |
 | `LINE`, `CLIPPED_LINE` | end point first | the 3D view |
 | `PIXEL` | one point | the 3D view |
+| `DUST` | one point; `colour` is the particle's own (0..15), not a game colour | the 3D view |
 | `SPANS` | the first span and how many, in `g->circles` (a sun, planet, ring or chart circle) | the 3D view |
 | `SPRITE` | the picture (`colour`), x, y | the screen |
 | `TEXT` | x, y, colour, shadowed; the bytes: 1 then a colour, 2 then x and y words | the screen |
@@ -77,6 +78,8 @@ Colours, glyphs and pictures:
 
 - Game colours go through the video mode's table (`ep_mcga_colour`). Colour 16h flashes
   through 86h + `f.flash`.
+- A dust particle's colour does not: its low three bits pick a raw MCGA pixel from the dust
+  routine's own table (`ds:2656`, at 2989).
 - Text colours go through `ds:20e9`, their shadows through `ds:20fe`.
 - Glyphs are at `ds:0d40` (`ep_ds_initial`): 8 rows of bits and a width each.
 - Pictures are in your own `ELITE.GRF`.
