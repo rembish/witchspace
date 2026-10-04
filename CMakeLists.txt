@@ -63,6 +63,8 @@ add_executable(ep_bootdump tests/bootdump.c)
 target_link_libraries(ep_bootdump PRIVATE epcore)
 add_executable(ep_flowdump tests/flowdump.c)
 target_link_libraries(ep_flowdump PRIVATE epcore)
+add_executable(ep_datadump tests/datadump.c)
+target_link_libraries(ep_datadump PRIVATE epcore)
 add_executable(ep_flow tests/flow.c)
 target_link_libraries(ep_flow PRIVATE epcore)
 enable_testing()
@@ -71,3 +73,14 @@ add_test(NAME flow COMMAND ep_flow)
 add_executable(ep_subsys tests/subsys.c tests/statemap.c)
 target_link_libraries(ep_subsys PRIVATE epcore)
 target_include_directories(ep_subsys PRIVATE tests)
+
+# The test tools read the original's tables from your copy (tests/testdata.c; EP_ORIGINAL
+# overrides the folder); without it they exit 77, which ctest counts as skipped.
+add_library(eptestdata OBJECT tests/testdata.c)
+target_link_libraries(eptestdata PRIVATE epcore)
+target_compile_definitions(eptestdata PRIVATE EP_SOURCE_ORIGINAL="${CMAKE_CURRENT_SOURCE_DIR}/original")
+foreach(t ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump ep_planetdump
+          ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_bootdump ep_flowdump ep_flow ep_subsys)
+  target_sources(${t} PRIVATE $<TARGET_OBJECTS:eptestdata>)
+endforeach()
+set_tests_properties(flow PROPERTIES SKIP_RETURN_CODE 77)
