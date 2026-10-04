@@ -1,12 +1,13 @@
-/* Elite Plus port: SDL2 frontend. The core plays the game; this keeps its clock (the timer the
+/* Witchspace: the SDL2 frontend. The core plays the game; this keeps its clock (the timer the
  * original programs: 1193182 Hz over the divisor the core sets, 5555h, or the music's),
  * feeds it the keyboard as PC scancodes, shows what it draws on a 320 x 200 MCGA screen,
  * sounds the PC speaker or the AdLib, and goes from one of the core's loops to the next as
  * their results say (title, station screens, flight, pause, dialogues).
  *
- * usage: eliteplus [--data DIR] [--saves DIR] [--speaker] [--protection]
- *   --data DIR     where ELITE.GRF and ADBLUE.MID are (your own copy; default original/)
- *   --saves DIR    where commanders are saved (default .)
+ * usage: witchspace [--data DIR] [--saves DIR] [--speaker] [--protection]
+ *   --data DIR     where your copy of the game is: ELITE.EXE, ELITE.GRF, ADBLUE.MID (default:
+ *                  this program's folder, then the current one, then original/)
+ *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default) */
 #include "audio.h"
@@ -20,11 +21,13 @@
 #include "ep_frame.h"
 #include "ep_sound.h"
 #include "ep_station.h"
+#include "ep_tables.h"
 #include "ep_title.h"
 #include "ep_travel.h"
 
 #include <SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -442,7 +445,7 @@ static void step(void)
 
 int main(int argc, char **argv)
 {
-    const char *data = "original", *saves = ".";
+    const char *data = NULL, *saves = NULL;
     int protection = 0, adlib = 1;
     for (int k = 1; k < argc; k++) {
         if (!strcmp(argv[k], "--data") && k + 1 < argc)
@@ -456,8 +459,41 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[k], "--shots") && k + 1 < argc)
             shots = argv[++k];
     }
-    char path[1100];
-    snprintf(path, sizeof path, "%s/ELITE.GRF", data);
+    /* your copy of the game: --data, or the folder this program is in, the current one, or
+     * original/ (where the sources keep it) */
+    char path[1100], here[1024] = ".";
+    char *base = SDL_GetBasePath();
+    if (base) {
+        snprintf(here, sizeof here, "%s", base);
+        SDL_free(base);
+    }
+    const char *look[3] = { here, ".", "original" };
+    for (int k = 0; !data && k < 3; k++)
+        if (files_find(look[k], "ELITE.EXE", path, sizeof path)) data = look[k];
+    if (!data || !files_find(data, "ELITE.EXE", path, sizeof path)) {
+        fprintf(stderr,
+                "Witchspace needs your copy of Elite Plus: ELITE.EXE was not found in %s.\n"
+                "Put this program in the game's folder, or give it with --data DIR.\n",
+                data ? data : "this program's folder, the current one or original/");
+        return 1;
+    }
+    if (!saves) saves = data; /* the commanders beside the game, as the original kept them */
+    size_t n;
+    uint8_t *exe = files_slurp(path, &n); /* the game's tables */
+    if (!exe) {
+        fprintf(stderr, "%s: cannot be read\n", path);
+        return 1;
+    }
+    int r = ep_data_load(exe, n);
+    free(exe);
+    if (r) {
+        fprintf(stderr, "%s: %s\n", path, ep_data_error(r));
+        return 1;
+    }
+    files_find(data, "ELITE.GRF", path, sizeof path);
+    uint8_t *grf = files_slurp(path, &n);
+    if (grf) ep_data_grf(grf, n);
+    free(grf);
     if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
     files_init(saves, data);
 
@@ -466,7 +502,7 @@ int main(int argc, char **argv)
         return 1;
     }
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
-    win = SDL_CreateWindow("Elite Plus", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
+    win = SDL_CreateWindow("Witchspace", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
                            SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     ren = win ? SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
     tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_W,

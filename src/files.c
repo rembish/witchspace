@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static char base[1024] = ".", data[1024] = "original";
@@ -27,15 +28,40 @@ static int exists(void *ctx, const char *name)
     return 1;
 }
 
+int files_find(const char *dir, const char *name, char *out, size_t n)
+{
+    snprintf(out, n, "%s/%s", dir, name);
+    FILE *f = fopen(out, "rb");
+    if (f) {
+        fclose(f);
+        return 1;
+    }
+    DIR *d = opendir(dir);
+    if (!d) return 0;
+    int found = 0;
+    struct dirent *e;
+    while (!found && (e = readdir(d))) {
+        const char *a = e->d_name, *b = name;
+        while (*a && *b && toupper((unsigned char)*a) == toupper((unsigned char)*b)) a++, b++;
+        if (!*a && !*b) {
+            snprintf(out, n, "%s/%s", dir, e->d_name);
+            found = 1;
+        }
+    }
+    closedir(d);
+    return found;
+}
+
 static int read_file(void *ctx, const char *name, uint8_t *buf, int max)
 {
     (void)ctx;
     char p[1100];
     size_t len = strlen(name);
-    if (len > 4 && !strcmp(name + len - 4, ".MID")) /* the music: with the game's files */
-        snprintf(p, sizeof p, "%s/%s", data, name);
-    else
+    if (len > 4 && !strcmp(name + len - 4, ".MID")) { /* the music: with the game's files */
+        if (!files_find(data, name, p, sizeof p)) return -1;
+    } else {
         path(p, sizeof p, name);
+    }
     FILE *f = fopen(p, "rb");
     if (!f) return -1;
     int n = (int)fread(buf, 1, (size_t)max, f);
@@ -77,3 +103,20 @@ static int list(void *ctx, char names[][13], int max)
 }
 
 const ep_io files_io = { NULL, exists, read_file, write_file, list };
+
+uint8_t *files_slurp(const char *path, size_t *len)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *d = n > 0 ? malloc((size_t)n) : NULL;
+    if (d && fread(d, 1, (size_t)n, f) != (size_t)n) {
+        free(d);
+        d = NULL;
+    }
+    fclose(f);
+    *len = d ? (size_t)n : 0;
+    return d;
+}
