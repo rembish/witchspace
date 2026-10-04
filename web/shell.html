@@ -86,6 +86,7 @@
   var ARCHIVE = 'https://archive.org/download/b1022001/b1022001.zip/';
   var NEEDED = ['ELITE.EXE', 'ELITE.GRF', 'ADBLUE.MID'];
   var $ = function (id) { return document.getElementById(id); };
+  var errors = []; // the game's messages, shown if it stops
 
   function status(text, error) {
     $('status').textContent = text || '';
@@ -114,6 +115,7 @@
   function have(name) { try { FS.stat('/game/' + name); return true; } catch (e) { return false; } }
 
   function start() {
+    errors = [];
     document.body.className = 'playing';
     Module.canvas.focus();
     Module.callMain(['--data', '/game', '--saves', '/saves']);
@@ -128,8 +130,14 @@
   var Module = {
     canvas: $('canvas'),
     print: function (t) { console.log(t); },
-    // the game's own messages (a missing or unknown file) shown on the page
-    printErr: function (t) { console.warn(t); document.body.className = ''; status(t, true); },
+    // the game's own messages: a warning while it plays (no sound, no pictures) as a toast;
+    // those it stops for (a missing or unknown file) on the page, when it says it failed
+    printErr: function (t) {
+      console.warn(t);
+      errors.push(t);
+      if (document.body.className === 'playing') toast(t);
+    },
+    failed: function () { document.body.className = ''; status(errors.join(' '), true); },
     saveFailed: function (err) { toast('The commander was saved, but this browser would not keep it (' + err + '): it is gone when the page closes.'); },
     setStatus: function (t) { if (t) status(t); },
     onRuntimeInitialized: function () {

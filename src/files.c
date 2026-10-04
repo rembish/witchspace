@@ -15,10 +15,12 @@
 
 static char base[1024] = ".", data[1024] = "original";
 
-void files_init(const char *dir, const char *data_dir)
+int files_init(const char *dir, const char *data_dir)
 {
+    if (strlen(dir) >= sizeof base || strlen(data_dir) >= sizeof data) return -1; /* not cut short */
     snprintf(base, sizeof base, "%s", dir);
     snprintf(data, sizeof data, "%s", data_dir);
+    return 0;
 }
 
 static void path(char *out, size_t n, const char *name) { snprintf(out, n, "%s/%s", base, name); }
@@ -36,7 +38,7 @@ static int exists(void *ctx, const char *name)
 
 int files_find(const char *dir, const char *name, char *out, size_t n)
 {
-    snprintf(out, n, "%s/%s", dir, name);
+    if ((size_t)snprintf(out, n, "%s/%s", dir, name) >= n) return 0; /* too long: not found */
     FILE *f = fopen(out, "rb");
     if (f) {
         fclose(f);

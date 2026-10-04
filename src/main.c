@@ -181,6 +181,10 @@ static int fullscreen;
 
 static void devices(void)
 {
+    if (pad && !SDL_GameControllerGetAttached(pad)) { /* unplugged: another, or the same plugged back */
+        SDL_GameControllerClose(pad);
+        pad = NULL;
+    }
     if (!pad)
         for (int k = 0; k < SDL_NumJoysticks() && !pad; k++)
             if (SDL_IsGameController(k)) pad = SDL_GameControllerOpen(k);
@@ -458,6 +462,16 @@ static void step(void)
     }
 }
 
+/* the program cannot go on (the message is out): in the browser the page shows it, with the
+ * game's files to give again (web/shell.html) */
+static int fail(void)
+{
+#ifdef __EMSCRIPTEN__
+    emscripten_run_script("Module.failed && Module.failed()");
+#endif
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     const char *data = NULL, *saves = NULL;
@@ -482,7 +496,7 @@ int main(int argc, char **argv)
     char path[1100], here[1024] = ".";
     char *base = SDL_GetBasePath();
     if (base) {
-        snprintf(here, sizeof here, "%s", base);
+        if (strlen(base) < sizeof here) memcpy(here, base, strlen(base) + 1); /* too long: not looked in */
         SDL_free(base);
     }
     const char *look[3] = { here, ".", "original" };
@@ -493,31 +507,34 @@ int main(int argc, char **argv)
                 "Witchspace needs your copy of Elite Plus: ELITE.EXE was not found in %s.\n"
                 "Put this program in the game's folder, or give it with --data DIR.\n",
                 data ? data : "this program's folder, the current one or original/");
-        return 1;
+        return fail();
     }
     if (!saves) saves = data; /* the commanders beside the game, as the original kept them */
     size_t n;
     uint8_t *exe = files_slurp(path, &n); /* the game's tables */
     if (!exe) {
         fprintf(stderr, "%s: cannot be read\n", path);
-        return 1;
+        return fail();
     }
     int r = ep_data_load(exe, n);
     free(exe);
     if (r) {
         fprintf(stderr, "%s: %s\n", path, ep_data_error(r));
-        return 1;
+        return fail();
     }
     files_find(data, "ELITE.GRF", path, sizeof path);
     uint8_t *grf = files_slurp(path, &n);
     if (grf) ep_data_grf(grf, n);
     free(grf);
     if (!grf_load(path)) fprintf(stderr, "no %s: the pictures are left out (see --data)\n", path);
-    files_init(saves, data);
+    if (files_init(saves, data) != 0) {
+        fprintf(stderr, "%s: the folder's name is too long\n", strlen(saves) >= strlen(data) ? saves : data);
+        return fail();
+    }
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-        return 1;
+        return fail();
     }
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     win = SDL_CreateWindow("Witchspace", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
@@ -528,7 +545,7 @@ int main(int argc, char **argv)
               : NULL;
     if (!tex) {
         fprintf(stderr, "SDL: %s\n", SDL_GetError());
-        return 1;
+        return fail();
     }
     audio_init();
     screen_init();
