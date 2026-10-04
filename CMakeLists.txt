@@ -115,6 +115,9 @@ add_test(NAME badinput COMMAND ep_badinput)
 add_test(NAME screencheck COMMAND ep_screencheck)
 if(NOT WIN32)
   add_test(NAME savecheck COMMAND ep_savecheck ${CMAKE_CURRENT_BINARY_DIR}/savecheck.tmpdir)
+  # make difftest fails when a comparison fails or the routines cannot be listed (a fake uv)
+  add_test(NAME difftest_runner COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/difftest_runner.sh
+           ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 add_executable(ep_subsys tests/subsys.c tests/statemap.c)
