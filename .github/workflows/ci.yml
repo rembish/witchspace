@@ -1,0 +1,73 @@
+# What can be checked without the original game: the build (warnings are errors), the web
+# build, formatting, and the Python tooling's lint and types. The differential tests need
+# your copy of Elite Plus, so they run locally (see README); here the test tools that need
+# it exit 77 and ctest counts them as skipped.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - name: Build (warnings are errors)
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          cmake -S . -B build -DWS_WERROR=ON
+          cmake --build build -j
+      - name: Tests that need no game files
+        run: ctest --test-dir build --output-on-failure
+      - name: Smoke test (no game files)
+        run: |
+          # without ELITE.EXE the game says what it needs and exits 1
+          set +e
+          ./build/witchspace --data /nonexistent 2> err.txt
+          code=$?
+          set -e
+          cat err.txt
+          test "$code" = 1 && grep -q "ELITE.EXE" err.txt
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Build (Emscripten)
+        run: |
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j --target witchspace
+
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format 21 (the version the code is formatted with)
+        run: |
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && sudo bash llvm.sh 21 && rm llvm.sh
+          sudo apt-get install -y clang-format-21
+      - name: clang-format
+        run: clang-format-21 --dry-run --Werror core/*.c core/*.h src/*.c src/*.h tests/*.c
+
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Environment
+        run: uv sync --extra dev
+      - name: Format
+        run: uv run ruff format --check re
+      - name: Lint
+        run: uv run ruff check re
+      - name: Types
+        run: uv run mypy

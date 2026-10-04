@@ -1,0 +1,47 @@
+# The browser version on GitHub Pages: the Emscripten build and its page (web/shell.html).
+# It contains none of the original game: the page fetches the player's files (from the
+# Internet Archive's copy, after the player agrees, or from their own copy) in the browser.
+name: Web build (GitHub Pages)
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Build
+        run: |
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j --target witchspace
+      - name: Assemble the site
+        run: |
+          mkdir -p site
+          cp build-web/witchspace.html site/index.html
+          cp build-web/witchspace.js build-web/witchspace.wasm site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

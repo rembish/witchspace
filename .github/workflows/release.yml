@@ -1,0 +1,124 @@
+# Binaries for Linux, Windows and macOS (SDL linked in), and the web build as a zip. Every
+# push to master makes them downloadable (Actions -> the run -> Artifacts); a tag like v0.1.0
+# publishes them as a GitHub release, with that version's section of CHANGELOG.md as its
+# notes. None of them contains the original game: each needs your copy beside it.
+name: Release
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04   # an older glibc, so the binary runs on more distributions
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL's build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+            libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libasound2-dev libpulse-dev \
+            libdbus-1-dev libudev-dev libdecor-0-dev
+      - name: Build
+        run: |
+          cmake -S . -B build -DWS_VENDOR_SDL=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j --target witchspace
+      - name: Package
+        run: |
+          mkdir -p dist/witchspace && cp build/witchspace README.md LICENSE CHANGELOG.md dist/witchspace/
+          tar -C dist -czf witchspace-linux-x64.tar.gz witchspace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witchspace-linux-x64
+          path: witchspace-linux-x64.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja zip
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DWS_VENDOR_SDL=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target witchspace
+      - name: Package
+        run: |
+          mkdir -p dist/witchspace && cp build/witchspace.exe README.md LICENSE CHANGELOG.md dist/witchspace/
+          (cd dist && zip -r ../witchspace-windows-x64.zip witchspace)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witchspace-windows-x64
+          path: witchspace-windows-x64.zip
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (universal: arm64 and x86_64)
+        run: |
+          cmake -S . -B build -DWS_VENDOR_SDL=ON -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build -j --target witchspace
+      - name: Package
+        run: |
+          codesign --force --sign - build/witchspace
+          mkdir -p dist/witchspace && cp build/witchspace README.md LICENSE CHANGELOG.md dist/witchspace/
+          (cd dist && zip -r ../witchspace-macos-universal.zip witchspace)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witchspace-macos-universal
+          path: witchspace-macos-universal.zip
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Build
+        run: |
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j --target witchspace
+      - name: Package
+        run: |
+          mkdir -p witchspace-web
+          cp build-web/witchspace.html witchspace-web/index.html
+          cp build-web/witchspace.js build-web/witchspace.wasm witchspace-web/
+          zip -r witchspace-web.zip witchspace-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: witchspace-web
+          path: witchspace-web.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos, web]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag is VERSION; the notes are its CHANGELOG section
+        run: |
+          version=$(cat VERSION)
+          test "${GITHUB_REF_NAME}" = "v${version}" || { echo "tag ${GITHUB_REF_NAME} is not v${version}"; exit 1; }
+          awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on && !/^\[/' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section for ${version}"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: notes.md
