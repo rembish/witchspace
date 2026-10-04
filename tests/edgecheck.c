@@ -90,7 +90,8 @@ static void save_name(void)
     CHECK(!memcmp(cargo, &g.cmdr.b[EP_CMDR_CARGO], sizeof cargo));
 }
 
-/* a tech level of ffh offers nothing: the list's cursor stays put and buying does nothing */
+/* a tech level of ffh offers nothing, and the list's cursor runs on past its end (as the
+ * original's does): buying there does nothing (it wrote past the commander) */
 static void empty_equipment(void)
 {
     docked();
@@ -101,20 +102,18 @@ static void empty_equipment(void)
     ep_equipment_screen(&g);
     for (int k = 0; k < 40; k++) idle_key(0x50);
     idle_key(0xff);
-    CHECK(g.f.menu[1] <= g.f.list_count);
+    CHECK(g.f.list_count == 0 && g.f.list_row >= 17);
     ep_commander before = g.cmdr;
     idle_key(0x9f);
     idle_key(0xff);
     CHECK(!memcmp(&before, &g.cmdr, sizeof before));
 }
 
-/* the rating past its last threshold (60000 kills) is Elite, and 65535 ends */
+/* the rating for 65535 kills: no word in the segment is above it, and the walk ends */
 static void rating(void)
 {
     docked();
-    uint16_t elite = ep_rating_text(&g, 59999);
-    CHECK(ep_rating_text(&g, 60000) == ep_rating_text(&g, 0xea60) && ep_rating_text(&g, 0xffff) == elite);
-    CHECK(elite != ep_rating_text(&g, 0));
+    ep_rating_text(&g, 0xffff);
 }
 
 /* a text with no end (a commander's cash text, all letters) is cut short and ends */
@@ -130,7 +129,8 @@ static void endless_text(void)
     ep_equipment_screen(&g); /* the cash line: out of bounds before */
 }
 
-/* a government past 7 picks the spawn tables' rows as 0..7 do */
+/* a government past 7 reads the spawn tables' entries from the data segment beyond them, as
+ * the original does, not past the core's arrays (the sanitizers check) */
 static void government(void)
 {
     docked();
@@ -138,7 +138,7 @@ static void government(void)
     g.f.approach = 1;
     ep_flight_start(&g);
     for (int k = 0; k < 50; k++) ep_ai_frame(&g);
-    CHECK(g.f.spawn_row < 8 * 4 && g.f.spawn_gov8 < 8 * 8);
+    CHECK(g.f.spawn_row == 0xff * 4); /* the rows past the tables were read */
 }
 
 /* the music with no song, or one with no time in it: the timer goes on (the title's clock runs

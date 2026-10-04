@@ -92,12 +92,14 @@ static void frame_kind(ep_game *g, uint8_t kind)
 
 uint16_t ep_rating_text(const ep_game *g, uint16_t kills)
 {
+    /* past the last threshold (60000) the walk goes on through what follows, as the original's
+       does, to a word above the kills; for 65535 there is none: stopped after the whole segment */
     uint16_t at = 0x8ead;
     int k = -1;
     do {
         at = (uint16_t)(at + 2);
         k++;
-    } while (k < 8 && kills >= ep_ds_word(g, at)); /* past the last, Elite's, 60000: still Elite */
+    } while (k < 0x8000 && kills >= ep_ds_word(g, at));
     return ep_ds_word(g, (uint16_t)(0x8ec1 + 2 * k));
 }
 
@@ -681,7 +683,7 @@ uint8_t ep_list_poll(ep_game *g, int mode)
         row--;
         key = 0xff;
     }
-    if (key == 0x50 && row + 1 < m[0]) { /* not past the last row (an empty list has none) */
+    if (key == 0x50 && row != (uint8_t)(m[0] - 1)) {
         row++;
         key = 0xff;
     }
@@ -1102,7 +1104,9 @@ int ep_equipment_buy(ep_game *g)
     ep_flight *f = &g->f;
     uint8_t *c = g->cmdr.b;
     int row = f->list_row;
-    if (row == 0xff || row >= f->list_count) return EP_WAIT_NONE;
+    /* a row past the prices' table (an empty list's cursor, from a commander's tech level of
+       ffh, runs on): nothing; the rows below it are bought as the original does */
+    if (row == 0xff || 2 * row + 1 >= (int)(sizeof f->prices / sizeof f->prices[0])) return EP_WAIT_NONE;
     if (row == 0) { /* fuel */
         if (f->mission == 1) {
             box_note(g, 0x8dad);
@@ -1185,7 +1189,8 @@ int ep_equipment_sell(ep_game *g)
 {
     ep_flight *f = &g->f;
     int row = f->list_row;
-    if (row == 0xff || row >= f->list_count || !*owned(g, row)) return EP_WAIT_NONE;
+    if (row == 0xff || 2 * row + 1 >= (int)(sizeof f->prices / sizeof f->prices[0]) || !*owned(g, row))
+        return EP_WAIT_NONE;
     if (row == 2 && g->cmdr.b[EP_CMDR_CARGO_USED] > 0x14) {
         box_note(g, 0x8d6a);
         return EP_WAIT_NONE;

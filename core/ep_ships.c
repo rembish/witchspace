@@ -4,6 +4,7 @@
 
 #include "ep_sound.h"
 #include "ep_combat.h"
+#include "ep_dsmap.h"
 #include "ep_tables.h"
 
 #include <string.h>
@@ -1026,6 +1027,19 @@ static void ai_loner(ep_game *g, ep_object *o)
     move(g, o);
 }
 
+/* the spawn tables' entries by government (ds:886f, ds:8899). A government is 0..7, but a
+ * commander's file can say more: past the tables the entries are whatever the data segment
+ * holds there, as the original reads them */
+static uint8_t spawn_limit(const ep_game *g, unsigned at)
+{
+    return at < 8 * 4 ? (&ep_spawn_limit[0][0])[at] : ep_ds_byte(g, (uint16_t)(0x886f + at));
+}
+
+static uint16_t spawn_chance(const ep_game *g, unsigned at)
+{
+    return at < 8 * 4 ? (&ep_spawn_chance[0][0])[at] : ep_ds_word(g, (uint16_t)(0x8899 + 2 * at));
+}
+
 /* with the jump drive on, a spawn chance 32 times higher, as the speed is (a768) */
 static uint16_t jump(const ep_game *g, uint16_t p) { return (uint16_t)(g->f.jump_speed ? p << 5 : p); }
 
@@ -1093,12 +1107,15 @@ void ep_ai_frame(ep_game *g)
     mission4(g);
     mission5(g);
     mission6(g);
-    /* a government is 0..7; a commander's file could say more (masked, as the prices do) */
-    uint8_t gov = g->cmdr.b[EP_CMDR_CURRENT + EP_SYSREC_GOVERNMENT] & 7;
+    uint8_t gov = g->cmdr.b[EP_CMDR_CURRENT + EP_SYSREC_GOVERNMENT];
     f->spawn_gov8 = (uint16_t)(gov * 8);
-    f->spawn_row = (uint16_t)((f->danger_gov & 7) * 4);
-    const uint8_t *limit = &ep_spawn_limit[0][0] + f->spawn_row;
-    const uint16_t *chance = &ep_spawn_chance[0][0] + f->spawn_gov8 / 2;
+    f->spawn_row = (uint16_t)(f->danger_gov * 4);
+    uint8_t limit[4];
+    uint16_t chance[4];
+    for (unsigned k = 0; k < 4; k++) {
+        limit[k] = spawn_limit(g, f->spawn_row + k);
+        chance[k] = spawn_chance(g, f->spawn_gov8 / 2 + k);
+    }
     if (!f->hyperspace) {
         uint8_t thr = (uint8_t)(limit[0] + (g->cmdr.b[EP_CMDR_EQUIPMENT + 11] == 1));
         if (f->class_count[4] < thr && rng(g) < jump(g, chance[0])) {
