@@ -19,6 +19,26 @@ How to read the addresses:
 Symbol names live in `ghidra/names.txt`. Items marked **[verify]** still need a check
 (emulator or DOSBox-X).
 
+## Checked against the manual
+
+The original's manual (MicroProse, 1991; scanned at the Internet Archive as
+`Elite_Plus_Manual`, read with OCR) agrees with what the reconstruction found:
+
+- **Keys.** Dive/climb keypad 8/2, roll keypad 4/6 (Num Lock off; on, the number keys select
+  icons), speed `>`/`<`, fire Space: the defaults in `ds:b251..b25d`. Icons are F1..F12 or
+  1..9, 0, `-`, `=`.
+- **The start.** The sound choice P/A/R at start-up; Jameson at Lave with 100 Cr, 7.0 light
+  years of fuel, three missiles, a front pulse laser, a 20-tonne hold.
+- **Equipment.** All fourteen items' tech levels and prices match `ds:8bef` (ECM 2 / 600 Cr,
+  docking computers 9 / 1500 Cr, galactic hyperdrive 10 / 5000 Cr, military laser 10 / 6000 Cr).
+- **Trade.** Slaves, narcotics and firearms are the illegal goods (the third byte of each
+  commodity's tech record).
+- **Docking.** Without a docking computer the station docks you for 50 Cr (`ep_pay(g, 1f4h)`
+  in tenths); the docking computer plays no music (the BBC original's Blue Danube is not
+  in Elite Plus).
+- **The galactic hyperdrive.** From galaxy eight it returns to galaxy one. The manual does
+  not mention the rare jump to a ninth galaxy (`7439`).
+
 ## The original
 
 ```
@@ -230,7 +250,7 @@ the quantities are random.
   3. `100h`;
   4. the base price (`ds:927f`);
   5. `100h + a + b·min(tech, 9)` from `ds:92a1` (3 bytes per commodity: a and b signed;
-     the third byte is 1 for Slaves, Narcotics and Firearms, presumably illegal).
+     the third byte is 1 for Slaves, Narcotics and Firearms, which the manual marks illegal).
 
   a and b are 0 in the shipped data, so tech does not change prices **[verify]** that
   nothing writes them. The result, in tenths of a credit, goes to `ds:8d0a + 4k`, and the
