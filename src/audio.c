@@ -6,14 +6,15 @@
 #include "opl3.h"
 
 #include <SDL.h>
+#include <stdio.h>
 
 #define RATE    44100
 #define LATENCY (RATE / 20) /* the chip's writes play this long after they were made */
 #define QUEUE   16384
 
 static SDL_AudioDeviceID dev;
-static volatile uint16_t divisor;
-static volatile int on;
+static uint16_t divisor; /* the speaker: set under the device's lock, read in the callback */
+static int on;
 static double phase;
 
 static opl3_chip chip;
@@ -29,7 +30,7 @@ static void fill(void *u, Uint8 *stream, int len)
     (void)u;
     int16_t *s = (int16_t *)stream;
     int n = len / 2;
-    double hz = divisor ? 1193182.0 / divisor : 0;
+    double hz = divisor ? 1193182.0 / divisor : 0; /* SDL holds the lock around the callback */
     for (int i = 0; i < n; i++, played++) {
         while (head != tail && queue[head].at <= played) {
             OPL3_WriteReg(&chip, queue[head].reg, queue[head].val);
@@ -50,7 +51,10 @@ static void fill(void *u, Uint8 *stream, int len)
 void audio_init(void)
 {
     OPL3_Reset(&chip, RATE);
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) return;
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        fprintf(stderr, "no sound: %s\n", SDL_GetError());
+        return;
+    }
     SDL_AudioSpec want, have;
     SDL_zero(want);
     want.freq = RATE;
@@ -59,13 +63,19 @@ void audio_init(void)
     want.samples = 512;
     want.callback = fill;
     dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    if (dev) SDL_PauseAudioDevice(dev, 0);
+    if (dev)
+        SDL_PauseAudioDevice(dev, 0);
+    else
+        fprintf(stderr, "no sound: %s\n", SDL_GetError());
 }
 
 void audio_speaker(uint16_t d, int o)
 {
+    if (d == divisor && o == on) return; /* as often as the timer ticks: lock only on a change */
+    if (dev) SDL_LockAudioDevice(dev);
     divisor = d;
     on = o;
+    if (dev) SDL_UnlockAudioDevice(dev);
 }
 
 void audio_opl(const uint8_t (*writes)[2], int n, double ago)
