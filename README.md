@@ -175,8 +175,8 @@ The notes on the original:
 ## License
 
 Witchspace is free software under the [BSD 3-Clause License](LICENSE). It includes Nuked
-OPL3 by Nuke.YKT (`third_party/nuked-opl3`, LGPL-2.1 or later) and, in the release binaries,
-SDL2 (zlib); see [THIRD_PARTY.md](THIRD_PARTY.md), which also says how to relink with your own
+OPL3 by Nuke.YKT (`third_party/nuked-opl3`, LGPL-2.1 or later), in the release binaries
+SDL2 (zlib), and in the web version Emscripten's runtime and musl (MIT); see [THIRD_PARTY.md](THIRD_PARTY.md), which also says how to relink with your own
 Nuked OPL3.
 
 Elite © 1984 David Braben and Ian Bell. Elite Plus © 1991 Chris Sawyer, Realtime Software,

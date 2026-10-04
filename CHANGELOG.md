@@ -22,11 +22,12 @@ Fixes from an outside review (Codex): safer file handling, a fidelity fix, and s
 - **No undefined arithmetic.** The dust's steering shifted negative numbers left; the core now
   builds warning-free in Debug too, and the comparisons run clean under the sanitizers.
 - **Sound.** The PC speaker's state is handed to the audio thread under its lock.
-- **Tests and releases.** `make difftest` fails when a comparison fails (it reported success);
-  an empty test corpus is an error; CI runs a sanitizer build; releases and the web site are
+- **Tests and releases.** `make difftest` fails when a comparison fails or the routines
+  cannot be listed (it reported success); an empty test corpus, or a game copy that is not
+  Elite Plus, is an error; CI runs a sanitizer build; releases and the web site are
   published only after CI passes.
 - **Licences.** Every download and the web site carry the third-party licences (Nuked OPL3's
-  LGPL, SDL2's zlib) and `THIRD_PARTY.md`, with how to relink with your own Nuked OPL3. The
+  LGPL, SDL2's zlib, and for the web Emscripten's and musl's MIT) and `THIRD_PARTY.md`, with how to relink with your own Nuked OPL3. The
   README and the interface notes now say precisely what the comparisons prove.
 
 ## [0.1.0] — 2026-10-04

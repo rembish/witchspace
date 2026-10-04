@@ -35,7 +35,7 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist/witchspace && cp build/witchspace README.md CHANGELOG.md dist/witchspace/
-          cp LICENSE THIRD_PARTY.md dist/witchspace/ && cp third_party/nuked-opl3/LICENSE dist/witchspace/LICENSE.Nuked-OPL3.txt && cp build/_deps/sdl2-src/LICENSE.txt dist/witchspace/LICENSE.SDL2.txt
+          cp LICENSE dist/witchspace/LICENSE.txt && cp THIRD_PARTY.md dist/witchspace/ && cp third_party/nuked-opl3/LICENSE dist/witchspace/LICENSE.Nuked-OPL3.txt && cp build/_deps/sdl2-src/LICENSE.txt dist/witchspace/LICENSE.SDL2.txt
           tar -C dist -czf witchspace-linux-x64.tar.gz witchspace
       - uses: actions/upload-artifact@v4
         with:
@@ -61,7 +61,7 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist/witchspace && cp build/witchspace.exe README.md CHANGELOG.md dist/witchspace/
-          cp LICENSE THIRD_PARTY.md dist/witchspace/ && cp third_party/nuked-opl3/LICENSE dist/witchspace/LICENSE.Nuked-OPL3.txt && cp build/_deps/sdl2-src/LICENSE.txt dist/witchspace/LICENSE.SDL2.txt
+          cp LICENSE dist/witchspace/LICENSE.txt && cp THIRD_PARTY.md dist/witchspace/ && cp third_party/nuked-opl3/LICENSE dist/witchspace/LICENSE.Nuked-OPL3.txt && cp build/_deps/sdl2-src/LICENSE.txt dist/witchspace/LICENSE.SDL2.txt
           (cd dist && zip -r ../witchspace-windows-x64.zip witchspace)
       - uses: actions/upload-artifact@v4
         with:
@@ -81,7 +81,7 @@ jobs:
         run: |
           codesign --force --sign - build/witchspace
           mkdir -p dist/witchspace && cp build/witchspace README.md CHANGELOG.md dist/witchspace/
-          cp LICENSE THIRD_PARTY.md dist/witchspace/ && cp third_party/nuked-opl3/LICENSE dist/witchspace/LICENSE.Nuked-OPL3.txt && cp build/_deps/sdl2-src/LICENSE.txt dist/witchspace/LICENSE.SDL2.txt
+          cp LICENSE dist/witchspace/LICENSE.txt && cp THIRD_PARTY.md dist/witchspace/ && cp third_party/nuked-opl3/LICENSE dist/witchspace/LICENSE.Nuked-OPL3.txt && cp build/_deps/sdl2-src/LICENSE.txt dist/witchspace/LICENSE.SDL2.txt
           (cd dist && zip -r ../witchspace-macos-universal.zip witchspace)
       - uses: actions/upload-artifact@v4
         with:
@@ -102,7 +102,7 @@ jobs:
           mkdir -p witchspace-web
           cp build-web/witchspace.html witchspace-web/index.html
           cp build-web/witchspace.js build-web/witchspace.wasm witchspace-web/
-          cp LICENSE witchspace-web/LICENSE.txt && cp THIRD_PARTY.md witchspace-web/ && cp third_party/nuked-opl3/LICENSE witchspace-web/LICENSE.Nuked-OPL3.txt
+          web/licenses.sh witchspace-web # ours and the third parties', Emscripten's included
           zip -r witchspace-web.zip witchspace-web
       - uses: actions/upload-artifact@v4
         with:
