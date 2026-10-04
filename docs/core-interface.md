@@ -20,8 +20,12 @@ blit leaves in a register). Both take bytes; the core still does no I/O.
 
 ## State
 
-Everything lives in one `ep_game` (`core/ep_game.h`). `ep_boot` fills it the way the
-original's start-up does; nothing else is global. The frontend sets three things on it:
+A game's state lives in one `ep_game` (`core/ep_game.h`). `ep_boot` fills it the way the
+original's start-up does. Two things are outside it: the original's tables, which
+`ep_data_load` fills once for the whole process before any game (read-only after), and a few
+static scratch buffers (`ep_boot`'s data segment, the load screen's). So the core runs one
+game at a time, on one thread, after the data is loaded; it is not reentrant. The frontend
+sets three things on the game:
 
 - `io`: access to commander files (`exists`, `read`, `write`, and `list` of `*.CDR`), and
   `read` of the game's music (`ADBLUE.MID`, at start-up with an AdLib). NULL means no files.

@@ -120,9 +120,12 @@ never to happen in play.
   input or output of its own, and it keeps the original's quirks.
 - **It is checked against the original.** The original runs in an x86 emulator; each
   reconstructed routine gets the same game state (taken from the running original, and
-  randomly varied) and must leave the same memory, draw the same things and make the same
-  sounds, byte for byte. Larger tests boot the whole original and play from the title into
-  space, comparing every frame.
+  randomly varied) and must leave the same memory that the core models, draw the same
+  primitives and make the same sounds (the writes to the speaker and the sound chip), byte
+  for byte. Larger tests boot the whole original and compare its start-up, play from the
+  title into space and compare where both arrive, and compare the title screen frame by
+  frame. These compare what the core says, not the final pixels; the frontend's renderer has
+  checks of its own where its colours matter.
 - **The core says what to draw, not how.** It emits polygons, lines, circles, pictures by
   number and text in the original's 320 × 200 coordinates; the frontend (`src/`, SDL2) draws
   them as the original did. Another renderer could draw the same stream its own way
@@ -171,10 +174,13 @@ The notes on the original:
 
 ## License
 
-Witchspace is free software under the [BSD 3-Clause License](LICENSE). Nuked OPL3 by
-Nuke.YKT (`third_party/nuked-opl3`) is under the LGPL-2.1 or later.
+Witchspace is free software under the [BSD 3-Clause License](LICENSE). It includes Nuked
+OPL3 by Nuke.YKT (`third_party/nuked-opl3`, LGPL-2.1 or later) and, in the release binaries,
+SDL2 (zlib); see [THIRD_PARTY.md](THIRD_PARTY.md), which also says how to relink with your own
+Nuked OPL3.
 
 Elite © 1984 David Braben and Ian Bell. Elite Plus © 1991 Chris Sawyer, Realtime Software,
 and Bell & Braben. Elite is a trademark of Frontier Developments. Witchspace is an
-unofficial reimplementation for preservation, not affiliated with any of them, and
-distributes no part of the original game.
+unofficial reimplementation for preservation, not affiliated with any of them. The program
+and its source contain no part of the original game; the clips above show it being played
+(they are kept with the release, not in this repository).
