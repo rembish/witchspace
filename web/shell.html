@@ -26,6 +26,7 @@
   #status.error { color: #ff7a7a; }
   #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: 90vw;
            background: #401016; color: #ffd0d0; border-radius: 8px; padding: 8px 14px; display: none; }
+  #toast.note { background: #10301a; color: #d0ffd8; }
   kbd { background: #1d2850; border-radius: 4px; padding: 0 5px; font-size: 13px; }
   a { color: var(--accent); }
   small { color: var(--dim); }
@@ -67,6 +68,18 @@
       Bell's Elite archive</a> as it is (<code>b1022000.zip</code>, the game as sold).</small><br>
       <button class="quiet" id="own">Use my own files…</button>
       <input type="file" id="files" multiple hidden></p>
+  </div>
+
+  <div class="box" id="saves" hidden>
+    <h2>Commanders</h2>
+    <p>Saved commanders stay in this browser (<span id="saves-count">none yet</span>). Import
+      saved games from the original or from elsewhere (<code>.CDR</code> files, or a zip of them:
+      George Hooper's <a href="https://web.archive.org/web/20071030094630/http://www.hooplah.com/encounters/util/elpmiss.zip"
+      target="_blank" rel="noopener">one for each mission</a>, for one), then load them in the game
+      (<kbd>Esc</kbd>, Load). Export yours to keep them. While playing, drop files on the game.</p>
+    <button class="quiet" id="import">Import commanders…</button>
+    <button class="quiet" id="export">Export commanders</button>
+    <input type="file" id="cdrs" multiple accept=".cdr,.CDR,.zip" hidden>
   </div>
 
   <p id="status"></p>
@@ -116,9 +129,10 @@
   }
 
   // a commander could not be kept in the browser's storage (src/files.c)
-  function toast(text) {
+  function toast(text, note) {
     var t = $('toast');
     t.textContent = text;
+    t.className = note ? 'note' : '';
     t.style.display = 'block';
     setTimeout(function () { t.style.display = 'none'; }, 8000);
   }
@@ -133,7 +147,10 @@
   }
 
   function show() {
-    var ready = NEEDED.every(have);
+    var ready = NEEDED.every(have), n = commanders().length;
+    $('saves').hidden = false;
+    $('saves-count').textContent = n ? n + (n === 1 ? ' commander' : ' commanders') : 'none yet';
+    $('export').disabled = !n;
     $('stored').hidden = !ready;
     $('theme-note').hidden = have(THEME);
     $('fetch').hidden = ready;
@@ -203,16 +220,70 @@
     return Promise.all(parts);
   }
 
-  // a file given: one of the game's, a zip of them, or the title's theme (an MP3)
+  // a commander (a save): the names the game lists, 8.3 in capitals (src/files.c)
+  var CDR = /^[-0-9A-Z_]{1,8}\.CDR$/, imported = 0;
+  function commander(name, bytes) {
+    if (!CDR.test(name)) return false;
+    FS.writeFile('/saves/' + name, bytes);
+    imported++;
+    return true;
+  }
+  function commanders() {
+    try { return FS.readdir('/saves').filter(function (n) { return CDR.test(n); }); } catch (e) { return []; }
+  }
+
+  // a file given: one of the game's, a commander, a zip of either, or the title's theme (an MP3)
   function keep(f) {
     var name = f.name.toUpperCase();
     return f.arrayBuffer().then(function (b) {
       if (/\.ZIP$/.test(name)) return unzip(b).then(function (all) {
-        all.forEach(function (p) { if (NEEDED.indexOf(p[0]) >= 0) FS.writeFile('/game/' + p[0], p[1]); });
+        all.forEach(function (p) {
+          if (NEEDED.indexOf(p[0]) >= 0) FS.writeFile('/game/' + p[0], p[1]);
+          else commander(p[0], p[1]);
+        });
       });
       if (/\.MP3$/.test(name)) FS.writeFile('/game/' + THEME, new Uint8Array(b));
       else if (NEEDED.indexOf(name) >= 0) FS.writeFile('/game/' + name, new Uint8Array(b));
+      else commander(name, new Uint8Array(b));
     });
+  }
+
+  // commanders given (the box's button, or dropped on the page): kept, and said so
+  function importing(files) {
+    imported = 0;
+    return Promise.all(files.map(keep)).then(function () {
+      var text = imported ? imported + (imported === 1 ? ' commander' : ' commanders') +
+        ' imported: load in the game with Esc, Load.' : 'No commanders in those files (8.3 names ending .CDR).';
+      FS.syncfs(false, function (err) {
+        if (err) text = 'Imported, but this browser would not keep them (' + err + ').';
+        if (document.body.className === 'playing') toast(text, !err && imported); else status(text, !!err || !imported);
+        show();
+      });
+    }).catch(function (e) { status('Could not read those files (' + e.message + ').', true); });
+  }
+
+  // the commanders as one zip to save (stored, not compressed: they are 226 bytes each)
+  var CRC = [];
+  for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; CRC[n] = c >>> 0; }
+  function crc32(d) { var c = 0xffffffff; for (var i = 0; i < d.length; i++) c = CRC[(c ^ d[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  function zip(files) { // [[name, bytes]]
+    var parts = [], dir = [], at = 0;
+    files.forEach(function (f) {
+      var name = new TextEncoder().encode(f[0]), d = f[1], crc = crc32(d);
+      var h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 10, true); h.setUint32(14, crc, true);
+      h.setUint32(18, d.length, true); h.setUint32(22, d.length, true); h.setUint16(26, name.length, true);
+      var e = new DataView(new ArrayBuffer(46));
+      e.setUint32(0, 0x02014b50, true); e.setUint16(4, 20, true); e.setUint16(6, 10, true); e.setUint32(16, crc, true);
+      e.setUint32(20, d.length, true); e.setUint32(24, d.length, true); e.setUint16(28, name.length, true);
+      e.setUint32(42, at, true);
+      parts.push(h, name, d); dir.push(e, name);
+      at += 30 + name.length + d.length;
+    });
+    var size = dir.reduce(function (s, p) { return s + p.byteLength; }, 0), end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, size, true); end.setUint32(16, at, true);
+    return new Blob(parts.concat(dir, [end]), { type: 'application/zip' });
   }
 
   $('own').addEventListener('click', function () { $('files').click(); });
@@ -230,6 +301,26 @@
   });
 
   $('play').addEventListener('click', start);
+  $('import').addEventListener('click', function () { $('cdrs').click(); });
+  $('cdrs').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files);
+    this.value = '';
+    importing(files);
+  });
+  $('export').addEventListener('click', function () {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(zip(commanders().map(function (n) { return [n, FS.readFile('/saves/' + n)]; })));
+    a.download = 'witchspace-commanders.zip';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
+  });
+  // commanders dropped on the page, the game's window too
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+  document.addEventListener('drop', function (e) {
+    e.preventDefault();
+    var files = Array.prototype.slice.call(e.dataTransfer.files);
+    if (files.length && typeof FS !== 'undefined') importing(files);
+  });
   $('forget').addEventListener('click', function () {
     NEEDED.concat([THEME]).forEach(function (n) { if (have(n)) FS.unlink('/game/' + n); });
     persist(show);
