@@ -41,6 +41,10 @@
   <div class="box" id="stored" hidden>
     <h2>Ready</h2>
     <p>The game's files are in this browser from an earlier visit.</p>
+    <p id="theme-note"><small>For the title, the Elite theme (Aidan Bell's, arranged by
+      C. Abbott) can play instead of the game's own music: add <code>b8060000.mp3</code> from
+      <a href="http://www.elitehomepage.org/archive/index.htm" target="_blank" rel="noopener">Ian Bell's Elite archive</a>.</small>
+      <button class="quiet" id="add-theme">Add the theme…</button></p>
     <button id="play">Play</button>
     <button class="quiet" id="forget">Forget the stored files</button>
   </div>
@@ -49,14 +53,18 @@
     <h2>The game's files</h2>
     <p>Witchspace contains no part of the original game. It needs three files from Elite Plus
       (<code>ELITE.EXE</code>, <code>ELITE.GRF</code>, <code>ADBLUE.MID</code>, about 350 KB).</p>
-    <p>It can download them for you from the copy preserved by the
+    <p>It can download them for you from the copy on
+      <a href="http://www.iancgbell.clara.net/elite/pc/index.htm" target="_blank" rel="noopener">Ian Bell's Elite pages</a>
+      (Elite's co-author's), through its mirror at the
       <a href="https://archive.org/details/b1022001" target="_blank" rel="noopener">Internet Archive</a>.
       They then stay in your browser's storage on this computer and are never sent to us or
       anyone else. Elite Plus is still under copyright (© 1991 Chris Sawyer, Realtime Software,
       Bell &amp; Braben): whether to use that copy is your decision.</p>
     <label class="check"><input type="checkbox" id="agree"> I understand, and choose to download them.</label>
     <button id="download" disabled>Download and play</button>
-    <p><small>Or use your own copy: choose the three files from your Elite Plus folder.</small><br>
+    <p><small>Or use your own copy: choose the three files from your Elite Plus folder, or a
+      zip from <a href="http://www.elitehomepage.org/archive/index.htm" target="_blank" rel="noopener">Ian
+      Bell's Elite archive</a> as it is (<code>b1022000.zip</code>, the game as sold).</small><br>
       <button class="quiet" id="own">Use my own files…</button>
       <input type="file" id="files" multiple hidden></p>
   </div>
@@ -75,6 +83,8 @@
   </div>
   <p><small>Witchspace @WS_VERSION@. Source code, the desktop version and the changes:
     <a href="https://github.com/rembish/witchspace">github.com/rembish/witchspace</a>.
+    With thanks to <a href="http://www.iancgbell.clara.net/elite/" target="_blank" rel="noopener">Ian Bell's Elite pages</a>,
+    which keep Elite Plus and the Elite theme.
     Elite is a trademark of Frontier Developments; Witchspace is not affiliated with them.
     Witchspace is under the <a href="LICENSE.txt">BSD 3-Clause License</a>; it contains
     <a href="THIRD_PARTY.md">third-party software</a> (Nuked OPL3, <a href="LICENSE.Nuked-OPL3.txt">LGPL-2.1+</a>; SDL2, <a href="LICENSE.SDL2.txt">zlib</a>;
@@ -85,6 +95,7 @@
   // Archive serves to other sites), or from the player's own copy.
   var ARCHIVE = 'https://archive.org/download/b1022001/b1022001.zip/';
   var NEEDED = ['ELITE.EXE', 'ELITE.GRF', 'ADBLUE.MID'];
+  var THEME = 'THEME.MP3'; // the title's theme, if given (src/main.c looks for it)
   var $ = function (id) { return document.getElementById(id); };
   var errors = []; // the game's messages, shown if it stops
 
@@ -124,6 +135,7 @@
   function show() {
     var ready = NEEDED.every(have);
     $('stored').hidden = !ready;
+    $('theme-note').hidden = have(THEME);
     $('fetch').hidden = ready;
   }
 
@@ -170,17 +182,48 @@
     });
   });
 
+  // a zip's files (Ian Bell's archive's, as they are): name -> bytes, deflated or stored
+  function unzip(buf) {
+    var dv = new DataView(buf), end = -1;
+    for (var i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--)
+      if (dv.getUint32(i, true) === 0x06054b50) { end = i; break; }
+    if (end < 0) return Promise.reject(new Error('not a zip'));
+    var at = dv.getUint32(end + 16, true), count = dv.getUint16(end + 10, true), parts = [];
+    for (var k = 0; k < count && dv.getUint32(at, true) === 0x02014b50; k++) {
+      var method = dv.getUint16(at + 10, true), size = dv.getUint32(at + 20, true);
+      var nlen = dv.getUint16(at + 28, true), local = dv.getUint32(at + 42, true);
+      var name = new TextDecoder().decode(new Uint8Array(buf, at + 46, nlen)).split('/').pop().toUpperCase();
+      var data = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+      var bytes = new Uint8Array(buf, data, size);
+      at += 46 + nlen + dv.getUint16(at + 30, true) + dv.getUint16(at + 32, true);
+      if (method === 0) parts.push(Promise.resolve([name, bytes]));
+      else if (method === 8) parts.push(new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')))
+        .arrayBuffer().then(function (n) { return function (b) { return [n, new Uint8Array(b)]; }; }(name)));
+    }
+    return Promise.all(parts);
+  }
+
+  // a file given: one of the game's, a zip of them, or the title's theme (an MP3)
+  function keep(f) {
+    var name = f.name.toUpperCase();
+    return f.arrayBuffer().then(function (b) {
+      if (/\.ZIP$/.test(name)) return unzip(b).then(function (all) {
+        all.forEach(function (p) { if (NEEDED.indexOf(p[0]) >= 0) FS.writeFile('/game/' + p[0], p[1]); });
+      });
+      if (/\.MP3$/.test(name)) FS.writeFile('/game/' + THEME, new Uint8Array(b));
+      else if (NEEDED.indexOf(name) >= 0) FS.writeFile('/game/' + name, new Uint8Array(b));
+    });
+  }
+
   $('own').addEventListener('click', function () { $('files').click(); });
+  $('add-theme').addEventListener('click', function () { $('files').click(); });
   $('files').addEventListener('change', function () {
-    var files = Array.prototype.slice.call(this.files);
-    Promise.all(files.map(function (f) {
-      var name = f.name.toUpperCase();
-      if (NEEDED.indexOf(name) < 0) return null;
-      return f.arrayBuffer().then(function (b) { FS.writeFile('/game/' + name, new Uint8Array(b)); });
-    })).then(function () {
+    var files = Array.prototype.slice.call(this.files), ready = !$('stored').hidden;
+    this.value = '';
+    Promise.all(files.map(keep)).then(function () {
       var missing = NEEDED.filter(function (n) { return !have(n); });
       if (missing.length) { status('Still needed: ' + missing.join(', '), true); return; }
-      persist(start);
+      persist(ready ? show : start); // the theme added to files kept before: stays on the page
     }).catch(function (e) {
       status('Could not read those files (' + e.message + ').', true);
     });
@@ -188,7 +231,7 @@
 
   $('play').addEventListener('click', start);
   $('forget').addEventListener('click', function () {
-    NEEDED.forEach(function (n) { if (have(n)) FS.unlink('/game/' + n); });
+    NEEDED.concat([THEME]).forEach(function (n) { if (have(n)) FS.unlink('/game/' + n); });
     persist(show);
   });
 
