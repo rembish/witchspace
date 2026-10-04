@@ -13,6 +13,8 @@
  *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default)
+ *   --original     the original's gameplay bugs as in 1991 (by default mended: the hold that
+ *                  loses room to Alien Items, the docking computer flying through the station)
  *   --version      print the version and stop
  *   --shots DIR    every 25th picture shown saved as a PPM file in DIR, for checking */
 #include "audio.h"
@@ -539,7 +541,7 @@ int main(int argc, char **argv)
 {
     const char *data = NULL, *saves = NULL;
     const char *theme = NULL;
-    int protection = 0, adlib = 1, no_theme = 0;
+    int protection = 0, adlib = 1, no_theme = 0, original = 0;
 #ifdef _WIN32
     find_console();
 #endif
@@ -561,6 +563,8 @@ int main(int argc, char **argv)
             theme = argv[++k];
         else if (!strcmp(argv[k], "--no-theme"))
             no_theme = 1;
+        else if (!strcmp(argv[k], "--original"))
+            original = 1;
     }
     /* your copy of the game: --data, or the folder this program is in, the current one, or
      * original/ (where the sources keep it) */
@@ -627,6 +631,7 @@ int main(int argc, char **argv)
     g.io = &files_io;
     g.wait = wait_for;
     g.protection = (uint8_t)protection;
+    g.fixes = original ? 0 : EP_FIXES_ALL;           /* the original's bugs mended, unless --original */
     ep_boot(&g, 2, adlib ? 1 : 2, t[1], t[2], t[3]); /* MCGA; the AdLib or the PC speaker */
     t0 = SDL_GetPerformanceCounter();
     if (protection)
