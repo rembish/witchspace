@@ -108,12 +108,15 @@ if(NOT WIN32) # POSIX folders and permissions; the Windows replacement is the sa
   add_executable(ep_savecheck tests/savecheck.c src/files.c) # saves keep the old commander on failure
   target_include_directories(ep_savecheck PRIVATE src core)
 endif()
+add_executable(ep_edgecheck tests/edgecheck.c) # edge cases from a code audit, kept fixed
+target_link_libraries(ep_edgecheck PRIVATE epcore)
 add_executable(ep_flow tests/flow.c)
 target_link_libraries(ep_flow PRIVATE epcore)
 enable_testing()
 add_test(NAME flow COMMAND ep_flow)
 add_test(NAME badinput COMMAND ep_badinput)
 add_test(NAME screencheck COMMAND ep_screencheck)
+add_test(NAME edgecheck COMMAND ep_edgecheck)
 if(NOT WIN32)
   add_test(NAME savecheck COMMAND ep_savecheck ${CMAKE_CURRENT_BINARY_DIR}/savecheck.tmpdir)
   # make difftest fails when a comparison fails or the routines cannot be listed (a fake uv)
@@ -133,16 +136,16 @@ target_link_libraries(eptestdata PRIVATE epcore)
 target_compile_definitions(eptestdata PRIVATE EP_SOURCE_ORIGINAL="${CMAKE_CURRENT_SOURCE_DIR}/original")
 foreach(t ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump ep_planetdump
           ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_clips ep_bootdump ep_flowdump ep_flow ep_subsys
-          ep_screencheck)
+          ep_screencheck ep_edgecheck)
   target_sources(${t} PRIVATE $<TARGET_OBJECTS:eptestdata>)
 endforeach()
-set_tests_properties(flow screencheck PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(flow screencheck edgecheck PROPERTIES SKIP_RETURN_CODE 77)
 
 # The frontend and the test tools: the usual warnings (the core has stricter ones above)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   foreach(t witchspace ep_galdump ep_descdump ep_marketdump ep_renderdump ep_objdump ep_circledump
             ep_planetdump ep_titledump ep_cmdrdump ep_datadump ep_musicwav ep_clips ep_bootdump ep_flowdump ep_flow
-            ep_subsys ep_badinput ep_screencheck)
+            ep_subsys ep_badinput ep_screencheck ep_edgecheck)
     target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
     if(WS_WERROR)
       target_compile_options(${t} PRIVATE -Werror)
