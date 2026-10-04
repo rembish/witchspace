@@ -205,7 +205,17 @@ Findings:
   `ds:01f8`, usually the compass's (48c9/48e7): the compass's tail runs with stray
   registers, draws a sprite and returns past the rest of the step. The core divides by 1
   instead. Its roll match stores the 11-bit sign-extended angle.
-- **`find_nearest`** (5fe1) keeps the caller's BP when no system lies in the zoomed chart's
-  window (which a galaxy's spread of systems seems never to allow). BP is then what the
-  drawing last left: 140h after text (2e3f), 140h minus the width after a sprite (377f), or
-  the line rasterizer's step flag (26da, 0 or 1). The core picks system 0.
+- **`find_nearest`** (5fe1) would keep the caller's BP if no system qualified. That cannot
+  happen in play:
+  - Zoomed, a system must lie in the window around the chart's centre (±13h, ±10h). The
+    centre is only set on arrival: to the system's own position, or after a misjump to the
+    midpoint between the target and the old centre. A jump is refused at 7.0 light years or
+    more from the centre, so the target is at most 9 from the midpoint on either axis
+    (checked for every centre and every allowed target). `ds:8610`, which would force a
+    misjump on a galactic jump, is only ever cleared.
+  - Unzoomed, the nearest system must be under ffffh squared away. The farthest any cursor
+    is from a system is about 4e00h squared (all nine galaxies checked).
+
+  Only a hand-edited commander file (a chart centre far from every system) gets there; BP is
+  then what the drawing last left (140h after text, 140h minus a sprite's width, or the line
+  rasterizer's 0 or 1). The core picks system 0.

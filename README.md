@@ -31,9 +31,10 @@ music and effects (its driver plays the original's `ADBLUE.MID` and effect progr
 emulated OPL2), and keyboard, joystick and mouse controls. The copy protection is reconstructed too, but off unless asked
 for (`--protection`).
 
-Not done yet: the Roland's music and effects (the AdLib's are done), and the 16-colour
-EGA/VGA screen modes (the frontend shows the 256-colour MCGA mode). Two rare
-edge cases still behave approximately; they are described in [re/FLIGHT.md](re/FLIGHT.md).
+Not planned: the Roland's music and effects, and the 16-colour EGA/VGA screen modes (the
+AdLib and the 256-colour MCGA mode cover them). One edge case behaves approximately, the
+docking computer started within a step of its docking point; it and a case shown never to
+happen in play are described in [re/FLIGHT.md](re/FLIGHT.md).
 
 ## Playing
 

@@ -60,7 +60,7 @@ void ep_find_nearest(ep_game *g)
     uint8_t x = (uint8_t)at, y = (uint8_t)(at >> 8);
     ep_seed s = ep_galaxy_seed(g->cmdr.b[EP_CMDR_GALAXY]);
     uint16_t best = 0xffff;
-    uint8_t pick = 0; /* bp: stale when nothing qualifies (0 in the tests) */
+    uint8_t pick = 0; /* bp: stale if nothing qualified, which play never allows (re/FLIGHT.md) */
     for (unsigned n = 0; n < 256; n++) {
         unsigned dx = absdiff(seed_x(&s), x) & 0xff, dy = absdiff(seed_y(&s), y) & 0xff;
         uint32_t d = dx * dx + dy * dy;
