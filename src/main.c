@@ -7,9 +7,10 @@
  * usage: witchspace [--data DIR] [--saves DIR] [--speaker] [--protection] [--theme FILE]
  *   --data DIR     where your copy of the game is: ELITE.EXE, ELITE.GRF, ADBLUE.MID (default:
  *                  this program's folder, then the current one, then original/)
- *   --theme FILE   an MP3 the title plays instead of its own music (default: B8060000.MP3,
- *                  B8060010.MP3 or THEME.MP3 beside the game's files, if there is one: the
- *                  Elite theme from Ian Bell's archive); --no-theme for the original's music
+ *   --theme FILE   an MP3 the title plays instead of its own music (default, with the AdLib:
+ *                  B8060000.MP3, B8060010.MP3 or THEME.MP3 beside the game's files, if there
+ *                  is one: the Elite theme from Ian Bell's archive); --no-theme for the
+ *                  original's music
  *   --saves DIR    where commanders are saved (default: the game's folder)
  *   --speaker      the PC speaker for the sound (default an AdLib)
  *   --protection   ask the copy protection's question (off by default)
@@ -627,7 +628,9 @@ int main(int argc, char **argv)
     }
 #endif
     audio_init();
-    if (!no_theme) load_theme(theme, data);
+    /* the theme found beside the game replaces the AdLib's music; --speaker asks for the
+       speaker's own, so only a theme given with --theme plays there */
+    if (!no_theme && (adlib || theme)) load_theme(theme, data);
     screen_init();
 
     uint8_t t[4];

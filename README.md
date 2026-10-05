@@ -126,8 +126,9 @@ original's behaviour.
 [Elite archive](http://www.elitehomepage.org/archive/index.htm) keeps recordings of the Elite
 theme (Aidan Bell's, in two arrangements by C. Abbott): `b8060000.mp3` and `b8060010.mp3`.
 Put one beside the game's files (or name it `THEME.MP3`) and the title plays it instead of
-the AdLib's (or the speaker's) Blue Danube; everything else sounds as the original. In the
-browser, add it on the page.
+the AdLib's Blue Danube; everything else sounds as the original. With `--speaker` the title
+plays the speaker's own music, unless a theme is given with `--theme`. In the browser, add it
+on the page.
 
 ## Status
 
