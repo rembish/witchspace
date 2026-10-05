@@ -4,6 +4,12 @@ All notable changes to Witchspace are recorded here, newest first. The version f
 [semantic versioning](https://semver.org/); until 1.0 the options and formats may still change.
 Each release's section is also its GitHub release's notes.
 
+## [0.1.8] — 2026-10-05
+
+- **`--speaker` plays the speaker's music at the title.** With the Elite theme beside the
+  game, the theme played whichever sound was chosen; it now replaces only the AdLib's music,
+  and with the speaker plays only when given with `--theme`.
+
 ## [0.1.7] — 2026-10-05
 
 - **Closer to the original.** The differential tests now also run on states from all the
@@ -145,6 +151,7 @@ desktop and in the browser.
 
 Not planned: the Roland LAPC-1's music and effects, and the 16-colour EGA/VGA screen modes.
 
+[0.1.8]: https://github.com/rembish/witchspace/releases/tag/v0.1.8
 [0.1.7]: https://github.com/rembish/witchspace/releases/tag/v0.1.7
 [0.1.6]: https://github.com/rembish/witchspace/releases/tag/v0.1.6
 [0.1.5]: https://github.com/rembish/witchspace/releases/tag/v0.1.5
